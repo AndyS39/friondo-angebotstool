@@ -104,6 +104,14 @@ PARAMETER_START = {
     # OFFEN 2: offen | smtp | entwurf | leads_im_namen – Nachtrag 08.10.2026 (Antwort
     # Andreas): Standard entwurf (.eml aus dem eigenen Postfach des HV), offen bleibt wählbar
     "hv_versandweg": "entwurf",
+    # --- v35: Lead-Management V6 (PLAN_LEAD_V6 Phase 183, Agent T) – TAIFUN-Kundenübergabe;
+    # Schalter standardmäßig AUS (Andreas 15.10.2026), Logik in app/taifun_export.py
+    "taifun_export_aktiv": "aus",
+    "taifun_import_ordner": r"C:\Users\kdadmin\Desktop\LM Datenimport",
+    "taifun_export_encoding": "windows-1252",   # windows-1252 | utf-8
+    "taifun_testdatei_ok": "",                  # Prüfpunkt „Testdatei in TAIFUN importiert“
+    "taifun_encoding_ok": "",                   # Prüfpunkt „Encoding bestätigt“
+    "taifun_ordner_geprueft": "",               # Ergebnis der letzten Ordnerprüfung
 }
 
 
@@ -563,13 +571,20 @@ def kanal_gleich(a, b) -> bool:
 
 
 def kanal_werte(session: Session) -> list[str]:
-    """Dropdown-Werte für den Kanal an der Quelle: „Standard“ + die Kanalwerte
-    der Angebotsprofile (v9-Zuordnung, erster Wert je Profil).
-    v33 (Phase 175): Profilwerte alias-bereinigt („SWD“ → „Stadtwerke Düsseldorf“);
-    „Stadtwerke Düsseldorf“ steht auch dann in der Liste, wenn das SWD-Profil (regel_kennung
-    swd) keinen Kanalwert trägt – gleichwertig zu Enni im AD-Profil, Import, Kartei, Filtern."""
+    """Dropdown-Werte für den Vertriebskanal (Kartei, Quelle, AD-Profil, Filter, Import).
+    v35 (PLAN_LEAD_V6 Phase 184): die aktiven Kanäle der Stammdaten-Tabelle `vertriebskanaele`
+    (app/lead_kanaele.py) nach Verwendungen der letzten 90 Tage absteigend, dann alphabetisch;
+    „?“ (Vertriebskanal unklar) ist kein Dropdown-Wert, „Standard“ entfällt als Kanal (das
+    Angebotsprofil „Standard“ bleibt Fallback). Inaktive Kanäle hängt nur die Kartei am
+    betroffenen Lead an („(nicht mehr wählbar)“).
+    Rückfall vor der Migration (leere Tabelle): die Kanalwerte der Angebotsprofile wie bis v34
+    (v33 Phase 175: alias-bereinigt, „Stadtwerke Düsseldorf“ auch ohne Kanalwert am SWD-Profil),
+    ohne „Standard“."""
+    from app import lead_kanaele
+    if lead_kanaele.tabelle_gefuellt(session):
+        return lead_kanaele.kanal_namen_sortiert(session)
     from app.models import Profil
-    werte = ["Standard"]
+    werte: list[str] = []
     swd_profil = False
     for profil in session.query(Profil).order_by(Profil.id):
         erster = next((w.strip() for w in (profil.kanalwerte or "").split(",")
@@ -812,6 +827,20 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
                 and not (kunde.vertriebskanal or "").strip()):
             kunde.vertriebskanal = quelle.kanal
     _sparten_mischen(kunde, sparten)
+    # v35 (PLAN_LEAD_V6 Phase 184): Kanalwahl der Schnellanlage (daten["vertriebskanal"], nur
+    # wählbare Kanäle) geht vor der Quelle, ein manuell gesetzter echter Kanal bleibt; ein
+    # Eingang ohne erkennbaren Kanal (Quelle ohne Kanal, API/Parser/Import/Schnellanlage ohne
+    # Wahl) setzt „?“ = „Vertriebskanal unklar“ statt leer (bestätigt 15.10.2026)
+    from app import lead_kanaele
+    gewaehlt = lead_kanaele.name_aufloesen(session, daten.get("vertriebskanal") or "")
+    if gewaehlt and gewaehlt in lead_kanaele.kanal_namen_sortiert(session, mit_unklar=True) \
+            and (not (kunde.vertriebskanal or "").strip()
+                 or lead_kanaele.ist_unklar(kunde.vertriebskanal) or not kunde.kanal_manuell):
+        if gewaehlt != (kunde.vertriebskanal or ""):
+            kunde.vertriebskanal = gewaehlt
+            kunde.kanal_manuell = True
+    if not (kunde.vertriebskanal or "").strip():
+        kunde.vertriebskanal = lead_kanaele.KANAL_UNKLAR
 
     if vorgang is None:
         vorgang = Vorgang(kunde_id=kunde.id, lead_phase="neu")

@@ -11,27 +11,31 @@
    typ anruf) mit Datum, Uhrzeit, Ergebnis, Benutzer, Lead (Link Kartei),
    neueste zuerst; Suche Name/Nummer/Benutzer/Ergebnis; Rufnummernsuche
    E.164 (kern.telefon_normalisieren) gegen kunden.telefon UND leads.telefon –
-   „0203 …“ und „+49 203 …“ sind gleich. Leads bleiben auf ihrem Board. #}
+   „0203 …“ und „+49 203 …“ sind gleich. Leads bleiben auf ihrem Board.
+   v35 (PLAN_LEAD_V6 Phase 186, Agent B): EINE Suchleiste – Name, Ort, E-Mail, Notiz,
+   Ergebnis, Benutzer und Rufnummer (reine Ziffernfolge ab 3 Ziffern = Endziffern-/Teilsuche
+   nach v31, E.164-normalisiert, Leerzeichen/Schrägstrich/Plus egal); die separate
+   Rufnummernleiste ist entfallen (telefon= bleibt als Alias alter Links). Sofortsuche ohne Enter
+   (data-lm-sofort, lm_sofort.js), Treffer und Liste werden ohne Seitenneuladen getauscht
+   (data-lm-sofort-ziel, ?fragment=1). #}
 {% block inhalt %}
 {{ lm_nav('kontaktiert') }}
 <div class="seitenkopf">
     <h1>Kontaktiert {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
-    <span class="dezent">alle Kontaktversuche · <b>{{ gesamt }}</b> Einträge{% if hv %} · nur eigene Leads{% endif %}</span>
+    <span class="dezent" data-lm-sofort-ziel="kopf">alle Kontaktversuche · <b>{{ gesamt }}</b> Einträge{% if hv %} · nur eigene Leads{% endif %}</span>
     <div class="aktionen">
         <a class="knopf klein zweitrangig" href="/lead-management/hauptboard">{{ symbol('board') }} Hauptboard</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<form method="get" action="/lead-management/kontaktiert" class="suchleiste lm-suchleiste">
-    <input type="search" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, Ergebnis, Benutzer" aria-label="Suche">
-    {#- v31 (PLAN_LEAD_V5 Phase 158): Endziffern-Suche – ab 3 Ziffern, „endet mit“ zuerst #}
-    <label class="kontrollfeld">{{ symbol('telefon-eingehend') }} Rufnummer
-        <input type="tel" name="telefon" value="{{ telefon }}" placeholder="Endziffern (ab 3) oder ganze Nummer, z. B. 4711 / 0203 123456" size="26" aria-label="Rufnummer oder Endziffern eingeben" title="Beliebige Ziffernfolge ab 3 Ziffern: findet Nummern, die damit enden (zuerst) oder sie enthalten – auch monday-Leads"></label>
-    <button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button>
-    {% if q or telefon %}<a class="knopf klein ghost" href="/lead-management/kontaktiert">Zurücksetzen</a>{% endif %}
+<form method="get" action="/lead-management/kontaktiert" class="suchleiste lm-suchleiste lm-kontaktiert-suche" id="lm-filterform" data-lm-sofort="1">
+    <input type="search" name="q" id="lm-suche" value="{{ q or telefon }}" placeholder="Suche: Name, Ort, E-Mail, Rufnummer (ab 3 Ziffern), Notiz, Ergebnis, Benutzer" aria-label="Suche – Name, Ort, E-Mail, Rufnummer, Notiz" title="Eine Suchleiste: Text findet Name, Ort, E-Mail, Notiz, Ergebnis, Benutzer; eine Ziffernfolge ab 3 Ziffern findet Rufnummern, die damit enden (zuerst) oder sie enthalten – auch monday-Leads" autocomplete="off" inputmode="search">
+    <noscript><button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button></noscript>
+    <a class="knopf klein ghost lm-filter-leeren" href="/lead-management/kontaktiert"{% if not (q or telefon) %} hidden{% endif %}>Zurücksetzen</a>
 </form>
 
+<div data-lm-sofort-ziel="treffer">
 {% if telefon %}
 <div class="karte lm-treffer">
     <h2>Rufnummer {{ telefon }} <small class="dezent">(normalisiert {{ telefon_norm or '–' }})</small></h2>
@@ -57,12 +61,13 @@
     {% endif %}
 </div>
 {% endif %}
+</div>
 
 <table class="tabelle lm-tabelle lm-kontaktiert">
     <thead>
         <tr><th>Datum</th><th>Uhrzeit</th><th>Ergebnis</th><th>Benutzer</th><th>Lead</th><th>Telefon</th><th>Dauer</th><th>Notiz</th></tr>
     </thead>
-    <tbody>
+    <tbody data-lm-sofort-ziel="liste">
         {% for z in zeilen %}
         <tr>
             <td>{{ z.aktivitaet.zeitpunkt | de_datum('%a %d.%m.%Y') }}</td>
@@ -82,11 +87,11 @@
         {% endfor %}
     </tbody>
 </table>
-{% if seiten > 1 %}
-<nav class="lm-seiten" aria-label="Seiten">
-    {% for n in range(1, seiten + 1) %}
-        <a class="knopf klein {{ 'zweitrangig' if n != seite }}" href="/lead-management/kontaktiert?q={{ q | urlencode }}&telefon={{ telefon | urlencode }}&seite={{ n }}">{{ n }}</a>
+<nav class="lm-seiten" aria-label="Seiten" data-lm-sofort-ziel="seiten"{% if seiten <= 1 %} hidden{% endif %}>
+    {% for n in range(1, seiten + 1) if seiten > 1 %}
+        <a class="knopf klein {{ 'zweitrangig' if n != seite }}" href="/lead-management/kontaktiert?q={{ (q or telefon) | urlencode }}&seite={{ n }}">{{ n }}</a>
     {% endfor %}
 </nav>
-{% endif %}
+<link rel="stylesheet" href="/static/lm_v35_b.css?v={{ css_version }}">
+<script src="/static/lm_sofort.js?v={{ css_version }}" defer></script>
 {% endblock %}

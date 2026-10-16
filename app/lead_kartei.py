@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app import lead_kanaele   # v35 (Phase 184): Kanal-Stammdaten, Kanal „?“
 from app import lead_v2, lead_v5
 from app import leadmanagement as kern
 from app import objekte as objekte_modul
@@ -232,6 +233,10 @@ def pflicht_status(session: Session, kunde: Kunde, vorgang: Vorgang | None = Non
             wert = getattr(kunde, feld, None)
             if wert is None or str(wert).strip() == "":
                 keys.add(feld)
+    # v35 (PLAN_LEAD_V6 Phase 184): Kanal „?“ → Kanalfeld rot („Vertriebskanal klären“), auch
+    # wenn vertriebskanal nicht in den Pflichtfeldern steht (lead_v2.pflichtfelder_offen zählt mit)
+    if lead_kanaele.kanal_unklar(kunde):
+        keys.add("vertriebskanal")
     if (kunde.objektart or "").upper() == "MFH":
         if not kunde.parteien:
             keys.add("parteien")
@@ -800,7 +805,9 @@ FELD_LABELS = {"anrede": "Anrede", "vorname": "Vorname", "nachname": "Nachname",
                "leadmanager_id": "Innendienst", "ad_id": "Außendienst",
                # v31 (Phase 153/157): Großkunde-Häkchen, MFH-Frage „Rechnungsadresse
                # identisch mit der Objektadresse?“ (Hauptobjekt)
-               "grosskunde": "Großkunde", "rechnung_abweichend": "Rechnungsadresse abweichend"}
+               "grosskunde": "Großkunde", "rechnung_abweichend": "Rechnungsadresse abweichend",
+               # v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Kundennummer (manuell nachgetragen)
+               "taifun_kundennr": "TAIFUN-Kundennummer"}
 AUTOSPEICHER_FELDER = tuple(FELD_LABELS)
 ADRESS_FELDER = ("strasse", "plz", "ort")
 # v31 (Phase 153): Kundenfelder, die das Hauptobjekt spiegelt (objekte.hauptobjekt_sync)
@@ -809,7 +816,8 @@ GROSSKUNDE_TEXT = "als Großkunde gekennzeichnet"
 GROSSKUNDE_ENTFERNT_TEXT = "Großkunde-Kennzeichen entfernt"
 _TEXT_LAENGEN = {"vorname": 100, "nachname": 100, "firma": 200, "telefon": 50,
                  "email": 200, "strasse": 200, "ort": 100, "rechnung_name": 200,
-                 "rechnung_strasse": 200, "rechnung_plz": 10, "rechnung_ort": 100}
+                 "rechnung_strasse": 200, "rechnung_plz": 10, "rechnung_ort": 100,
+                 "taifun_kundennr": 30}   # v35 (Phase 183, Agent T)
 _EMAIL_MUSTER = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 SEITENZUSTAENDE = ("zurueckgestellt", "nicht_erreicht", "unqualifiziert", "verloren")
 
@@ -1008,9 +1016,14 @@ def feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde, feld: str, 
         if neu and not re.fullmatch(r"\d{5}", neu):
             return fehler("PLZ muss aus 5 Ziffern bestehen.", alt or "")
     elif feld == "vertriebskanal":
+        # v35 (PLAN_LEAD_V6 Phase 184): wählbar sind die aktiven Stammdaten-Kanäle (kern.kanal_werte,
+        # nach Häufigkeit) und „?“; alte Schreibweisen/Aliase („SWD“) werden auf den Listennamen
+        # abgebildet; der bisherige (auch inaktive) Wert bleibt erlaubt
         neu = _norm_text(wert, 100)
+        if neu and neu != (alt or ""):
+            neu = lead_kanaele.name_aufloesen(session, neu) or neu
         werte = kern.kanal_werte(session)
-        if neu and neu not in werte and neu != (alt or ""):
+        if neu and neu not in werte and neu != (alt or "") and not lead_kanaele.ist_unklar(neu):
             return fehler("Vertriebskanal unbekannt.", alt or "")
     elif feld == "interesse":
         if isinstance(wert, (list, tuple)):
@@ -1117,7 +1130,15 @@ def vorschlaege_zustand(session: Session, vorgang: Vorgang, kunde: Kunde | None,
     Ort leer) · laden (das Template holt GET /lead/{id}/termin/vorschlaege.json
     nach dem Seitenaufbau). Liefert {status, hinweis, hv_name}."""
     hv = hv_am_vorgang(session, vorgang)
-    if hv is not None and (benutzer is None or benutzer.id != hv.id):
+    # v35 (PLAN_LEAD_V6 Phase 185): Mitglieder der Gruppe des zuständigen HV sehen die
+    # normalen Vorschläge (lead_termin.hv_gruppe_ids), nicht den Hinweis „liegt bei …“
+    try:
+        from app import lead_termin as _termin_modul
+        gruppe_ich = _termin_modul.hv_gruppe_ids(session, benutzer)
+    except Exception:   # noqa: BLE001
+        gruppe_ich = None
+    if hv is not None and (benutzer is None
+                           or (hv.id not in gruppe_ich if gruppe_ich is not None else benutzer.id != hv.id)):
         return {"status": "hv_lead", "hv_name": hv.name,
                 "hinweis": f"Lead liegt bei {hv.name} (Handelsvertreter), "
                            "Terminierung durch den Vertreter"}
@@ -1374,6 +1395,11 @@ def objekt_feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde | Non
         # Adresse geändert → Geocoding je Objekt (AT, Lauf geocoding) neu; Koordinaten verwerfen
         objekt.lat, objekt.lon, objekt.geocode_status = None, None, None
         vorschlaege_cache_leeren(vorgang.id)
+    if feld == "bezeichnung":
+        # v35 (PLAN_LEAD_V6 Phase 186, Agent G): Galerie-Ordner „Objekt <Bezeichnung>“ folgt der
+        # Umbenennung (nur das Feld ordner der Fotos, Dateien bleiben liegen)
+        from app import galerie as galerie_modul
+        galerie_modul.objekt_umbenannt(session, objekt, alt_vgl)
     _aenderung(session, vorgang, praefix + label, alt_vgl, neu_vgl, benutzer)
     session.flush()
     return ok(neu_vgl)
@@ -1669,6 +1695,15 @@ def _ad_auswahl(session: Session, vorgang: Vorgang, kunde: Kunde) -> list:
     return auswahl
 
 
+def _taifun_kontext(session: Session, vorgang: Vorgang, kunde, benutzer, readonly: bool) -> dict | None:
+    """v35 (Phase 183, Agent T): Kontext `taifun` aus app/taifun_export.kartei_kontext."""
+    try:
+        from app import taifun_export
+        return taifun_export.kartei_kontext(session, vorgang, kunde, benutzer, readonly)
+    except Exception:   # noqa: BLE001 – die Kartei darf daran nie scheitern
+        return None
+
+
 def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool = False) -> dict:
     from app import galerie as galerie_modul
     from app import lead_mail, leadmanagement_logik
@@ -1716,8 +1751,15 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
     status_zeile = logik.status_zeile(vorgang.lead_phase or "neu")
     status_farben = {z.phase: z.farbe for z in logik.status_zeilen}
     kanal_werte = kern.kanal_werte(session)
+    # v35 (PLAN_LEAD_V6 Phase 184): Dropdown nach Häufigkeit; der aktuelle Wert bleibt wählbar –
+    # inaktiv/unbekannt als „(nicht mehr wählbar)“, „?“ als „Vertriebskanal unklar“ (kanal_labels)
+    kanal_labels: dict = {}
     if kunde and kunde.vertriebskanal and kunde.vertriebskanal not in kanal_werte:
         kanal_werte.append(kunde.vertriebskanal)
+        if lead_kanaele.ist_unklar(kunde.vertriebskanal):
+            kanal_labels[kunde.vertriebskanal] = f"? – {lead_kanaele.UNKLAR_HINWEIS}"
+        else:
+            kanal_labels[kunde.vertriebskanal] = f"{kunde.vertriebskanal} (nicht mehr wählbar)"
     aktiver_termin = next((t for t in termine if t.status in TERMIN_OFFEN), None)
     heute = datetime.now()
     hv = lead_v2.ist_handelsvertreter(session, benutzer)
@@ -1732,6 +1774,12 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
     # v31 (PLAN_LEAD_V5): Objekte, Großkunde, Testphase-Schalter, Status aus der Kartei,
     # Timeline mit Herkunft (vorgang_verlauf), To-Do-Zeilen für die schmale Spalte
     objekte = objekte_kontext(session, vorgang, kunde, pflicht, benutzer_map, erfassungen, angebote)
+    # v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos je Objekt – Block an der Objektkarte
+    # (kartei_objekte.html, Makro objekt_fotos); Kontext aus galerie.objektfotos_kontext
+    try:
+        objektfotos = galerie_modul.objektfotos_kontext(session, vorgang, benutzer)
+    except Exception:   # noqa: BLE001 – die Kartei darf daran nie scheitern
+        objektfotos = dict(galerie_modul.OBJEKTFOTOS_LEER)
     try:
         vorgang_interessen = objekte_modul.vorgang_interessen(session, vorgang.id) or (kunde.interessen if kunde else [])
     except Exception:   # noqa: BLE001
@@ -1809,9 +1857,13 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "todo_empfaenger": lead_todos.empfaenger_liste(session),
         "pflicht": pflicht, "pflicht_offen": pflicht["offen"],
         "terminierung": terminierung,
+        # v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Übergabe (Knopf, Badge, Rückfrage,
+        # Hinweisbalken, Testphase-Export) – die Kartei bleibt ohne das Modul lauffähig
+        "taifun": _taifun_kontext(session, vorgang, kunde, benutzer, readonly),
         "objektarten": lead_v2.objektarten(session), "anreden": ANREDEN,
         "interessen": INTERESSEN, "interessen_wahl": INTERESSEN_WAHL,
         "sparten_langnamen": langnamen, "kanal_werte": kanal_werte,
+        "kanal_labels": kanal_labels,   # v35 (Phase 184): „(nicht mehr wählbar)“ / „? – Vertriebskanal klären“
         "innendienst_wahl": innendienst_auswahl(session, vorgang),
         "ad_wahl": _ad_auswahl(session, vorgang, kunde) if kunde else [],
         "hv_sperre": lead_v2.hv_ausgeschlossen(session, vorgang, kunde) if kunde else "",
@@ -1827,6 +1879,7 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "sperre_text": ("Demo-Modus: Buchung nur für Demo-Leads" if demo_sperre
                         else (lead_v5.TESTPHASE_HINWEIS if not terminierung_aktiv else "")),
         "objekte": objekte, "vorgang_interessen": vorgang_interessen,
+        "objektfotos": objektfotos,   # v35 (Phase 186, Agent G): Fotos je Objekt
         "rechnung_abweichend": rechnung_abweichend(session, vorgang, kunde),
         "grosskunde": bool(kunde is not None and kunde.grosskunde),
         "grosskunde_farbe": (kern.parameter_holen(session, "grosskunde_farbe", "") or "").strip(),

@@ -51,6 +51,16 @@
         </div>
     {% endfor %}
 
+    {# v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos des Erfassungs-Objekts aus der Kundenkartei –
+       nur Anzeige (Kacheln mit Lightbox; galerie_fuss() liefert die Lightbox) #}
+    {% if objektfotos is defined and objektfotos %}
+    {% from "_objektfotos.html" import objektfotos_abschnitt, objektfotos_stil %}
+    {% from "_galerie.html" import galerie_fuss %}
+    {{ objektfotos_stil() }}
+    {{ objektfotos_abschnitt(objektfotos, 'Fotos zum Objekt', 'erfassung/' ~ (erfassung.objekt_id or 0)) }}
+    {{ galerie_fuss() }}
+    {% endif %}
+
     <div class="mobil-aktionen sticky-fuss">
         <a class="knopf zweitrangig gross" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten | length - 1 }}">← Zurück</a>
         {% if not offen and erfassung.status == 'Entwurf' %}

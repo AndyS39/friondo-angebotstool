@@ -213,11 +213,14 @@ class KanalFilter(Basis):
         standard = {z["vorgang"].id for z in self.daten(kanal="Standard")["zeilen"]}
         self.assertIn(ohne.id, standard)
         self.assertNotIn(enni.id, standard)
-        # Optionen: kern.kanal_werte (Standard zuerst) + Kanäle der Liste, Farben, aktiv
+        # Optionen: „ohne Kanal“ (technischer Wert Standard) zuerst, dann kern.kanal_werte (v35,
+        # PLAN_LEAD_V6 Phase 184: Stammdaten-Kanäle nach Häufigkeit – „Standard“ ist kein Kanal
+        # mehr und steht nicht mehr in kanal_werte) + Kanäle der Liste, Farben, aktiv
         d = self.daten(kanal=["Enni"])
         werte = [k["wert"] for k in d["kanaele"]]
         self.assertEqual(werte[0], "Standard")
-        self.assertEqual(werte[:len(kern.kanal_werte(self.s))], kern.kanal_werte(self.s))
+        self.assertEqual(d["kanaele"][0]["label"], "ohne Kanal")
+        self.assertEqual(werte[1:1 + len(kern.kanal_werte(self.s))], kern.kanal_werte(self.s))
         self.assertIn("SWD", werte)
         je_wert = {k["wert"]: k for k in d["kanaele"]}
         self.assertTrue(je_wert["Enni"]["aktiv"])

@@ -125,7 +125,8 @@ class Basis(unittest.TestCase):
                  "kalender_testpostfach", "mail_modus", "hv_ausschluss", "hv_gruppe_rene",
                  "hv_gruppe_simon", "vorschlaege_anzahl", "routen_start", lead_glocken.PARAMETER,
                  "hv_standard_benutzer", "kanal_ad_regel",
-                 "terminierung_aktiv")   # v31 (Phase 159): Buchungsweg in diesen Tests offen
+                 "terminierung_aktiv",   # v31 (Phase 159): Buchungsweg in diesen Tests offen
+                 "hv_gruppe_simon_mitglieder")   # v35 (Phase 185): Gruppe ausdrücklich (kein Rückfall)
 
     @classmethod
     def setUpClass(cls):
@@ -162,6 +163,9 @@ class Basis(unittest.TestCase):
             kern.parameter_setzen(cls.s, "hv_ausschluss", "Empfehlung; Messe; Sparkasse Duisburg; SWD; Enni")
             kern.parameter_setzen(cls.s, "hv_gruppe_rene", str(cls.rene.id))
             kern.parameter_setzen(cls.s, "hv_gruppe_simon", f"{cls.simon.id},{cls.paolo.id}")
+            # v35 (PLAN_LEAD_V6 Phase 185): die HV-Sicht arbeitet mit der Gruppe – Mitglieder
+            # ausdrücklich setzen, sonst greift der Rückfall „alle HV außer René“ (Dev-DB-Vertreter)
+            kern.parameter_setzen(cls.s, "hv_gruppe_simon_mitglieder", f"{cls.simon.id},{cls.paolo.id}")
             kern.parameter_setzen(cls.s, "hv_standard_benutzer", str(cls.simon.id))
             kern.parameter_setzen(cls.s, "vorschlaege_anzahl", "3")
             kern.parameter_setzen(cls.s, "routen_start", "Arnold-Overbeck-Straße 63-65, 47139 Duisburg")
@@ -375,7 +379,10 @@ class B_KarteHV(Basis):
         self.assertNotIn(fremd.id, leads)
         self.assertIn(eigen.id, termine)
         self.assertNotIn(fremd.id, termine)
-        self.assertEqual(starts, {self.paolo.name})
+        # v35 (Phase 185): Startadressen der eigenen Gruppe (Simon + Paolo), nicht der anderen
+        self.assertEqual(starts, {self.paolo.name, self.simon.name})
+        self.assertNotIn(self.rene.name, starts)
+        self.assertNotIn(self.horst.name, starts)
         # Innendienst/Admin unverändert: beide Leads
         pins_admin = self.client.get("/lead-management/karte/daten").json()["pins"]
         self.assertTrue({eigen.id, fremd.id} <= {p["vorgang_id"] for p in pins_admin if p["art"] == "lead"})
@@ -864,8 +871,37 @@ class M_Terminassistent(Basis):
                             for b in spalte.get("belegt", [])), spalte.get("belegt"))
         self.assertEqual(db.engine.pool.checkedout(), 0)
 
+    def paolo_allein(self):
+        """v35 (PLAN_LEAD_V6 Phase 185): die HV-Sicht rechnet mit den Kalendern der GRUPPE
+        (Simon + Paolo). Die Sperrzeit-Tests prüfen den eigenen Kalender – dafür steht Paolo
+        für den Testabschnitt allein (Simons Gruppe = nur Simon); danach wieder Basis-Gruppen."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _allein():
+            kern.parameter_setzen(self.s, "hv_gruppe_simon", str(self.simon.id))
+            kern.parameter_setzen(self.s, "hv_gruppe_simon_mitglieder", str(self.simon.id))
+            self.s.commit()
+            lead_termin.vorschlaege_cache_leeren()
+            try:
+                yield
+            finally:
+                kern.parameter_setzen(self.s, "hv_gruppe_simon", f"{self.simon.id},{self.paolo.id}")
+                kern.parameter_setzen(self.s, "hv_gruppe_simon_mitglieder", f"{self.simon.id},{self.paolo.id}")
+                self.s.commit()
+                lead_termin.vorschlaege_cache_leeren()
+        return _allein()
+
     def test_hv_nur_eigener_kalender_und_sperrzeit(self):
         v = self.lead(82, ad_id=self.paolo.id)
+        # v35 (Phase 185): in der Gruppe stehen die Kalender aller Mitglieder (Simon + Paolo)
+        k = self.client_paolo.get(f"/lead-management/lead/{v.id}/termin/kalender.json?neu=1").json()
+        self.assertEqual(sorted(sp["ad_id"] for sp in k["spalten"]), sorted([self.paolo.id, self.simon.id]))
+        self.assertTrue(k["hv"])
+        with self.paolo_allein():
+            self._sperrzeit_eigener_kalender(v)
+
+    def _sperrzeit_eigener_kalender(self, v):
         k = self.client_paolo.get(f"/lead-management/lead/{v.id}/termin/kalender.json?neu=1").json()
         self.assertEqual([sp["ad_id"] for sp in k["spalten"]], [self.paolo.id])
         self.assertTrue(k["hv"])
@@ -961,6 +997,10 @@ class M_Terminassistent(Basis):
         ein Vorschlag direkt an der Sperrzeit-Grenze bleibt erlaubt, eine Überlappung
         nicht; die manuelle Konfliktprüfung meldet an der Grenze keinen Puffer."""
         v = self.lead(83, ad_id=self.paolo.id)
+        with self.paolo_allein():   # v35: eigener Kalender (Gruppe = nur Paolo)
+            self._sperrzeit_exakt(v)
+
+    def _sperrzeit_exakt(self, v):
         j = self.client_paolo.get(f"/lead-management/lead/{v.id}/termin/vorschlaege.json?neu=1").json()
         self.assertEqual(j["status"], "ok", j)
         erster = j["vorschlaege"][0]

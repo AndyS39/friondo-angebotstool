@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
+{% from "_symbole.html" import symbol %}
+
+{% block titel %}TAIFUN-Übergaben – Lead-Management{% endblock %}
+{% block mainklasse %}breit{% endblock %}
+
+{# v35 (PLAN_LEAD_V6 Phase 183, Agent T): Übergabeliste aller TAIFUN-Kundenexporte
+   (GET /lead-management/taifun-uebergaben?status=geschrieben|abgeholt|fehler|importiert):
+   Datum, Vorgang, Datei, Benutzer, Status; „Als importiert markieren“ je Zeile, „XML“
+   (Protokoll-Kopie unter data/taifun_export, 12 Monate), bei Fehler „Erneut übergeben“.
+   Status abgeholt setzt der Lauf taifun-uebergaben (alle 15 Minuten), wenn die Datei nicht
+   mehr im Import-Ordner liegt. Nur Tokens (lm_v35_t.css). #}
+{% block inhalt %}
+{#- Nav-Key „lead-einstellungen“ (Vertrag v25: nur bekannte Keys; die Liste hängt an den Lead-Einstellungen) #}
+{{ lm_nav('lead-einstellungen') }}
+<link rel="stylesheet" href="/static/lm_v35_t.css?v={{ css_version }}">
+<div class="seitenkopf">
+    <h1>TAIFUN-Übergaben</h1>
+    <span class="dezent">Import-Ordner {{ ordner }} · Übergabe {{ 'eingeschaltet' if aktiv_schalter else 'ausgeschaltet (Lead-Einstellungen → TAIFUN-Übergabe)' }}
+        · Abholung prüft der Lauf <code>{{ lauf }}</code> alle 15 Minuten</span>
+    <div class="aktionen">
+        {% if ist_admin %}<a class="knopf klein zweitrangig" href="/parametrierung/lead-einstellungen#taifun-uebergabe">Lead-Einstellungen</a>{% endif %}
+        <a class="knopf klein zweitrangig" href="/lead-management/dashboard">← Dashboard</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung {{ 'fehler' if fehler }}" role="status">{{ meldung }}</p>{% endif %}
+{#- v35 (Phase 186, Agent B): Sofortfilter – die Status-Links wirken ohne Seitenneuladen (lm_sofort.js:
+    verstecktes Formular, data-lm-sofort-links="status", Leiste und Liste sind Tauschbereiche) #}
+<form method="get" action="/lead-management/taifun-uebergaben" id="lm-taifun-form" data-lm-sofort="1" data-lm-sofort-links="status" hidden>{% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}</form>
+<nav class="lm-umschalter lm-taifun-filter" aria-label="Status" style="margin-bottom:12px" data-lm-sofort-ziel="taifun-status" data-lm-sofort-link-quelle="lm-taifun-form">
+    <a class="{{ 'aktiv' if not status }}" href="/lead-management/taifun-uebergaben">Alle <span class="n">{{ zeilen | length if not status else (zaehler.values() | sum) }}</span></a>
+    {% for key, name in status_namen.items() %}
+    <a class="{{ 'aktiv' if status == key }}" href="/lead-management/taifun-uebergaben?status={{ key }}">{{ name }} <span class="n {{ 'rot' if key == 'fehler' and zaehler.get('fehler') }}">{{ zaehler.get(key, 0) }}</span></a>
+    {% endfor %}
+</nav>
+<div class="tabelle-wrap" data-lm-sofort-ziel="taifun-liste">
+<table class="tabelle lm-taifun-liste">
+    <thead><tr><th>Datum</th><th>Vorgang</th><th>Datei</th><th>Benutzer</th><th>Auslöser</th><th>Status</th><th>Hinweis</th><th>Aktion</th></tr></thead>
+    <tbody>
+    {% for z in zeilen %}
+    {% set e = z.eintrag %}
+    <tr data-uebergabe="{{ e.id }}" data-status="{{ e.status }}" class="{{ 'lm-taifun-fehlerzeile' if e.status == 'fehler' }}">
+        <td class="nowrap">{{ e.geschrieben_am.strftime('%d.%m.%Y %H:%M') if e.geschrieben_am else '–' }}
+            {% if e.abgeholt_am %}<br><small class="dezent">abgeholt {{ e.abgeholt_am.strftime('%d.%m.%y %H:%M') }}</small>{% endif %}
+            {% if e.importiert_am %}<br><small class="dezent">importiert {{ e.importiert_am.strftime('%d.%m.%y %H:%M') }}</small>{% endif %}</td>
+        <td>{% if z.test %}<span class="abzeichen" title="Testdatei aus den Lead-Einstellungen (Demo-Lead Max Mustermann)">Testdatei</span>
+            {% elif z.vorgang %}<a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name if z.kunde else ('Vorgang ' ~ z.vorgang.id) }}</a> <small class="dezent">V{{ z.vorgang.id }}</small>
+            {% else %}<span class="dezent">Vorgang {{ e.vorgang_id }} (gelöscht)</span>{% endif %}</td>
+        <td class="lm-taifun-datei">{{ e.datei or '–' }}</td>
+        <td>{{ z.benutzer.name if z.benutzer else '–' }}</td>
+        <td>{{ z.grund_text }}</td>
+        <td><span class="abzeichen lm-taifun-status lm-taifun-status-{{ e.status }}" title="{{ z.status_text }}">{{ z.status_text }}</span></td>
+        <td class="dezent lm-taifun-hinweis-zelle">{{ e.fehler_text or '' }}</td>
+        <td class="nowrap">
+            {% if z.kopie and (z.vorgang or z.test) %}<a class="knopf klein zweitrangig" href="/lead-management/lead/{{ z.vorgang.id if z.vorgang else 0 }}/taifun/{{ e.id }}/xml" title="Protokoll-Kopie der XML-Datei anzeigen/herunterladen">{{ symbol('oeffnen') }} XML</a>{% endif %}
+            {% if e.status in ('geschrieben', 'abgeholt') %}
+            <form method="post" action="/lead-management/taifun-uebergaben/{{ e.id }}/importiert" class="lm-inline">
+                <input type="hidden" name="zurueck" value="/lead-management/taifun-uebergaben{{ '?status=' ~ status if status }}">
+                <button class="knopf klein zweitrangig" type="submit" title="Manuellen Import in TAIFUN bestätigen">{{ symbol('haken') }} Als importiert markieren</button>
+            </form>
+            {% endif %}
+            {% if e.status == 'fehler' and z.vorgang and aktiv_schalter %}
+            <form method="post" action="/lead-management/lead/{{ z.vorgang.id }}/taifun" class="lm-inline">
+                <input type="hidden" name="bestaetigt" value="1">
+                <input type="hidden" name="zurueck" value="/lead-management/taifun-uebergaben{{ '?status=' ~ status if status }}">
+                <button class="knopf klein" type="submit" title="XML erneut in den Import-Ordner schreiben">{{ symbol('aktualisieren') }} Erneut übergeben</button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="dezent">Keine Übergaben{% if status %} mit Status „{{ status_namen.get(status, status) }}“{% endif %}.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="dezent" style="margin-top:8px">Status <b>geschrieben</b> = Datei liegt im Import-Ordner; <b>abgeholt</b> = Datei ist aus dem Ordner
+    verschwunden (von TAIFUN oder einem Mitarbeiter verarbeitet, Lauf alle 15 Minuten); <b>Fehler</b> = Ordner fehlt,
+    keine Rechte oder Validierung gegen ADRESSEN.xsd gescheitert – der Lead steht oben im Hauptboard mit
+    „TAIFUN-Übergabe fehlgeschlagen“; <b>manuell importiert</b> = per Knopf bestätigt.
+    Kopien bleiben 12 Monate unter <code>data/taifun_export/</code>.</p>
+{#- v35 (Phase 186, Agent B): Sofortfilter der Status-Links #}
+<link rel="stylesheet" href="/static/lm_v35_b.css?v={{ css_version }}">
+<script src="/static/lm_sofort.js?v={{ css_version }}" defer></script>
+{% endblock %}

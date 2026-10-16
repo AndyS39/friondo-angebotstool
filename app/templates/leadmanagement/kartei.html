@@ -25,6 +25,9 @@
 {#- v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): roter Hinweisbalken „Mail nicht gesendet“ /
     „E-Mail falsch“ – Inhalt aus lead_mail.kartei_hinweis (mail_hinweis im Kontext) #}
 {% include "leadmanagement/_mail_hinweis.html" %}
+{#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): roter Balken „TAIFUN-Übergabe fehlgeschlagen“ + Rückfrage ohne JS #}
+{% include "leadmanagement/_taifun_hinweis.html" %}
+{% if taifun is defined and taifun %}<link rel="stylesheet" href="/static/lm_v35_t.css?v={{ css_version }}">{% endif %}
 {#- v31 (Phase 154): archivierter Lead – Banner mit Wiederherstellen (Sammelaktion, B) #}
 {% if archiv_text %}<div class="lm-archiv-banner meldung">{{ archiv_text }} – Lead-Sicht ohne Boards/Listen.
   <form method="post" action="/lead-management/boards/sammelaktion" class="lm-inline-form" style="display:inline">
@@ -39,6 +42,8 @@
                 <h1 class="lk-name">{{ kunde.anzeige_name if kunde else 'Kundenkartei ' ~ vorgang.id }}
                     {#- v31 (Phase 153): Badge „Großkunde“ – Klasse lm-grosskunde (lead_v2.css, B), Fläche aus Parameter grosskunde_farbe #}
                     {% if grosskunde %}<span class="abzeichen lm-grosskunde" data-rolle="grosskunde-badge" title="Als Großkunde gekennzeichnet"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
+                    {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): grünes Badge „TAIFUN <Datum>“ (+ Kundennummer) nach erfolgter Übergabe #}
+                    {% if taifun is defined and taifun and taifun.badge %}<span class="abzeichen lm-taifun-badge" data-rolle="taifun-badge" title="{{ taifun.badge_titel }}">{{ taifun.badge }}</span>{% endif %}
                     {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
                     {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
                     {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin – keine Terminbestätigung (F10)">Vorab-Angebot</span>{% endif %}
@@ -136,10 +141,22 @@
             <form method="post" action="{{ kartei_url }}/terminierung" class="lk-inline" id="lk-terminierung-form">
                 {% if terminierung.erledigt %}
                     <button class="knopf" type="button" disabled title="Bereits terminiert – Termin geplant und bestätigt">{{ symbol('haken') }} Terminiert</button>
-                {% elif not terminierung_aktiv %}
+                {% elif not terminierung_aktiv and not (taifun is defined and taifun and taifun.testphase_export) %}
                     {#- v31 (Phase 159): Testphase – sichtbar, ausgegraut, Tooltip #}
                     <button class="knopf lk-terminierung" type="button" disabled aria-disabled="true" id="lk-terminierung-knopf"
                             data-testphase="1" title="{{ testphase_hinweis }}">{{ symbol('kalender') }} Terminierung{% if vorgemerkte | length > 1 %} ({{ vorgemerkte | length }} Termine){% endif %}</button>
+                {% elif not terminierung_aktiv %}
+                    {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): Testphase + TAIFUN-Übergabe aktiv – der Knopf ist aktiv und
+                        schreibt NUR die TAIFUN-Datei (keine Buchung, kein Outlook, keine Mail, Phase bleibt) #}
+                    {% if terminierung.bereit %}
+                    <button class="knopf lk-terminierung" type="submit" id="lk-terminierung-knopf" data-testphase="1" data-taifun-testphase="1"
+                            onclick="return confirm('Testphase: nur Übergabe an TAIFUN – keine Buchung, keine Mail. Jetzt die TAIFUN-Datei schreiben?')"
+                            title="{{ taifun.testphase_hinweis }}">{{ symbol('kalender') }} Terminierung{% if vorgemerkte | length > 1 %} ({{ vorgemerkte | length }} Termine){% endif %}</button>
+                    {% else %}
+                    <button class="knopf lk-terminierung" type="button" disabled aria-disabled="true" id="lk-terminierung-knopf" data-testphase="1" data-taifun-testphase="1"
+                            aria-describedby="lk-fehlliste"
+                            title="{{ taifun.testphase_hinweis }} – gesperrt, es fehlt: {{ terminierung.fehlend | join(', ') }}">{{ symbol('kalender') }} Terminierung</button>
+                    {% endif %}
                 {% elif terminierung.bereit %}
                     <button class="knopf lk-terminierung" type="submit" id="lk-terminierung-knopf"
                             onclick="return confirm('Terminierung: Phase Terminiert, Outlook-Termin schreiben und Terminbestätigung mit ICS planen?')"
@@ -160,6 +177,20 @@
                 <input type="hidden" name="bestaetigung" value="auto">
                 {% endif %}
             </form>
+            {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): „An TAIFUN übergeben“ / „Erneut an TAIFUN übergeben“ (ID/LM/Admin,
+                nicht AD/HV); ausgegraut mit Tooltip bei Schalter aus oder Kanal „?“; Rückfrage (Dublette / bereits
+                übergeben) als confirm – ohne JavaScript antwortet die Route mit dem Rückfrage-Balken (bestaetigt=1) #}
+            {% if taifun is defined and taifun and taifun.erlaubt %}
+            <form method="post" action="{{ taifun.url }}" class="lk-inline" id="lk-taifun-form" data-rolle="taifun-form">
+                <input type="hidden" name="bestaetigt" value="">
+                {% if taifun.knopf_gesperrt %}
+                <button class="knopf zweitrangig" type="button" disabled aria-disabled="true" id="lk-taifun-knopf" title="{{ taifun.knopf_tooltip }}">{{ symbol('import') }} {{ taifun.knopf_text }}</button>
+                {% else %}
+                <button class="knopf zweitrangig" type="submit" id="lk-taifun-knopf" title="{{ taifun.knopf_tooltip }}"
+                        {% if taifun.rueckfrage %}onclick="if (!window.confirm({{ taifun.rueckfrage | tojson | forceescape }})) { return false; } this.form.elements.bestaetigt.value = '1'; return true;"{% endif %}>{{ symbol('import') }} {{ taifun.knopf_text }}</button>
+                {% endif %}
+            </form>
+            {% endif %}
         {% endif %}
         <div class="lk-schnell" role="toolbar" aria-label="Schnellaktionen">
             {% if kunde and kunde.telefon %}

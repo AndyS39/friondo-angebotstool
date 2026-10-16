@@ -27,6 +27,7 @@ from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
 from app import import_preisliste   # v27: Hinweis/Bestätigung monday-Vollabgleich
 from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
+from app import leadmanagement as lead_kern   # v35 (Phase 184): Kanal-Dropdown aus den Stammdaten
 
 router = APIRouter(prefix="/leads")
 
@@ -264,6 +265,8 @@ def _tabelle_kontext(session: Session, benutzer, q: str, interesse: str, vertrie
             "q": q, "interesse": interesse, "vertriebler_id": vertriebler_id,
             "lead_status": lead_status, "sortierung": sortierung or "termin", "ansicht": ansicht,
             "ausgeblendet": ausgeblendet, "kanal": kanal, "kanal_werte": kanal_werte,
+            # v35 (PLAN_LEAD_V6 Phase 184): Dropdown „Kanal manuell setzen“ aus den Stammdaten
+            "kanal_wahl": lead_kern.kanal_werte(session),
             "prioritaet": prioritaet, "prioritaeten": PRIORITAETEN,
             "prioritaet_texte": mein_tag.PRIORITAET_TEXTE,
             "ohne_ad": ohne_ad, "ueberfaellig_anzahl": len(ueberfaellige),

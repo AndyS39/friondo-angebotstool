@@ -59,6 +59,11 @@ class Basis(unittest.TestCase):
         cls.modus = kern.parameter_holen(cls.s, "lead_freigabe_modus", "admin")
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", "admin")
         cls.startseite_alt = kern.parameter_holen(cls.s, "lm_startseite", "")
+        # v35 (PLAN_LEAD_V6 Phase 185): HV-Sicht = Gruppe; ohne Mitgliederliste zöge der v31-Rückfall
+        # („alle HV außer René“) die Dev-DB-Vertreter in die Gruppe des Test-HV – er steht hier allein
+        cls.hv_mitglieder_alt = kern.parameter_holen(cls.s, "hv_gruppe_simon_mitglieder", "")
+        kern.parameter_setzen(cls.s, "hv_gruppe_simon_mitglieder",
+                              kern.parameter_holen(cls.s, "hv_gruppe_simon", "") or "0")
         cls.s.commit()
         cls.admin = cls.s.get(Benutzer, 1)
         cls.client = TestClient(app)
@@ -77,6 +82,7 @@ class Basis(unittest.TestCase):
         aufraeumen(cls.s)
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", cls.modus)
         kern.parameter_setzen(cls.s, "lm_startseite", cls.startseite_alt)
+        kern.parameter_setzen(cls.s, "hv_gruppe_simon_mitglieder", cls.hv_mitglieder_alt)
         cls.s.commit()
         cls.s.close()
 

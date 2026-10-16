@@ -23,7 +23,7 @@ Die Positionsregeln (Enni/SWD) sind fest hinterlegt und am ℹ nachzulesen.</p>
     <tr title="{{ hinweise[p.id] }}">
         <form method="post" action="/parametrierung/profile/{{ p.id }}">
         <td><strong>{{ p.name }}</strong> <span class="dezent">ℹ</span></td>
-        <td><input type="text" name="kanalwerte" value="{{ p.kanalwerte }}" size="14"></td>
+        <td><input type="text" name="kanalwerte" value="{{ p.kanalwerte }}" size="14" list="kanal-liste" title="Kanalwerte (kommagetrennt) – Namen aus den Vertriebskanälen (Lead-Management → Vertriebskanäle); Kanäle ohne Zuordnung nutzen das Profil Standard"></td>
         <td><select name="nachtext_id">
             <option value="0">– Standard –</option>
             {% for b in bloecke_nachtext %}
@@ -46,6 +46,10 @@ Die Positionsregeln (Enni/SWD) sind fest hinterlegt und am ℹ nachzulesen.</p>
     {% endfor %}
     </tbody>
 </table>
+{#- v35 (PLAN_LEAD_V6 Phase 184): Vorschlagsliste der Kanalwerte aus den Vertriebskanal-Stammdaten (nur lesend) #}
+<datalist id="kanal-liste">{% for kn in kanal_wahl | default([]) %}<option value="{{ kn }}">{% endfor %}</datalist>
+<p class="dezent">Kanalwerte: Namen der <a href="/lead-management/kanaele">Vertriebskanäle</a> (kommagetrennt, Teilstring-Abgleich);
+    Kanäle ohne Zuordnung nutzen das Profil „Standard“.</p>
 
 <h2>Textblöcke (Nach- &amp; Vortexte)</h2>
 <form method="get" action="/parametrierung/profile" class="suchleiste">

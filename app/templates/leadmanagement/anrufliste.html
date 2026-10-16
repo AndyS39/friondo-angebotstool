@@ -21,16 +21,21 @@
    (Klasse nur bei score_aktiv), Filter „Vertriebskanal“ (Mehrfach, Farben aus
    kanal_farben) statt Quelle/Einzelquelle, Kanal-Badge statt Quelle-Badge,
    Phasen-Label aus dem Blatt Status; „Nicht erreicht“ und „Mailbox“ ohne
-   Dialog (Taste 2/4 klicken den Button), Erreicht → Kartei Reiter Termin. #}
+   Dialog (Taste 2/4 klicken den Button), Erreicht → Kartei Reiter Termin.
+   v35 (PLAN_LEAD_V6 Phase 186, Agent B): Sofortsuche – Suchfeld 300 ms nach dem Tippen,
+   Chips/Auswahl sofort (data-lm-sofort, Chip-Links über data-lm-sofort-links), die Liste
+   (data-lm-sofort-ziel) wird ohne Seitenneuladen getauscht; kein „Filtern“/„Anwenden“-Knopf
+   (noscript-Rückfall); Panel-Links und Tasten über Ereignis-Delegation (Zeilen werden ersetzt). #}
 {% block inhalt %}
 {{ lm_nav('anrufliste') }}
 <div class="seitenkopf">
     <h1>Anrufliste {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}</h1>
-    <span class="dezent">{{ 'Meine + freie Leads' if filter_werte.meine else 'Alle Leads' }} · {{ offen }} offen</span>
+    <span class="dezent" data-lm-sofort-ziel="kopf">{{ 'Meine + freie Leads' if filter_werte.meine else 'Alle Leads' }} · {{ offen }} offen</span>
     <div class="aktionen">
         <form method="get" action="/lead-management/anruf/suche" class="lm-rufnummer" title="Eingehender Anruf: Rufnummer eingeben (E.164-Vergleich, z. B. 0203 … = +49 203 …) – ein Treffer springt direkt in die Kartei">
-            <input type="search" name="q" inputmode="tel" placeholder="Rufnummer eingeben" autocomplete="off">
-            <button class="knopf klein zweitrangig" type="submit">{{ symbol('telefon') }} Suchen</button>
+            {#- v35 (Phase 186): kein „Suchen“-Knopf mehr – Enter sucht (noscript-Rückfall) #}
+            <input type="search" name="q" inputmode="tel" placeholder="Rufnummer eingeben – Enter sucht" autocomplete="off" aria-label="Rufnummer (eingehender Anruf)">
+            <noscript><button class="knopf klein zweitrangig" type="submit">{{ symbol('telefon') }} Suchen</button></noscript>
         </form>
         <a class="knopf klein zweitrangig" href="/lead-management/anruf/meine" title="Eigene protokollierte Anrufe mit Datum, Nummer, Vorgang, Ergebnis, Dauer">Meine Anrufe</a>
         <a class="knopf klein zweitrangig" href="/lead-management/anrufliste?meine={{ '0' if filter_werte.meine else '1' }}">{{ 'Alle Leads' if filter_werte.meine else 'Meine + freie Leads' }}</a>
@@ -41,7 +46,7 @@
 
 {% set meine_param = 'meine=' ~ ('1' if filter_werte.meine else '0') %}
 {% set kanal_aktiv = kanaele | selectattr('aktiv') | map(attribute='wert') | list %}
-<form method="get" action="/lead-management/anrufliste" class="lm-schnellfilter" id="filterform">
+<form method="get" action="/lead-management/anrufliste" class="lm-schnellfilter" id="filterform" data-lm-sofort="1" data-lm-sofort-links="meine,sla,versuche_min,rueckruf,frei,grosskunde,eingang_von,eingang_bis">
     <input type="hidden" name="meine" value="{{ '1' if filter_werte.meine else '0' }}">
     {% for key, name in chips %}
     {#- v31 (Phase 153): Chip „Großkunde“ (grosskunde=1) #}
@@ -56,31 +61,31 @@
         <summary title="Vertriebskanal – Mehrfachauswahl, Werte = Vertriebskanäle der Angebotsprofile">Vertriebskanal: {{ kanal_aktiv | join(', ') if kanal_aktiv else 'alle' }}</summary>
         <div class="lm-mehrfach-liste">
             {% for k in kanaele %}
-            <label><input type="checkbox" name="kanal" value="{{ k.wert }}" {{ 'checked' if k.aktiv }} onchange="this.form.submit()">
-                <i class="lm-kanal-punkt" {% if k.farbe %}style="--f:{{ k.farbe }}"{% endif %}></i> {{ k.wert }}</label>
+            <label><input type="checkbox" name="kanal" value="{{ k.wert }}" {{ 'checked' if k.aktiv }}>
+                <i class="lm-kanal-punkt" {% if k.farbe %}style="--f:{{ k.farbe }}"{% endif %}></i> {{ k.label if (k.label is defined and k.label) else k.wert }}</label>{# v35 (Phase 184): „ohne Kanal“ statt „Standard“ #}
             {% endfor %}
             <div class="lm-mehrfach-fuss">
-                <a class="dezent" href="/lead-management/anrufliste?{{ meine_param }}">alle Kanäle</a>
-                <button class="knopf klein zweitrangig" type="submit">Anwenden</button>
+                <a class="dezent" href="/lead-management/anrufliste?{{ meine_param }}" data-lm-sofort-leeren="kanal">alle Kanäle</a>
+                <noscript><button class="knopf klein zweitrangig" type="submit">Anwenden</button></noscript>
             </div>
         </div>
     </details>
-    <select name="sparte" onchange="this.form.submit()">
+    <select name="sparte">
         <option value="">Sparte: alle</option>
         {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS (Jinja-Global lm_sparten) #}
         {% for s in lm_sparten %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }} – {{ lm_sparten_lang.get(s, s) }}</option>{% endfor %}
     </select>
     {% if score_aktiv %}
-    <select name="klasse" onchange="this.form.submit()">
+    <select name="klasse">
         <option value="">Klasse: alle</option>
         {% for k in ('A', 'B', 'C') %}<option value="{{ k }}" {{ 'selected' if filter_werte.klasse == k }}>{{ k }}</option>{% endfor %}
     </select>
     {% endif %}
-    <select name="phase" onchange="this.form.submit()" title="Phase (Standard: Arbeitsliste) – Label aus dem Blatt Status">
+    <select name="phase" title="Phase (Standard: Arbeitsliste) – Label aus dem Blatt Status">
         <option value="">Phase: Arbeitsliste</option>
         {% for wert, name in phasen_optionen %}<option value="{{ wert }}" {{ 'selected' if filter_werte.phase == wert }}>{{ name }}</option>{% endfor %}
     </select>
-    <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Name / Telefon / Ort / PLZ">
+    <input type="search" name="q" id="lm-suche" value="{{ filter_werte.q }}" placeholder="Name / Telefon / Ort / PLZ – sofort beim Tippen" autocomplete="off">
     {# tolerierte Parameter der Übersichts-Links (ohne eigenes Select): als Abzeichen sichtbar, beim Filtern erhalten #}
     {% if filter_werte.kampagne_id not in ('', none) %}<input type="hidden" name="kampagne_id" value="{{ filter_werte.kampagne_id }}"><span class="abzeichen">Kampagne #{{ filter_werte.kampagne_id }}</span>{% endif %}
     {% if filter_werte.quelle_typ %}<input type="hidden" name="quelle_typ" value="{{ filter_werte.quelle_typ }}"><span class="abzeichen">Quellen-Typ: {{ quellen_gruppen.get(filter_werte.quelle_typ, filter_werte.quelle_typ) }}</span>{% endif %}
@@ -89,11 +94,11 @@
         <span class="abzeichen">Eingang {{ filter_werte.eingang_von }}{{ ' – ' ~ filter_werte.eingang_bis if filter_werte.eingang_bis != filter_werte.eingang_von }}</span>{% endif %}
     {% if filter_werte.versuche is not none %}<input type="hidden" name="versuche" value="{{ filter_werte.versuche }}"><span class="abzeichen">Versuche = {{ filter_werte.versuche }}</span>{% endif %}
     {% if filter_werte.versuche_min is not none and chip != 'drei' %}<input type="hidden" name="versuche_min" value="{{ filter_werte.versuche_min }}"><span class="abzeichen">Versuche ≥ {{ filter_werte.versuche_min }}</span>{% endif %}
-    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+    <noscript><button class="knopf klein zweitrangig" type="submit">Filtern</button></noscript>
 </form>
 
 <div class="anruf-layout">
-<div class="lm-arbeitsliste{{ '' if score_aktiv else ' ohne-klasse' }}" id="anruftabelle">
+<div class="lm-arbeitsliste{{ '' if score_aktiv else ' ohne-klasse' }}" id="anruftabelle" data-lm-sofort-ziel="liste">
     <div class="lm-sortierung" title="Eine durchgehend sortierte Liste – keine Gruppen mehr">
         <b>Reihenfolge</b>
         {% for rang, text, erkl in raenge %}<span title="{{ erkl }}">{{ text or 'übrige nach Eingang (älteste zuerst)' }}</span>{% if not loop.last %}<span class="dezent">→</span>{% endif %}{% endfor %}
@@ -187,19 +192,27 @@ document.addEventListener('click', e => {
     });
 });
 // Seitenpanel: Klick auf den Namen öffnet die Akte rechts ohne Seitenwechsel
+// (v35: delegiert – die Zeilen werden von der Sofortsuche ohne Seitenneuladen ersetzt)
 const panel = document.getElementById('lead-panel');
-document.querySelectorAll('.panel-link').forEach(a => {
-    a.addEventListener('click', e => {
-        e.preventDefault();
-        /* einbett=1: Akte ohne Kopf-/Fusszeile im Panel (Design-Fix 27.09.2026) */
-        document.getElementById('panel-frame').src = a.dataset.ziel + '?einbett=1';
-        document.getElementById('panel-voll').href = a.dataset.ziel;
-        panel.hidden = false;
-        aktiveZeile = a.closest('.anruf-zeile');
-        document.querySelectorAll('.anruf-zeile.aktiv')
-            .forEach(z => z.classList.remove('aktiv'));
-        aktiveZeile.classList.add('aktiv');
-    });
+document.addEventListener('click', e => {
+    const a = e.target.closest ? e.target.closest('.panel-link') : null;
+    if (!a) return;
+    e.preventDefault();
+    /* einbett=1: Akte ohne Kopf-/Fusszeile im Panel (Design-Fix 27.09.2026) */
+    document.getElementById('panel-frame').src = a.dataset.ziel + '?einbett=1';
+    document.getElementById('panel-voll').href = a.dataset.ziel;
+    panel.hidden = false;
+    aktiveZeile = a.closest('.anruf-zeile');
+    document.querySelectorAll('.anruf-zeile.aktiv')
+        .forEach(z => z.classList.remove('aktiv'));
+    aktiveZeile.classList.add('aktiv');
+});
+document.addEventListener('lm-sofort:geladen', () => {
+    if (aktiveZeile && !document.contains(aktiveZeile)) {
+        const id = aktiveZeile.dataset.vorgang;
+        aktiveZeile = document.querySelector('.anruf-zeile[data-vorgang="' + id + '"]');
+        if (aktiveZeile) aktiveZeile.classList.add('aktiv');
+    }
 });
 function panelSchliessen() { panel.hidden = true; }
 // Tastaturkürzel 1–7 wirken auf die im Seitenpanel geöffnete Zeile – Belegung
@@ -220,4 +233,7 @@ document.addEventListener('keydown', e => {
 });
 </script>
 <script src="/static/lm_anruf.js?v={{ css_version }}" defer></script>
+{#- v35 (Phase 186): Sofortsuche (Chips, Auswahl, Suchfeld) #}
+<link rel="stylesheet" href="/static/lm_v35_b.css?v={{ css_version }}">
+<script src="/static/lm_sofort.js?v={{ css_version }}" defer></script>
 {% endblock %}

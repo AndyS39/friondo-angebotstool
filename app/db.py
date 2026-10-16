@@ -374,6 +374,7 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "galerie_dateien": {
         "sparte": "VARCHAR(5) NOT NULL DEFAULT 'WP'",          # 27.09.2026
+        "objekt_id": "INTEGER",                                 # v35 Phase 186 (Fotos je Objekt)
     },
     "aufgaben": {
         "aktion_typ": "VARCHAR(20) NOT NULL DEFAULT ''",       # v15 Phase 78
@@ -559,6 +560,11 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     # v12 (Lead-Management, Phase 73): Lead-Kopf am Vorgang – alle nullable
     "vorgaenge": {
+        "taifun_export_am": "DATETIME",                           # v35 Phase 183
+        "taifun_export_von": "INTEGER",                           # v35 Phase 183
+        "taifun_export_datei": "VARCHAR(120) NOT NULL DEFAULT ''",   # v35 Phase 183
+        "taifun_export_status": "VARCHAR(20) NOT NULL DEFAULT ''",   # v35 Phase 183
+        "taifun_export_grund": "TEXT NOT NULL DEFAULT ''",         # v35 Phase 183
         "nachfass_versuche": "INTEGER NOT NULL DEFAULT 0",       # v33 Phase 176
         "letzter_einwand_id": "INTEGER",                         # v33 Phase 176
         "archiviert_am": "DATETIME",                             # v31 Phase 154
@@ -612,6 +618,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "mail_fehler_text": "VARCHAR(500) NOT NULL DEFAULT ''",
     },
     "kunden": {
+        "taifun_kundennr": "VARCHAR(30) NOT NULL DEFAULT ''",       # v35 Phase 183
         "grosskunde": "BOOLEAN NOT NULL DEFAULT 0",             # v31 Phase 153
         "objektart": "VARCHAR(10)",                             # v23 Phase 104
         "parteien": "INTEGER",                                  # v23 Phase 104
@@ -689,6 +696,7 @@ def _spalten_ergaenzen() -> None:
 # Spaltenliste); CREATE INDEX IF NOT EXISTS ist idempotent und nur additiv –
 # v26 läuft auf einer Datenbank mit diesen Indizes unverändert.
 _INDIZES = [
+    ("ix_v35_galerie_dateien_objekt_id", "galerie_dateien", "objekt_id"),   # v35 Phase 186
     ("ix_v33_projekt_termine_vorgang_id", "projekt_termine", "vorgang_id"),   # v33 Phase 168
     ("ix_v33_montage_formulare_termin_id", "montage_formulare", "termin_id"),  # v33 Phase 168
     ("ix_v27_vorgaenge_lead_phase", "vorgaenge", "lead_phase"),

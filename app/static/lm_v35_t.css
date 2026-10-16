@@ -1,0 +1,33 @@
+/* v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Kundenübergabe – Kartei-Badge, Hinweisbalken,
+   Übergabeliste, Abschnitt der Lead-Einstellungen. Nur Tokens (Design v2, Hell/Dunkel). */
+
+/* Kartei: grünes Badge „TAIFUN <Datum>“ im Kopf (Paar --status-gruen) */
+.lm-taifun-badge { background: var(--status-gruen-bg); color: var(--status-gruen);
+  border: 1px solid color-mix(in srgb, var(--status-gruen) 35%, transparent); white-space: nowrap; }
+
+/* Hinweisbalken (Muster .lm-mail-hinweis aus lead_v29.css); Rückfrage in Warnfarbe */
+.lm-taifun-rueckfrage { border-color: var(--status-orange); background: var(--status-orange-bg);
+  color: var(--status-orange); }
+
+/* Knopf „An TAIFUN übergeben“ neben „Terminierung“ */
+#lk-taifun-form { display: inline; margin: 0; }
+#lk-taifun-knopf[disabled] { opacity: .6; cursor: not-allowed; }
+
+/* Übergabeliste */
+.lm-taifun-liste .lm-taifun-datei { font-family: inherit; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lm-taifun-liste .lm-taifun-hinweis-zelle { max-width: 360px; white-space: normal; overflow-wrap: anywhere; }
+.lm-taifun-liste .lm-inline { display: inline; margin: 0; }
+.lm-taifun-liste .lm-inline + .lm-inline, .lm-taifun-liste .knopf + .lm-inline { margin-left: 4px; }
+.lm-taifun-status-geschrieben { background: var(--status-blau-bg); color: var(--status-blau); }
+.lm-taifun-status-abgeholt, .lm-taifun-status-importiert { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lm-taifun-status-fehler { background: var(--status-rot-bg); color: var(--status-rot); }
+.lm-taifun-fehlerzeile td:first-child { box-shadow: inset 4px 0 0 var(--status-rot); }
+.lm-taifun-filter .n.rot { color: var(--status-rot); font-weight: 700; }
+
+/* Lead-Einstellungen: Abschnitt „TAIFUN-Übergabe“ */
+.lm-taifun-abschnitt .lm-pruefpunkte li.ok { color: var(--status-gruen); }
+.lm-taifun-abschnitt .lm-pruefpunkte li.offen { color: var(--status-orange); }
+.lm-taifun-abschnitt .lm-taifun-dienst { border-left: 4px solid var(--status-orange); padding: 6px 10px;
+  background: var(--flaeche-abgesetzt); color: var(--text); border-radius: var(--r-m, 10px); }
+.lm-taifun-abschnitt .aktionen { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; }
+.lm-taifun-abschnitt .lm-inline { display: inline; margin: 0; }

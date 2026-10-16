@@ -1,0 +1,44 @@
+{# v35 (PLAN_LEAD_V6 Phase 183, Agent T): roter Hinweisbalken „TAIFUN-Übergabe fehlgeschlagen“ in
+   der Kundenkartei (Muster _mail_hinweis.html, v29) – Inhalt aus taifun_export.kartei_hinweis
+   (Kontext taifun.hinweis: {art, titel, text, erneut_url, liste_url}); „Erneut übergeben“ postet
+   mit bestaetigt=1 (die Rückfrage wurde beim ersten Versuch schon beantwortet). Zusätzlich die
+   Rückfrage ohne JavaScript: ?taifun_rueckfrage=1 (Route antwortet so, wenn bestaetigt fehlt) →
+   Balken mit „Trotzdem übergeben“. Styles: lead_v29.css (.lm-mail-hinweis) + lm_v35_t.css. #}
+{% from "_symbole.html" import symbol %}
+{% if taifun and taifun.hinweis %}
+<div class="lm-mail-hinweis lm-mail-hinweis-fehler lm-taifun-hinweis" role="alert" id="lm-taifun-hinweis" data-art="fehler">
+    <span class="lm-mail-hinweis-symbol" aria-hidden="true">{{ symbol('warnung') }}</span>
+    <div class="lm-mail-hinweis-text">
+        <strong>{{ taifun.hinweis.titel }}</strong>
+        <span>{{ taifun.hinweis.text }}</span>
+    </div>
+    <div class="lm-mail-hinweis-aktionen">
+        {% if taifun.erlaubt and not taifun.knopf_gesperrt %}
+        <form method="post" action="{{ taifun.hinweis.erneut_url }}" class="lm-inline" data-rolle="taifun-erneut">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf klein" type="submit" title="XML erneut in den TAIFUN-Import-Ordner schreiben">{{ symbol('aktualisieren') }} Erneut übergeben</button>
+        </form>
+        {% elif taifun.knopf_gesperrt %}
+        <span class="dezent">{{ taifun.knopf_tooltip }}</span>
+        {% endif %}
+        {% if taifun.erlaubt %}<a class="knopf klein zweitrangig" href="{{ taifun.hinweis.liste_url }}">Übergabeliste</a>{% endif %}
+    </div>
+</div>
+{% endif %}
+{%- set taifun_rueckfrage = (request.query_params.get('taifun_rueckfrage') == '1') if request is defined else false %}
+{% if taifun and taifun.erlaubt and taifun_rueckfrage and taifun.rueckfrage and not taifun.knopf_gesperrt %}
+<div class="lm-mail-hinweis lm-taifun-hinweis lm-taifun-rueckfrage" role="alert" id="lm-taifun-rueckfrage" data-art="rueckfrage">
+    <span class="lm-mail-hinweis-symbol" aria-hidden="true">{{ symbol('fragezeichen') }}</span>
+    <div class="lm-mail-hinweis-text">
+        <strong>TAIFUN-Übergabe – Rückfrage</strong>
+        <span>{{ taifun.rueckfrage }}</span>
+    </div>
+    <div class="lm-mail-hinweis-aktionen">
+        <form method="post" action="{{ taifun.url }}" class="lm-inline" data-rolle="taifun-trotzdem">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf klein" type="submit">Trotzdem übergeben</button>
+        </form>
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Abbrechen</a>
+    </div>
+</div>
+{% endif %}

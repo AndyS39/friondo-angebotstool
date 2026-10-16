@@ -8,6 +8,10 @@ fpdf2
 python-dotenv
 msal
 pypdf
+# v35 (PLAN_LEAD_V6): XSD-Validierung, Profilbild/Objektfotos (HEIC → JPG)
+lxml
+Pillow
+pillow-heif
 
 # nur Entwicklung/Abnahme (tests/abnahme.py, TestClient)
 httpx

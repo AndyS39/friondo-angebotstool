@@ -2,7 +2,8 @@
 
 > **Nummernhinweis 15.10.2026 (Claude Code):** PLAN_V21 wurde vor diesem Plan als **v34, Phasen 178–182**
 > gebaut (nächste freie Nummern der Zuordnungstabelle in CLAUDE.md). Bei der Umsetzung dieses Plans
-> gelten deshalb **v35 und Phasen 183–187** (im Text unten durchgängig ersetzen).
+> gelten deshalb **v35 und Phasen 183–187** – im Text unten am 15.10.2026 durchgängig ersetzt
+> (Nummern geprüft 15.10.2026, Claude Code).
 
 Voraussetzung: kein anderer Plan in Umsetzung (strangübergreifend). Stand
 15.10.2026: v31 (PLAN_LEAD_V5, Phasen 153 bis 160) und v32 (PLAN_V19, Phasen
@@ -17,13 +18,13 @@ Live-Master im Projektordner `C:\Users\a.scheelen\Tools\Angebotstool`
 (Reihenfolge einhalten, jede Checkbox nach Umsetzung und Test abhaken, am
 Ende Gesamtübersicht mit Testergebnissen und offenen Punkten, fachliche
 Rückfragen gebündelt). **Ein gemeinsamer Commit am Ende**, migrate.py
-idempotent, **nur additive Migrationen** (v33-Code muss auf der
-v34-Datenbank weiterlaufen, Rückweg `rollback.bat --nur-code`). **Kein git
+idempotent, **nur additive Migrationen** (v35-Code muss auf der
+v35-Datenbank weiterlaufen, Rückweg `rollback.bat --nur-code`). **Kein git
 push vor Freigabe.**
 
-CLAUDE-Abschnitt: **„Neu in v34“** [ANNAHME: v31 = PLAN_LEAD_V5, v32 =
+CLAUDE-Abschnitt: **„Neu in v35“** [ANNAHME: v31 = PLAN_LEAD_V5, v32 =
 PLAN_V19, v33 = PLAN_V20; vor dem Bau gegen die Zuordnungstabelle prüfen,
-bei Abweichung die nächste freie Nummer nehmen]. Phasen **178 bis 182**
+bei Abweichung die nächste freie Nummer nehmen]. Phasen **183 bis 187**
 [ANNAHME: 166 bis 177 gehören zu PLAN_V20; bei Abweichung die nächsten
 freien Nummern nehmen und durchgängig ersetzen]. Die v27-Regeln gelten
 (`def`-Routen, keine offene Datenbanksitzung während Datei- oder Netz-I/O,
@@ -94,9 +95,9 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
     separate Rufnummernleiste; **Sofortsuche beim Tippen ohne Enter**, das
     gilt für alle Suchfelder und Filter im Lead-Management.
 
-## Phase 178: TAIFUN-Kundenexport
+## Phase 183: TAIFUN-Kundenexport
 
-- [ ] **Schema und Generator:** `ADRESSEN.xsd` nach `docs/taifun/ADRESSEN.xsd`
+- [x] **Schema und Generator:** `ADRESSEN.xsd` nach `docs/taifun/ADRESSEN.xsd`
       legen (unverändert, Herkunftsnachweis). Modul `app/taifun_export.py`
       mit `xml_fuer_vorgang(vorgang_id) -> bytes` und
       `exportieren(vorgang_id, benutzer_id, grund)`. Datei: XML-Deklaration
@@ -114,7 +115,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       20, PLZ 10, Ort 60, Briefanrede 200, E-Mail 80, Telefon/Mobil 30);
       längere Werte werden gekürzt und der Kürzungshinweis in die
       Karteikarte und die Aktivität geschrieben.
-- [ ] **Feldzuordnung Lead → Ad** (wörtlich so umsetzen):
+- [x] **Feldzuordnung Lead → Ad** (wörtlich so umsetzen):
       - `KdUse` = `true`.
       - `Name3` = „<Vorname> <Nachname>“ (ohne Anrede; nur Nachname, wenn
         kein Vorname; bei Firmenkunden/Großkunde mit Firmenname: Firmenname
@@ -149,7 +150,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
         gesperrter Buchung: „vorgemerkt: …“) · „Quelle: <Quelle/Kampagne>“ ·
         „Großkunde: ja“ (falls gesetzt) · Kürzungs-/Parserhinweise.
         Keine Notizen, Anrufprotokolle oder Preise.
-- [ ] **Zielordner und Schreiben:** Parameter `taifun_import_ordner`
+- [x] **Zielordner und Schreiben:** Parameter `taifun_import_ordner`
       (Lead-Einstellungen, Abschnitt „TAIFUN-Übergabe“, Standard
       `C:\Users\kdadmin\Desktop\LM Datenimport`), Parameter
       `taifun_export_aktiv` (Standard an). Prüfung beim Speichern des
@@ -168,7 +169,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Grund, rotes Label **„TAIFUN-Übergabe fehlgeschlagen“** in Notiz-
       Spalte und Kartei (gleiches Muster wie „Mail nicht gesendet“, v29),
       Button „Erneut übergeben“, Zähler in den Lead-Einstellungen.
-- [ ] **Auslöser und Bedienung:** (1) Klick auf **„Terminierung“** (B8)
+- [x] **Auslöser und Bedienung:** (1) Klick auf **„Terminierung“** (B8)
       erzeugt nach erfolgreicher Pflichtfeldprüfung die Datei, **auch in der
       Testphase** mit `terminierung_aktiv = aus`: der Button ist dann nicht
       mehr ausgegraut, sondern aktiv mit Tooltip „Testphase: nur Übergabe an
@@ -189,7 +190,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       **„TAIFUN“** mit Datum im Kartei-Kopf, Spalte „TAIFUN-Übergabe“ im
       Spaltenkatalog der Boards (Standard ausgeblendet), Filter-Chip
       „an TAIFUN übergeben“. Keine Glocke (v29-Regel), keine Kundenmail.
-- [ ] **Übergabeliste und Abholung:** Lead-Einstellungen → „TAIFUN-Übergabe“
+- [x] **Übergabeliste und Abholung:** Lead-Einstellungen → „TAIFUN-Übergabe“
       zeigt die Liste aller Exporte (Datum, Vorgang, Datei, Benutzer,
       Status: geschrieben · abgeholt · fehler · manuell importiert). Ein
       Scheduler-Job (alle 15 Minuten, v27-Rahmen) prüft, ob die Datei noch
@@ -199,7 +200,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       `data/taifun_export/<Dateiname>` als Protokoll, 12 Monate, Löschlauf
       vorhanden). Feld `kunden.taifun_kundennr` (additiv) im Kundeninfo-
       Block der Kartei zum manuellen Nachtragen, Badge zeigt die Nummer.
-- [ ] **Parametrierung und Prüfpunkte:** Abschnitt „TAIFUN-Übergabe“ mit
+- [x] **Parametrierung und Prüfpunkte:** Abschnitt „TAIFUN-Übergabe“ mit
       Schalter, Ordner, Encoding, Button „Testdatei schreiben“ (Demo-Lead
       „Max Mustermann“, Datei `LM_TEST_<Zeit>.xml`, zum Import-Test in
       TAIFUN) und Prüfpunkten für den Go-live: Ordner erreichbar, Testdatei
@@ -208,9 +209,9 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       XML, Ordner/Rechte, Fragenliste an den TAIFUN-Betreuer (automatischer
       Import ja/nein, Verhalten bei Dubletten, Rückgabe der Kundennummer).
 
-## Phase 179: Vertriebskanal-Stammdaten (Nachtrag 15.10.)
+## Phase 184: Vertriebskanal-Stammdaten (Nachtrag 15.10.)
 
-- [ ] **Tabelle `vertriebskanaele`** (additiv: `key`, `name`, `farbe`,
+- [x] **Tabelle `vertriebskanaele`** (additiv: `key`, `name`, `farbe`,
       `aktiv`, `pflicht_hinweis`, `reihenfolge`, `angelegt_am`); Parameter
       `kanal_farben` (v23) wird daraus abgeleitet und nicht mehr von Hand
       gepflegt. Migration legt die Kanäle aus den Bildern an (Farben ca.,
@@ -233,7 +234,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Abgleich der Schreibweisen gegen monday-Mapping und Quellen-Dropdown
       (v21) mit Zuordnungstabelle alt → neu in der Migration (z. B.
       „Stadtwerke Düsseld…“ = Stadtwerke Düsseldorf).
-- [ ] **Pflege in der Parametrierung** → „Vertriebskanäle“: Liste mit
+- [x] **Pflege in der Parametrierung** → „Vertriebskanäle“: Liste mit
       Name, Farbe (Farbwähler, Kontrast zum Text automatisch), aktiv,
       Anzahl Leads, Anzahl Verwendungen 90 Tage; Anlegen, Umbenennen (wirkt
       überall), Farbe ändern, **Löschen** = `aktiv = 0` (nicht neu wählbar;
@@ -243,22 +244,22 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       die neue Tabelle; Kanäle ohne Zuordnung nutzen Profil „Standard“
       (unverändert). HV-Ausschlussliste (v29 `hv_ausschluss`) und Kanal-
       AD-Regel (v23) wählen aus der neuen Liste.
-- [ ] **Dropdowns nach Häufigkeit:** alle Kanal-Dropdowns (Kartei, Inline-
+- [x] **Dropdowns nach Häufigkeit:** alle Kanal-Dropdowns (Kartei, Inline-
       Edit, Schnellanlage, Import, Quelle, Filter) sortieren aktive Kanäle
       nach Anzahl Verwendungen der letzten 90 Tage absteigend, dann
       alphabetisch; inaktive nur am betroffenen Lead als „(nicht mehr
       wählbar)“. Labels in Boards, Kartei, Kanban, Anrufliste, Leads VOT,
       Angebotsliste aus der neuen Tabelle (Farbe, Name).
-- [ ] **Kanal „?“ = unklar:** Lead mit Kanal „?“ zeigt das Kanalfeld rot
+- [x] **Kanal „?“ = unklar:** Lead mit Kanal „?“ zeigt das Kanalfeld rot
       umrandet mit Hinweis „Vertriebskanal klären“, zählt im Pflichtfeld-
-      Zähler und sperrt „Terminierung“ und TAIFUN-Übergabe (Phase 178), bis
+      Zähler und sperrt „Terminierung“ und TAIFUN-Übergabe (Phase 183), bis
       ein anderer Kanal gewählt ist; Filter-Chip „Kanal unklar“ im
       Hauptboard. Eingang ohne erkennbaren Kanal (Parser, API ohne Kanal,
       Quelle ohne Kanal) setzt „?“ statt leer (bestätigt 15.10.2026).
 
-## Phase 180: Rechte Außendienst, HV-Gruppensicht, Profilbild (Nachtrag 15.10.)
+## Phase 185: Rechte Außendienst, HV-Gruppensicht, Profilbild (Nachtrag 15.10.)
 
-- [ ] **Außendienst bearbeitet eigene Leads wie der Innendienst:**
+- [x] **Außendienst bearbeitet eigene Leads wie der Innendienst:**
       Rechte-Matrix: Rolle Außendienst (angestellt) an Leads mit
       `vorgaenge.ad_id` = eigener Benutzer: alle Felder der Kundenkartei
       (Autospeichern), Status/Phase inkl. Pflichtgründe, Zuständige
@@ -270,7 +271,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       (Lead-Akte). Jede Änderung protokolliert als Aktivität mit Autor; EK/
       DB bleiben unsichtbar (Rolle unverändert). Mobile Darstellung der
       Kartei (v25 responsiv) geprüft bei 390 px.
-- [ ] **HV-Gruppensicht:** `lead_v2.hv_sicht` und alle HV-Filter
+- [x] **HV-Gruppensicht:** `lead_v2.hv_sicht` und alle HV-Filter
       (Handelsvertreter-Ansicht, Dashboard, Karte, To-Dos, Kartei-Gate,
       Terminassistent) arbeiten mit der **Gruppe** statt mit dem einzelnen
       Benutzer: Gruppe René = {René}; Gruppe Simon = {Simon, Paolo, André,
@@ -282,7 +283,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       per Dropdown (v31), zwischen den Gruppen nur Innendienst/Admin über
       die Sammelaktion. Filter „Vertreter“ in der HV-Ansicht zeigt nur die
       eigene Gruppe. Statistik/Kacheln der HV-Ansicht rechnen je Gruppe.
-- [ ] **Profilbild in den eigenen Benutzereinstellungen:** Menü „Mein
+- [x] **Profilbild in den eigenen Benutzereinstellungen:** Menü „Mein
       Profil“ (alle Rollen): Bild hochladen (JPG/PNG, max 2 MB, quadratischer
       Zuschnitt im Browser, Speicherung als `benutzer.bild_datei`, v29),
       Vorschau, Entfernen. Das Bild ersetzt die Initialen-Avatare in Boards,
@@ -290,12 +291,12 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Terminbestätigung je Vertriebler (v29 `{vertriebler_block}`) genutzt;
       Admin kann Bilder weiterhin in der Benutzerverwaltung setzen.
 
-## Phase 181: Hauptboard Inline-Bearbeitung, gespeicherte Filter, Sofortsuche, Objektfotos (Nachtrag 15.10.)
+## Phase 186: Hauptboard Inline-Bearbeitung, gespeicherte Filter, Sofortsuche, Objektfotos (Nachtrag 15.10.)
 
-- [ ] **Zeilen direkt bearbeiten:** Inline-Edit (v23: status, notiz,
+- [x] **Zeilen direkt bearbeiten:** Inline-Edit (v23: status, notiz,
       ad_id, leadmanager_id, wiedervorlage) wird erweitert auf **Interessen**
       (Mehrfach-Häkchen im Popover mit allen Sparten inkl. MS/WA/DMS),
-      **Vertriebskanal** (Dropdown, Phase 179), **Großkunde** (Häkchen),
+      **Vertriebskanal** (Dropdown, Phase 184), **Großkunde** (Häkchen),
       **Objektart**, **Telefon**, **E-Mail**, **Vor-Ort-Termin** (nur
       Anzeige + Link, keine Buchung), **Teilgenommen** (Infoabend). Klick in
       die Zelle öffnet das Eingabeelement, Enter/Verlassen speichert per
@@ -303,9 +304,9 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Autospeichern der Kartei, Aktivität bei Änderung), Escape bricht ab;
       Pflichtfeld-Verletzungen (Kanal „?“, fehlender AD) werden rot in der
       Zelle markiert. Gilt für Hauptboard, Deals, Infoabend, HV-Ansicht
-      (Rechte je Rolle wie Phase 180). Sortierung und Spaltenbreiten (v29)
+      (Rechte je Rolle wie Phase 185). Sortierung und Spaltenbreiten (v29)
       bleiben erhalten; keine Seitenneuladung.
-- [ ] **Filter speichern:** in der Sticky-Filterleiste Button „Filter
+- [x] **Filter speichern:** in der Sticky-Filterleiste Button „Filter
       speichern“ (Name, Häkchen „als Standard beim Öffnen“), Dropdown
       „Gespeicherte Filter“ je Nutzer und Board (`benutzer_einstellungen`
       Key `boards_filter`: Chips, Suche, Sortierung, Gruppen-Klappzustand),
@@ -313,7 +314,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Öffnen des Boards angewendet, URL-Parameter überschreiben ihn.
       Innendienst kann einen Filter „für alle freigeben“ (schreibgeschützte
       Kopie bei den anderen Nutzern) (bestätigt 15.10.2026).
-- [ ] **Eine Suchleiste, Sofortsuche:** Im Board „Kontaktiert“ entfällt die
+- [x] **Eine Suchleiste, Sofortsuche:** Im Board „Kontaktiert“ entfällt die
       separate Rufnummernsuche; die breite Suchleiste (Name, Ort, E-Mail,
       Notiz) durchsucht zusätzlich die Telefonnummer (Endziffern- und
       Teilsuche nach v31 Phase 158, E.164-normalisiert, ab 3 Ziffern; Eingabe
@@ -329,7 +330,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Ergebnisse). Lupe-Button und „Suchen“-Buttons entfallen; die URL
       spiegelt den aktuellen Filter (teilbar, Zurück-Navigation v30 bleibt).
       Gespeicherte Filter (oben) speichern den Suchtext mit.
-- [ ] **Fotos je Objekt:** die Galerie des Vorgangs (v15, je Sparte +
+- [x] **Fotos je Objekt:** die Galerie des Vorgangs (v15, je Sparte +
       Sammelbox) erhält je Objekt (v31 `vorgang_objekte`) einen eigenen
       Ordner „Objekt <Bezeichnung>“; Upload in der Kartei direkt an der
       Objektkarte (mehrere Dateien, mobil per Kamera, JPG/PNG/HEIC → JPG,
@@ -340,7 +341,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Anzeige). Ein-Objekt-Vorgänge: Ordner heißt „Objekt“ und ersetzt
       nichts Bestehendes.
 
-## Phase 182: Tests, Doku, Übergabe
+## Phase 187: Tests, Doku, Übergabe
 
 - [ ] Tests `tests/test_lead_v6_taifun.py`: (a) XML eines Demo-Leads
       validiert gegen `docs/taifun/ADRESSEN.xsd`, Elementreihenfolge und
@@ -374,21 +375,21 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Parameter),
       Rückweg-Probe, Voll-Crawl, Abnahmeskript, Smoke grün;
       `docs/betrieb.md` Inventar: Export-Ordner, Scheduler-Job, Rechte des
-      Dienstkontos; `docs/nach-dem-update-v34.md` (Admin: Ordner prüfen,
+      Dienstkontos; `docs/nach-dem-update-v35.md` (Admin: Ordner prüfen,
       Testdatei in TAIFUN importieren, Encoding bestätigen; Team: Badge
       TAIFUN, Button, Kundennummer nachtragen).
-- [ ] CLAUDE.md: Abschnitt „Neu in v34 – Lead-Management V6 TAIFUN-
+- [ ] CLAUDE.md: Abschnitt „Neu in v35 – Lead-Management V6 TAIFUN-
       Kundenübergabe, Kanal-Stammdaten, Rechte, Inline-Bearbeitung
-      (abgestimmt 15.10.2026)“ (Plan: PLAN_LEAD_V6.md, Phasen 178 bis 182;
+      (abgestimmt 15.10.2026)“ (Plan: PLAN_LEAD_V6.md, Phasen 183 bis 187;
       Nummern laut Vorspann prüfen), Zuordnungstabelle
-      `| v34 | PLAN_LEAD_V6.md | 178–182 |`, in „Neu in v6/v9/v23/v29“ die
+      `| v35 | PLAN_LEAD_V6.md | 183–187 |`, in „Neu in v6/v9/v23/v29“ die
       Sätze zu Kanal aus monday-Mapping als einzige Quelle, `kanal_farben`
       von Hand, HV sieht nur eigene Leads und AD read-only als *überholt –
-      siehe v34* markieren, „Zentrale Dateien“ um
+      siehe v35* markieren, „Zentrale Dateien“ um
       `docs/taifun/ADRESSEN.xsd`, Hinweis in „Neu in v31“ (Testphase:
-      Terminierung erzeugt TAIFUN-Datei), `config.VERSION = "v34"`.
-      Gesamtübersicht, ein Commit „v34: TAIFUN-Kundenübergabe (PLAN_LEAD_V6,
-      Phasen 178-182)“, **kein push vor Freigabe**.
+      Terminierung erzeugt TAIFUN-Datei), `config.VERSION = "v35"`.
+      Gesamtübersicht, ein Commit „v35: TAIFUN-Kundenübergabe (PLAN_LEAD_V6,
+      Phasen 183-187)“, **kein push vor Freigabe**.
 
 ## Kontrollwerte für die Abnahme
 
@@ -421,4 +422,4 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
 - Bestätigung der [ANNAHME]-Stellen: Encoding windows-1252; Rechnungs-
   adresse als TAIFUN-Adresse; Mobil-Erkennung über Vorwahl; nationale
   Nummernschreibweise; Firmenname in Name 3 bei Firmenkunden; Versionsnummer
-  v34 und Phasen 178 bis 182.
+  v35 und Phasen 183 bis 187.

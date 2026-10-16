@@ -302,17 +302,21 @@ def kanal_farbe(farben: dict, kanal: str) -> str:
 
 
 def kanal_optionen(session: Session, gewaehlt: list[str], zusaetzlich=()) -> list[dict]:
-    """Optionen des Filters „Vertriebskanal“: kern.kanal_werte (Standard + Kanäle
-    der Angebotsprofile) plus Kanäle, die an den gelisteten Kunden stehen,
-    aber in keinem Profil mehr vorkommen; je Eintrag wert, farbe, aktiv."""
+    """Optionen des Filters „Vertriebskanal“: zuerst „ohne Kanal“ (technischer Wert
+    KANAL_STANDARD „Standard“ – bleibt aus Kompatibilität der Übersichts-Links, Anzeige
+    „ohne Kanal“; v35: „Standard“ ist kein Kanal mehr), dann kern.kanal_werte (v35: aktive
+    Stammdaten-Kanäle nach Häufigkeit) plus Kanäle, die an den gelisteten Kunden stehen,
+    aber nicht (mehr) wählbar sind; je Eintrag wert, label, farbe, aktiv."""
     farben = _kanal_farben(session)
-    werte = list(kern.kanal_werte(session))
+    werte = [KANAL_STANDARD] + [w for w in kern.kanal_werte(session)
+                                if w.lower() != KANAL_STANDARD.lower()]
     for extra in zusaetzlich:
         extra = (extra or "").strip()
         if extra and extra.lower() not in [w.lower() for w in werte]:
             werte.append(extra)
     gewaehlt = [g.lower() for g in (gewaehlt or [])]
-    return [{"wert": w, "farbe": kanal_farbe(farben, w), "aktiv": w.lower() in gewaehlt}
+    return [{"wert": w, "label": ("ohne Kanal" if w == KANAL_STANDARD else w),
+             "farbe": kanal_farbe(farben, w), "aktiv": w.lower() in gewaehlt}
             for w in werte]
 
 
@@ -456,8 +460,13 @@ def daten(session: Session, benutzer, f: dict) -> dict:
             continue
         if f.get("kampagne_id") not in ("", None) and str(v.kampagne_id or 0) != str(f["kampagne_id"]):
             continue
-        if f.get("kanal") and (z["kanal"] or KANAL_STANDARD).lower() not in f["kanal"]:
-            continue
+        if f.get("kanal"):
+            kanal_wert = (z["kanal"] or KANAL_STANDARD).lower()
+            # v35 (PLAN_LEAD_V6 Phase 184): „ohne Kanal“ (technischer Wert Standard) trifft auch
+            # Kanal „?“ (Vertriebskanal unklar – Eingang ohne erkennbaren Kanal)
+            if kanal_wert not in f["kanal"] and not (
+                    kanal_wert == "?" and KANAL_STANDARD.lower() in f["kanal"]):
+                continue
         if f.get("sparte") and f["sparte"] not in z["sparten"]:
             continue
         if f.get("klasse") and v.score_klasse != f["klasse"]:

@@ -258,6 +258,9 @@ def profile_seite(request: Request, block_id: int = 0,
                             for p in profile},
                   bloecke_nachtext=[b for b in bloecke if b.art == "nachtext"],
                   bloecke_vortext=[b for b in bloecke if b.art == "vortext"],
+                  # v35 (PLAN_LEAD_V6 Phase 184): Kanalwerte nur lesend aus den Vertriebskanal-
+                  # Stammdaten (Vorschlagsliste für die Zuordnung Kanal → Profil)
+                  kanal_wahl=__import__("app.leadmanagement", fromlist=["kanal_werte"]).kanal_werte(session),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -2449,7 +2452,7 @@ def lead_einstellungen(request: Request,
                   "quote_terminiert", "quote_erfasst", "quote_angebot",
                   # v23 (Lead-Management V2, Phase 104/112)
                   "erwartungswert_GW", "versuche_max", "wv_meldet_sich_tage",
-                  "rueckruf_telefon", "kanal_farben", "pflichtfelder",
+                  "rueckruf_telefon", "pflichtfelder",   # v35: kanal_farben aus der Tabelle
                   "hv_ausschluss", "hv_standard_benutzer",
                   "ersatz_radius_stufen", "ersatz_alter_tage",
                   "info_wochentag", "info_woche", "info_uhrzeit", "info_ort",
@@ -2466,10 +2469,13 @@ def lead_einstellungen(request: Request,
                   # v31 (PLAN_LEAD_V5 Phasen 153/156/157/159)
                   "terminierung_aktiv", "mail_versand_aktiv", "sparten_langnamen",
                   "grosskunde_farbe", "hv_gruppe_simon_mitglieder",
-                  "erwartungswert_MS", "erwartungswert_WA", "erwartungswert_DMS"]
+                  "erwartungswert_MS", "erwartungswert_WA", "erwartungswert_DMS",
+                  # v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Übergabe
+                  "taifun_export_aktiv", "taifun_import_ordner", "taifun_export_encoding",
+                  "taifun_testdatei_ok", "taifun_encoding_ok", "taifun_ordner_geprueft"]
     werte = {name: lead_kern.parameter_holen(session, name)
              for name in schluessel}
-    from app import lead_v2
+    from app import lead_v2, taifun_export
     handelsvertreter = lead_v2.handelsvertreter_liste(session)
     # v29 (Phase 141/142): Glocken-Arten, offene Lead-Mails mit Fehler
     from app import lead_glocken
@@ -2496,6 +2502,8 @@ def lead_einstellungen(request: Request,
                   demo_marker=demo_marker,
                   pruefpunkte=lead_v2.freischaltung_pruefpunkte(session),
                   mails_gesperrt=lead_v2.mails_gesperrt_anzahl(session),
+                  # v35 (PLAN_LEAD_V6 Phase 184): Kanäle für HV-Ausschluss/Kanal-Regel aus der Liste
+                  kanal_wahl=lead_kern.kanal_werte(session),
                   terminierung_aktiv=lead_v5.terminierung_aktiv(session),
                   mail_versand_aktiv=lead_v5.mail_versand_aktiv(session),
                   sparten_liste=[(c, sparten_modul.SPARTEN_LANG[c]) for c in sparten_modul.SPARTEN],
@@ -2507,6 +2515,9 @@ def lead_einstellungen(request: Request,
                   glocke_arten=glocke_arten, glocke_alle=lead_glocken.ALLE_ARTEN,
                   glocke_namen=lead_glocken.ARTEN_NAMEN,
                   mail_fehler_anzahl=mail_fehler_anzahl,
+                  # v35 (Phase 183, Agent T): Abschnitt „TAIFUN-Übergabe“ (Schalter, Ordner,
+                  # Encoding, Prüfpunkte, Zähler) – Logik in app/taifun_export.py
+                  taifun=taifun_export.einstellungen_kontext(session),
                   umstellung=request.query_params.get("umstellung", ""),
                   meldung=request.query_params.get("meldung", ""))
 
@@ -2566,6 +2577,19 @@ def lead_einstellungen_speichern(request: Request,
         return RedirectResponse("/parametrierung", status_code=303)
     form = anfrage.formular(request)
 
+    # v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Übergabe – ein geänderter Import-Ordner wird
+    # beim Speichern geprüft (Testdatei schreiben/löschen = Datei-I/O): VOR den Schreibzugriffen,
+    # Sitzung freigegeben (v27-Regel); die Parameter selbst schreibt taifun_export.parameter_speichern
+    from app import taifun_export
+    from app.db import verbindung_freigeben
+    taifun_pruefung = None
+    if form.get("taifun_dabei") is not None:
+        ordner_neu = (form.get("taifun_import_ordner") or "").strip()
+        if ordner_neu and ordner_neu != lead_kern.parameter_holen(session, "taifun_import_ordner", ""):
+            verbindung_freigeben(session)
+            taifun_pruefung = taifun_export.ordner_pruefen(ordner_neu)
+    taifun_meldungen = taifun_export.parameter_speichern(session, form, benutzer, taifun_pruefung)
+
     # v31 (PLAN_LEAD_V5 Phase 159): Der Demo-Modus ist beendet – lead_freigabe_modus bleibt
     # dauerhaft „alle“ (Migration), die v12-Umstellungslogik ist entfernt; die Entscheidung
     # „Demo-Leads löschen oder behalten“ läuft einmalig über /lead-einstellungen/demo-ende.
@@ -2622,7 +2646,7 @@ def lead_einstellungen_speichern(request: Request,
                 "absender_postfach", "kerngebiet_plz", "firmen_adresse",
                 "demo_badge_text",
                 # v23 (Lead-Management V2)
-                "rueckruf_telefon", "kanal_farben", "pflichtfelder",
+                "rueckruf_telefon", "pflichtfelder",   # v35 (Phase 184): kanal_farben entfällt
                 "hv_ausschluss", "hv_standard_benutzer",
                 "ersatz_radius_stufen", "info_uhrzeit", "info_ort",
                 "kanal_ad_regel",
@@ -2701,8 +2725,9 @@ def lead_einstellungen_speichern(request: Request,
         lead_kern.parameter_setzen(session, "zuweisung_lm",
                                    form.get("zuweisung_lm"))
     session.commit()
+    # v35 (Phase 183, Agent T): Ergebnis der TAIFUN-Ordnerprüfung mit in die Meldung
     return RedirectResponse("/parametrierung/lead-einstellungen?meldung="
-                            + quote_plus("Einstellungen gespeichert."),
+                            + quote_plus(" ".join(["Einstellungen gespeichert."] + taifun_meldungen)),
                             status_code=303)
 
 

@@ -37,6 +37,27 @@ def glocken_arten(s, *arten):
     finally:
         kern.parameter_setzen(s, lead_glocken.PARAMETER, alt)
         s.commit()
+
+
+# v35 (PLAN_LEAD_V6 Phase 185): die HV-Sicht arbeitet mit der GRUPPE (Parameter hv_gruppe_rene /
+# hv_gruppe_simon / hv_gruppe_simon_mitglieder). Die Tests dieser Datei setzen Vertreter A in die
+# René-Gruppe und Vertreter B (Standard) in die Simon-Gruppe – so sieht keiner den anderen wie in
+# v23; Abschnitte, die eine Umverteilung zwischen beiden prüfen, legen beide in EINE Gruppe.
+HV_GRUPPEN_PARAMETER = ("hv_gruppe_rene", "hv_gruppe_simon", "hv_gruppe_simon_mitglieder")
+
+
+@contextmanager
+def gruppen(s, rene: str, simon: str, mitglieder: str):
+    alt = {n: kern.parameter_holen(s, n, "") for n in HV_GRUPPEN_PARAMETER}
+    for n, w in zip(HV_GRUPPEN_PARAMETER, (rene, simon, mitglieder)):
+        kern.parameter_setzen(s, n, w)
+    s.commit()
+    try:
+        yield
+    finally:
+        for n, w in alt.items():
+            kern.parameter_setzen(s, n, w)
+        s.commit()
 from app.db import SessionLocal, init_db
 from app.main import app
 from app.models import (AdProfil, Benachrichtigung, Benutzer, KommunikationLog,
@@ -88,6 +109,11 @@ class Basis(unittest.TestCase):
         cls.hv_b = cls.benutzer_anlegen("LeadV2H Simon Standard", hv=True)
         cls.ad = cls.benutzer_anlegen("LeadV2H Angestellter AD", hv=False)
         kern.parameter_setzen(cls.s, "hv_standard_benutzer", str(cls.hv_b.id))
+        # v35 (Phase 185): getrennte Gruppen – A = René-Gruppe, B = Simon-Gruppe (siehe gruppen())
+        cls.gruppen_alt = {n: kern.parameter_holen(cls.s, n, "") for n in HV_GRUPPEN_PARAMETER}
+        kern.parameter_setzen(cls.s, "hv_gruppe_rene", str(cls.hv_a.id))
+        kern.parameter_setzen(cls.s, "hv_gruppe_simon", str(cls.hv_b.id))
+        kern.parameter_setzen(cls.s, "hv_gruppe_simon_mitglieder", str(cls.hv_b.id))
         cls.s.commit()
         cls.admin = TestClient(app)
         cls.admin.post("/login", data={"benutzer_id": "1", "pin": "1234"})
@@ -98,6 +124,8 @@ class Basis(unittest.TestCase):
     def tearDownClass(cls):
         kern.parameter_setzen(cls.s, "hv_standard_benutzer", cls.standard_param)
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", cls.modus)
+        for n, w in cls.gruppen_alt.items():
+            kern.parameter_setzen(cls.s, n, w)
         cls.s.commit()
         aufraeumen(cls.s)
         cls.s.close()
@@ -218,9 +246,11 @@ class Ansicht(Basis):
         r2 = self.client_a.get(f"{BASIS}?vertreter={self.hv_b.id}")
         self.assertNotIn(self.marke(fremd), r2.text)
         self.assertIn(self.marke(eigen), r2.text)
-        # Dropdown: HV sieht alle Vertreter, aber keine Option „nicht zugewiesen“
+        # Dropdown: v35 (Phase 185) – HV sieht nur die eigene Gruppe (A = René-Gruppe: nur sich
+        # selbst), keinen Vertreter der anderen Gruppe und keine Option „nicht zugewiesen“
         zeile = self.zeile(r.text, eigen)
-        self.assertIn(self.hv_b.name, zeile)
+        self.assertIn(self.hv_a.name, zeile)
+        self.assertNotIn(self.hv_b.name, zeile)
         self.assertNotIn("nicht zugewiesen", zeile)
         d = self.client_a.get(f"{BASIS}/dashboard")
         self.assertEqual(d.status_code, 200)
@@ -307,7 +337,8 @@ class Tabelle(Basis):
             self.assertEqual(zeile["hv"].id, self.hv_a.id)      # HV-Felder obendrauf
             self.assertIn("punkte", zeile)                      # Hauptboard-Felder
             html = self.admin.get(BASIS).text
-            self.assertIn('class="sp-lead"', self.zeile(html, v))
+            # v35 (Phase 186, Agent B): offene Pflichtfelder färben die Zelle (sp-lead lm-pflicht-fehlt)
+            self.assertIn('class="sp-lead', self.zeile(html, v))
         # Rückfall-Rendering erzwingen (Makro „fehlt“)
         original = hv_modul.tabelle_makro_vorhanden
         hv_modul.tabelle_makro_vorhanden = lambda: False
@@ -316,7 +347,8 @@ class Tabelle(Basis):
         finally:
             hv_modul.tabelle_makro_vorhanden = original
         zeile = self.zeile(html, v)
-        self.assertIn('class="hv-kunde"', zeile)
+        # v35 (Phase 186, Agent B): die Rückfall-Zellen tragen zusätzlich die Spalten-Keys („hv-kunde sp-lead“)
+        self.assertIn('class="hv-kunde', zeile)
         self.assertIn("hv-status", zeile)
         self.assertIn(f"tel:", zeile)
         self.assertIn(self.hv_a.name, zeile)
@@ -325,32 +357,50 @@ class Tabelle(Basis):
 class Zuweisung(Basis):
     def test_umverteilung_schreibt_aktivitaet_und_glocke(self):
         v = self.lead(20, ad_id=self.hv_a.id)
-        # v29 (Phase 141): Glocke „zuweisung“ ist standardmäßig aus – nur Aktivität
+        # v35 (Phase 185): Umverteilung nur innerhalb der Gruppe – zwischen den Gruppen
+        # bleibt sie dem Innendienst vorbehalten (Sammelaktion)
         r = self.client_a.post(f"{BASIS}/{v.id}/zuweisen",
-                               data={"ad_id": str(self.hv_a.id), "zurueck": BASIS},
+                               data={"ad_id": str(self.hv_b.id), "zurueck": BASIS},
                                follow_redirects=False)
-        self.assertEqual(self.s.query(Benachrichtigung)
-                         .filter(Benachrichtigung.benutzer_id == self.hv_b.id,
-                                 Benachrichtigung.text.like(f"Lead zugewiesen: {NACHNAME}-20%")).count(), 0)
-        with glocken_arten(self.s, "zuweisung"):
+        self.assertIn(quote_plus("Nicht möglich"), r.headers["location"])
+        self.assertEqual(self.frisch(v).ad_id, self.hv_a.id)
+        # beide in EINER Gruppe: Umverteilung mit Aktivität (+ Glocke, wenn die Art aktiv ist)
+        with gruppen(self.s, "", str(self.hv_b.id), f"{self.hv_a.id},{self.hv_b.id}"):
+            # v29 (Phase 141): Glocke „zuweisung“ ist standardmäßig aus – nur Aktivität
             r = self.client_a.post(f"{BASIS}/{v.id}/zuweisen",
-                                   data={"ad_id": str(self.hv_b.id), "zurueck": BASIS},
+                                   data={"ad_id": str(self.hv_a.id), "zurueck": BASIS},
                                    follow_redirects=False)
-        self.assertEqual(r.status_code, 303)
-        self.assertTrue(r.headers["location"].startswith(BASIS + "?meldung="))
-        self.assertEqual(self.frisch(v).ad_id, self.hv_b.id)
-        akt = (self.s.query(LeadAktivitaet)
-               .filter(LeadAktivitaet.vorgang_id == v.id,
-                       LeadAktivitaet.text.like(f"Zugewiesen an {self.hv_b.name}%")).all())
-        self.assertEqual(len(akt), 1)
-        self.assertEqual(akt[0].benutzer_id, self.hv_a.id)
-        self.assertIn(f"(vorher {self.hv_a.name})", akt[0].text)
-        glocke = (self.s.query(Benachrichtigung)
-                  .filter(Benachrichtigung.benutzer_id == self.hv_b.id,
-                          Benachrichtigung.art == "lead",
-                          Benachrichtigung.text.like(f"Lead zugewiesen: {NACHNAME}-20%")).count())
-        self.assertEqual(glocke, 1)
-        # der abgebende Vertreter sieht den Lead nicht mehr und darf ihn nicht mehr anfassen
+            self.assertEqual(self.s.query(Benachrichtigung)
+                             .filter(Benachrichtigung.benutzer_id == self.hv_b.id,
+                                     Benachrichtigung.text.like(f"Lead zugewiesen: {NACHNAME}-20%")).count(), 0)
+            with glocken_arten(self.s, "zuweisung"):
+                r = self.client_a.post(f"{BASIS}/{v.id}/zuweisen",
+                                       data={"ad_id": str(self.hv_b.id), "zurueck": BASIS},
+                                       follow_redirects=False)
+            self.assertEqual(r.status_code, 303)
+            self.assertTrue(r.headers["location"].startswith(BASIS + "?meldung="))
+            self.assertEqual(self.frisch(v).ad_id, self.hv_b.id)
+            akt = (self.s.query(LeadAktivitaet)
+                   .filter(LeadAktivitaet.vorgang_id == v.id,
+                           LeadAktivitaet.text.like(f"Zugewiesen an {self.hv_b.name}%")).all())
+            self.assertEqual(len(akt), 1)
+            self.assertEqual(akt[0].benutzer_id, self.hv_a.id)
+            self.assertIn(f"(vorher {self.hv_a.name})", akt[0].text)
+            glocke = (self.s.query(Benachrichtigung)
+                      .filter(Benachrichtigung.benutzer_id == self.hv_b.id,
+                              Benachrichtigung.art == "lead",
+                              Benachrichtigung.text.like(f"Lead zugewiesen: {NACHNAME}-20%")).count())
+            self.assertEqual(glocke, 1)
+            # v35: in derselben Gruppe sehen beide den Lead weiter, A darf ihn zurückholen
+            self.assertIn(self.marke(v), self.client_a.get(BASIS).text)
+            self.assertIn(self.marke(v), self.client_b.get(BASIS).text)
+            self.assertEqual(self.client_a.post(f"{BASIS}/{v.id}/zuweisen",
+                                                data={"ad_id": str(self.hv_a.id)}, follow_redirects=False).status_code, 303)
+            self.assertEqual(self.frisch(v).ad_id, self.hv_a.id)
+            self.client_b.post(f"{BASIS}/{v.id}/zuweisen", data={"ad_id": str(self.hv_b.id)}, follow_redirects=False)
+            self.assertEqual(self.frisch(v).ad_id, self.hv_b.id)
+        # getrennte Gruppen: der abgebende Vertreter sieht den Lead nicht mehr und darf ihn
+        # nicht mehr anfassen (wie v23)
         self.assertNotIn(self.marke(v), self.client_a.get(BASIS).text)
         self.assertEqual(self.client_a.post(f"{BASIS}/{v.id}/zuweisen",
                                             data={"ad_id": str(self.hv_a.id)}).status_code, 404)
@@ -415,11 +465,17 @@ class Zuweisung(Basis):
         self.assertEqual(self.frisch(m).ad_id, self.hv_b.id)
         self.assertNotIn(f'data-vorgang="{m.id}"',
                          self.admin.get(f"{BASIS}?vertreter={self.hv_a.id}").text)
-        # HV darf eigenen Lead an den Standard geben
+        # HV darf eigenen Lead an den Standard geben – v35 (Phase 185): nur, wenn der Standard
+        # zur eigenen Gruppe gehört (getrennte Gruppen → „Nicht möglich“, Lead bleibt)
         x = self.lead(26, ad_id=self.hv_a.id)
         r3 = self.client_a.post(f"{BASIS}/{x.id}/standard", follow_redirects=False)
         self.assertEqual(r3.status_code, 303)
-        self.assertEqual(self.frisch(x).ad_id, self.hv_b.id)
+        self.assertIn(quote_plus("Nicht möglich"), r3.headers["location"])
+        self.assertEqual(self.frisch(x).ad_id, self.hv_a.id)
+        with gruppen(self.s, "", str(self.hv_b.id), f"{self.hv_a.id},{self.hv_b.id}"):
+            r3 = self.client_a.post(f"{BASIS}/{x.id}/standard", follow_redirects=False)
+            self.assertEqual(r3.status_code, 303)
+            self.assertEqual(self.frisch(x).ad_id, self.hv_b.id)
 
     def test_monday_abgleich_bei_zuweisung(self):
         v, lead = self.monday_lead(3, BOARD_SIMON, benutzer_id=None)

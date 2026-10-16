@@ -428,7 +428,9 @@ class Vorschlaege(Basis):
         self.assertIn('data-zustand="adresse_fehlt"', self.block(self.kartei(v3, client=hv_client).text))
 
     def test_vorschlaege_block_nicht_in_lesesicht(self):
-        v = self.lead(23, vollstaendig=True)
+        # v35 (PLAN_LEAD_V6 Phase 185): Lesesicht nur an fremden Leads – der Lead hängt hier nur
+        # über den Termin am AD (ad_id leer); am eigenen Lead bearbeitet der AD wie der Innendienst
+        v = self.lead(23, vollstaendig=True, ad_id=None)
         self.s.add(VotTermin(vorgang_id=v.id, ad_id=self.ad.id, status="geplant", demo=True,
                              beginn=datetime.now() + timedelta(days=3)))
         self.s.commit()

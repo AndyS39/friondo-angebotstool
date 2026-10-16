@@ -254,6 +254,26 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
 - Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v34.md` (Login-Probe mit dem Handy, Liste
   „gewerkeübergreifende Artikel“, Sparten-Mail-Vorlagen gegenlesen, HTTPS-Entscheidung).
 
+## 4d. Besonderheiten beim Update auf v35 (ein Commit, 16.10.2026)
+
+- Neue Abhängigkeiten `lxml`, `Pillow`, `pillow-heif` – `update.bat` führt `pip install -r requirements.txt` aus
+  (binäre Wheels, kein Compiler nötig); danach prüfen: `venv\Scripts\python -c "import lxml, PIL, pillow_heif"`.
+  Ohne `lxml` scheitert jede TAIFUN-Übergabe an der Validierung, ohne `pillow_heif` bleiben HEIC-Fotos liegen.
+- `migrate.py` meldet beim ersten Lauf: Tabellen `taifun_uebergaben`, `vertriebskanaele`; Spalten
+  `vorgaenge.taifun_export_*`, `kunden.taifun_kundennr`, `galerie_dateien.objekt_id` (+ Index); Lead-Parameter
+  `taifun_*` (Schalter AUS); „Kanaele (v35): 30 Vertriebskanaele aus der Liste angelegt“, Zuordnungen alter
+  Schreibweisen („'SWD' -> 'Stadtwerke Düsseldorf'“ …) und je Bestandswert außerhalb der Liste „als inaktiver
+  Kanal angelegt“ – diese Zeilen notieren; „Objektfotos (v35)“ nur, wenn Objekt-Ordner im Bestand liegen. Der
+  zweite Lauf meldet „keine Änderungen nötig“.
+- Die TAIFUN-Übergabe bleibt nach dem Update AUS (Parameter `taifun_export_aktiv`); Einschalten erst nach den
+  Prüfpunkten in `docs/nach-dem-update-v35.md` (Ordner für das Dienstkonto SYSTEM, Testdatei in TAIFUN importiert,
+  Encoding bestätigt).
+- Danach `scripts\smoke.bat` wie immer; `/health` zeigt **17 Läufe** (neu `taifun-uebergaben`).
+- Rückweg: `rollback.bat --nur-code` (v34-Code läuft auf der v35-Datenbank – nur additive Änderungen; Rückweg-Probe
+  im Durchlauf: `diagnose/test_v35_final/rueckweg_probe.txt`).
+- Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v35.md` (TAIFUN-Ordner und Testdatei, Kanäle prüfen,
+  HV-Gruppen-Parameter, Profilbilder).
+
 ## 5. Versionsstand prüfen
 
 Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem

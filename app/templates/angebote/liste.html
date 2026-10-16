@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_interesse.html" as interesse_ui %}
 {% import "_sparten.html" as sparten_ui %}
-{% from "_komponenten.html" import status_badge, verfolgung_chip %}
+{% from "_komponenten.html" import status_badge, verfolgung_chip, kanal_badge %}
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
 {% from "_taifun_pdf.html" import taifun_pdf_eintrag %}
@@ -43,7 +43,7 @@
     {%- if mail_zaehler.get(a.id) %} <a class="mail-abzeichen" href="/angebote/{{ a.id }}/mails"
        title="{{ mail_zaehler[a.id] }} Antwort{{ 'en' if mail_zaehler[a.id] != 1 }} zur Angebots-Mail">{{ symbol('brief') }} {{ mail_zaehler[a.id] }}</a>{% endif %}</td>
 {%- elif key == 'kanal' -%}
-<td class="sp-kanal dezent">{{ (k.vertriebskanal or '–') if k else '–' }}</td>
+<td class="sp-kanal dezent">{#- v35 (Phase 184): Kanal-Label mit Farbe aus den Stammdaten #}{% if k and k.vertriebskanal %}{{ kanal_badge(k.vertriebskanal) }}{% else %}–{% endif %}</td>
 {%- elif key == 'vertriebler' -%}
 <td class="sp-vertriebler dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
 {%- elif key == 'datum' -%}

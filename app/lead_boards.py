@@ -30,11 +30,21 @@
 # Sparten MS/WA/DMS (app/sparten.py), Label „Disqualifiziert“ in Texten,
 # Rufnummernsuche mit Endziffern (lead_anrufliste.rufnummer_suchen), Rückruf-/
 # Wiedervorlage-Zeiten auf 5 Minuten gerundet (lead_v5.runden_5min).
+# v35 (PLAN_LEAD_V6 Phase 186, Agent B): Inline-Bearbeitung erweitert auf Interessen,
+# Vertriebskanal, Großkunde, Objektart (neue Spalte, Standard ausgeblendet), Telefon,
+# E-Mail und Teilgenommen – Validierung und Aktivität über lead_kartei.feld_speichern
+# (dieselbe Funktion wie das Autospeichern der Kartei), Rechte je Zeile über
+# lead_v2.bearbeiten_erlaubt (Vertrag R); Pflichtfeld-Verletzungen je Zeile
+# (pflicht_zellen, Kanal „?“ = unklar); gespeicherte Filter je Nutzer und Board
+# (benutzer_einstellungen Key boards_filter, Freigabe „für alle“ im globalen Eintrag
+# boards_filter_geteilt), Standardfilter beim Öffnen (filter_query), Sofortsuche-
+# Fragmente (fragment_ziele), Rufnummernsuche in der einen Suchleiste von „Kontaktiert“.
 
 import hashlib
 import json
 import re
 from datetime import date, datetime, timedelta
+from html.parser import HTMLParser
 
 from sqlalchemy.orm import Session
 
@@ -108,12 +118,17 @@ SPALTEN = [
     # v31 (PLAN_LEAD_V5 Phase 153): Spalte „Großkunde“ – Standard ausgeblendet, das Badge
     # steht zusätzlich am Kundennamen (Zelle lead); Filter-Chip und Sortierung möglich
     ("grosskunde", "Großkunde", False),
+    # v35 (PLAN_LEAD_V6 Phase 186): Objektart als Spalte (Standard ausgeblendet, Inline-Dropdown)
+    ("objektart", "Objektart", False),
     ("versuche", "Kontaktversuche", True), ("letzter_kontakt", "Letzter Kontakt", True),
     ("eingang", "Eingangsdatum", True), ("notiz", "Notiz", True),
     ("ad", "Außendienst", True), ("innendienst", "Innendienst", True),
     ("ort", "Ort", True), ("strasse", "Straße", True), ("telefon", "Telefon", True),
     ("email", "E-Mail", True), ("termin", "Vor-Ort-Termin", True),
     ("wiedervorlage", "Wiedervorlage", True),
+    # v35 (PLAN_LEAD_V6 Phase 183, Agent T): Spalte „TAIFUN-Übergabe“ (Standard ausgeblendet,
+    # sortierbar nach Übergabedatum; Filter-Chip taifun=1, Rang 0 + rotes Label bei Status fehler)
+    ("taifun", "TAIFUN-Übergabe", False),
 ]
 # Board Deals: zusätzlich Erfassung/Angebot (Buttons + Sparten-Chips)
 SPALTEN_TERMINIERT = SPALTEN[:5] + [("angebot", "Erfassung / Angebot", True)] + SPALTEN[5:]
@@ -121,6 +136,34 @@ SPALTEN_TERMINIERT = SPALTEN[:5] + [("angebot", "Erfassung / Angebot", True)] + 
 SPALTE_SCORE = ("score", "Score", True)
 SPALTEN_FEST = ("lead",)          # immer sichtbar, immer vorn
 EINSTELLUNG_KEY = "boards_spalten"
+# v35 (PLAN_LEAD_V6 Phase 186): gespeicherte Filter je Nutzer und Board (benutzer_einstellungen);
+# „für alle freigeben“ legt eine schreibgeschützte Kopie im globalen Eintrag (benutzer_id 0) ab
+FILTER_KEY = "boards_filter"
+FILTER_GETEILT_KEY = "boards_filter_geteilt"
+FILTER_GLOBAL_BENUTZER = 0
+FILTER_NAME_MAX = 60
+FILTER_MAX_JE_BOARD = 30
+# Query-Parameter, die KEIN Filter sind (Standardfilter greift trotzdem)
+FILTER_NEUTRALE_PARAMETER = ("meldung", "fehler", "kopien", "seite", "filter", "fragment", "board")
+# Kanal „?“ = Vertriebskanal unklar (Phase 184, Agent K): rotes Pflichtfeld in der Zelle
+KANAL_UNKLAR = "?"
+# Inline-Felder der Tabelle, die über lead_kartei.feld_speichern laufen (Phase 186):
+# Tabellen-Feldname → Kartei-Feldname (Validierung, Aktivität „<Feld>: „alt“ → „neu““)
+INLINE_KARTEI_FELDER = {
+    "interessen": "interesse", "interesse": "interesse",
+    "kanal": "vertriebskanal", "vertriebskanal": "vertriebskanal",
+    "grosskunde": "grosskunde", "objektart": "objektart",
+    "telefon": "telefon", "email": "email",
+}
+# Pflichtfeld-Namen (lead_v2.pflichtfelder_offen) → Spalten-Key der roten Markierung
+# (Name/Anrede haben keine eigene Zelle – die Kundenname-Zelle bleibt unmarkiert, Alt-Tests
+# prüfen dort class="sp-lead" exakt; die Markierung steht als Attribut data-pflicht am <td>)
+PFLICHT_ZELLEN = {
+    "Vertriebskanal": "kanal", "Vertriebskanal klären": "kanal",   # v35 K: Kanal „?“ (lead_kanaele.UNKLAR_HINWEIS)
+    "Außendienst": "ad", "Interesse": "interessen",
+    "Telefon": "telefon", "E-Mail": "email", "Objektart": "objektart",
+    "PLZ": "ort", "Ort": "ort", "Straße": "strasse",
+}
 # Boards mit eigener Spaltenkonfiguration je Nutzer (Hauptboard, Deals,
 # Infoabend, Handelsvertreter – Infoabend/HV nutzen den Hauptboard-Katalog)
 KONFIG_BOARDS = ("hauptboard", "terminiert", "info", "handelsvertreter")
@@ -211,6 +254,7 @@ BREITE_MAX = 600
 # v29 (Phase 142, Vertrag L2): rote Labels der Notiz-Spalte, Reihenfolge fest
 MAIL_LABEL_UNGUELTIG = "E-Mail falsch"
 MAIL_LABEL_FEHLER = "Mail nicht gesendet"
+TAIFUN_LABEL_FEHLER = "TAIFUN-Übergabe fehlgeschlagen"   # v35 (Phase 183, Agent T) = taifun_export.LABEL_FEHLER
 
 # Abgeleitete Phasen sind nicht manuell setzbar (Termin/Erfassung/Angebot)
 PHASEN_ABGELEITET = ("terminiert", "erfasst", "angebot", "gewonnen")
@@ -554,6 +598,8 @@ def _sortier_wert(z: dict, key: str):
         return ",".join(z.get("sparten") or []) or None
     if key == "grosskunde":
         return 1 if z.get("grosskunde") else 0     # v31 (Phase 153): Großkunden zuerst bei „ab“
+    if key == "objektart":
+        return (k.objektart or "").strip().lower() or None   # v35 (Phase 186)
     if key == "angebot":
         angebote = z.get("angebote") or []
         return angebote[0].nummer if angebote else None
@@ -575,6 +621,8 @@ def _sortier_wert(z: dict, key: str):
         return z["termin"].beginn if z.get("termin") and z["termin"].beginn else None
     if key == "wiedervorlage":
         return z.get("wiedervorlage")
+    if key == "taifun":
+        return z.get("taifun_am")   # v35 (Phase 183, Agent T): nach Übergabedatum
     return None
 
 
@@ -683,7 +731,26 @@ def mail_labels(vorgang) -> list[str]:
         labels.append(MAIL_LABEL_UNGUELTIG)
     if getattr(vorgang, "mail_fehler", False):
         labels.append(MAIL_LABEL_FEHLER)
+    # v35 (PLAN_LEAD_V6 Phase 183, Agent T): „TAIFUN-Übergabe fehlgeschlagen“ – gleiches Muster
+    if (getattr(vorgang, "taifun_export_status", "") or "") == "fehler":
+        labels.append(TAIFUN_LABEL_FEHLER)
     return labels
+
+
+def _taifun_text(vorgang) -> str:
+    """v35 (Phase 183, Agent T): Tooltip der Spalte „TAIFUN-Übergabe“ (taifun_export.board_text)."""
+    try:
+        from app import taifun_export
+        return taifun_export.board_text(vorgang)
+    except Exception:   # noqa: BLE001
+        return ""
+
+
+def label_titel(vorgang) -> dict:
+    """Tooltip je rotem Label der Notiz-Spalte (v35, Agent T – _tabelle.html liest z.label_titel)."""
+    return {MAIL_LABEL_UNGUELTIG: (getattr(vorgang, "email_status_grund", "") or ""),
+            MAIL_LABEL_FEHLER: (getattr(vorgang, "mail_fehler_text", "") or ""),
+            TAIFUN_LABEL_FEHLER: (getattr(vorgang, "taifun_export_grund", "") or "")}
 
 
 # --- Farben, Avatare -----------------------------------------------------------------
@@ -693,14 +760,21 @@ def _hash_index(text: str, n: int) -> int:
 
 
 def kanal_farben(session: Session) -> dict:
-    """Parameter kanal_farben (JSON {kanal: #hex}, Schlüssel klein)."""
+    """{kanal klein: #hex} – v35 (PLAN_LEAD_V6 Phase 184): aus den Stammdaten
+    `vertriebskanaele` (lead_kanaele.kanal_farben_map, inkl. Aliase „swd“); der Parameter
+    kanal_farben (v23, jetzt aus der Tabelle gespiegelt) füllt nur noch Werte ohne Zeile."""
+    from app import lead_kanaele
+    farben = dict(lead_kanaele.kanal_farben_map(session))
     roh = kern.parameter_holen(session, "kanal_farben", "") or ""
     try:
         werte = json.loads(roh) if roh.strip() else {}
     except ValueError:
         werte = {}
-    return {str(k).strip().lower(): str(v).strip() for k, v in werte.items()
-            if str(v).strip()} if isinstance(werte, dict) else {}
+    if isinstance(werte, dict):
+        for k, v in werte.items():
+            if str(v).strip():
+                farben.setdefault(str(k).strip().lower(), str(v).strip())
+    return farben
 
 
 def kanal_farbe(farben: dict, kanal: str) -> str:
@@ -716,6 +790,92 @@ def grosskunde_farbe(session: Session) -> str:
     der CSS-Klasse .lm-grosskunde (lead_v2.css)."""
     wert = (kern.parameter_holen(session, "grosskunde_farbe", "") or "").strip()
     return wert if re.fullmatch(r"#[0-9a-fA-F]{6}", wert) else ""
+
+
+# --- v35 (PLAN_LEAD_V6 Phase 186): Rechte je Zeile, Kanal-Auswahl, Pflichtfelder ----------
+
+def bearbeiten_erlaubt(session: Session, benutzer, vorgang) -> bool:
+    """Darf dieser Benutzer diese Zeile inline bearbeiten? Vertrag mit Agent R (Phase 185):
+    lead_v2.bearbeiten_erlaubt(session, benutzer, vorgang) entscheidet – Innendienst/
+    Leadmanagement/Admin alle Leads, angestellter Außendienst nur Leads mit vorgaenge.ad_id =
+    eigene ID, Handelsvertreter nur Leads ihrer Gruppe (lead_v2.hv_gruppe_fuer). Jede
+    Inline-Änderung (POST /boards/zeile/{id}) und jede Zeile der Boards (z.bearbeitbar) läuft
+    hierüber – keine zweite Rechtelogik."""
+    if benutzer is None or vorgang is None:
+        return False
+    return bool(lead_v2.bearbeiten_erlaubt(session, benutzer, vorgang))
+
+
+def kanal_auswahl(session: Session, aktuell: str = "") -> list[dict]:
+    """Einträge des Kanal-Dropdowns der Inline-Bearbeitung: [{wert, farbe, waehlbar}].
+    Vertrag K (Phase 184): lead_kanaele.kanal_sortiert(session) liefert die aktiven Kanäle
+    nach Häufigkeit (als Namen, Dicts oder Objekte); ohne das Modul die Kanalwerte der
+    Angebotsprofile (kern.kanal_werte) ohne „Standard“ (entfällt als Label, Plan 184).
+    Der aktuelle Wert steht immer in der Liste – ein inaktiver Kanal als „(nicht mehr
+    wählbar)“; „?“ (unklar) ist wählbar und wird in der Zelle rot markiert."""
+    farben = kanal_farben(session)
+    eintraege: list[dict] = []
+    gesehen: set[str] = set()
+
+    def _zufuegen(wert, farbe="", waehlbar=True):
+        wert = str(wert or "").strip()
+        if not wert or wert.lower() in gesehen:
+            return
+        gesehen.add(wert.lower())
+        eintraege.append({"wert": wert, "farbe": farbe or kanal_farbe(farben, wert),
+                          "waehlbar": bool(waehlbar)})
+    try:
+        from app import lead_kanaele   # Agent K (Phase 184)
+        sortiert = getattr(lead_kanaele, "kanal_sortiert", None)
+        liste = sortiert(session) if sortiert is not None else []
+        farbe_fn = getattr(lead_kanaele, "kanal_farbe", None)
+    except Exception:   # noqa: BLE001 – ohne Kanal-Stammdaten der v23-Weg
+        liste, farbe_fn = [], None
+    for eintrag in liste or []:
+        if isinstance(eintrag, dict):
+            name = eintrag.get("name") or eintrag.get("wert") or eintrag.get("key") or ""
+            farbe = eintrag.get("farbe") or ""
+            waehlbar = eintrag.get("aktiv", True)
+        elif isinstance(eintrag, str):
+            name, farbe, waehlbar = eintrag, "", True
+        else:
+            name = getattr(eintrag, "name", "") or getattr(eintrag, "key", "")
+            farbe = getattr(eintrag, "farbe", "") or ""
+            waehlbar = getattr(eintrag, "aktiv", True)
+        if not farbe and farbe_fn is not None:
+            try:
+                farbe = farbe_fn(session, name) or ""
+            except Exception:   # noqa: BLE001
+                farbe = ""
+        _zufuegen(name, farbe, waehlbar)
+    if not eintraege:
+        for wert in kern.kanal_werte(session):
+            if wert.lower() != "standard":
+                _zufuegen(wert)
+    if KANAL_UNKLAR.lower() not in gesehen:
+        _zufuegen(KANAL_UNKLAR, farben.get(KANAL_UNKLAR, ""))
+    aktuell = (aktuell or "").strip()
+    if aktuell and aktuell.lower() not in gesehen:
+        _zufuegen(aktuell, "", False)
+    return eintraege
+
+
+def pflicht_zellen(session: Session, kunde, vorgang) -> set:
+    """Spalten-Keys mit Pflichtfeld-Verletzung (rote Zelle): leere Pflichtfelder aus
+    lead_v2.pflichtfelder_offen (Parameter pflichtfelder) plus Kanal „?“ (unklar)."""
+    keys: set = set()
+    if kunde is None:
+        return keys
+    try:
+        for name in lead_v2.pflichtfelder_offen(session, kunde, vorgang):
+            key = PFLICHT_ZELLEN.get(str(name))
+            if key:
+                keys.add(key)
+    except Exception:   # noqa: BLE001 – Markierung ist Komfort, die Tabelle bleibt
+        pass
+    if (kunde.vertriebskanal or "").strip() == KANAL_UNKLAR:
+        keys.add("kanal")
+    return keys
 
 
 def status_label(logik, phase: str) -> tuple[str, str]:
@@ -810,6 +970,9 @@ def filter_aus_query(q) -> dict:
         # v31 (Phase 153/154): Filter-Chips „Großkunde“ und „Archiv“ (archivierte Leads)
         "grosskunde": q.get("grosskunde", "") == "1",
         "archiviert": q.get("archiviert", "") == "1",
+        # v35 (PLAN_LEAD_V6 Phase 184): Filter-Chip „Kanal unklar“ (Kanal „?“)
+        "kanal_unklar": q.get("kanal_unklar", "") == "1",
+        "taifun": q.get("taifun", "") == "1",   # v35 (Phase 183, Agent T): Chip „an TAIFUN übergeben“
         "sort": None,        # v25: gemerkte Sortierung des Nutzers (lm_boards setzt sie)
     }
 
@@ -850,7 +1013,8 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
     elif archiv_sicht != "alle":
         abfrage = lead_archiv.filter_aktiv(abfrage)
     if hv:
-        abfrage = abfrage.filter(Vorgang.ad_id == benutzer.id)
+        # v35 (PLAN_LEAD_V6 Phase 185, Agent R): Handelsvertreter sehen die Leads ihrer Gruppe
+        abfrage = abfrage.filter(Vorgang.ad_id.in_(lead_v2.hv_gruppe_fuer(session, benutzer.id) or {benutzer.id}))
     elif f.get("meine") and benutzer is not None:
         abfrage = abfrage.filter(Vorgang.leadmanager_id == benutzer.id)
     if f.get("ad_id"):
@@ -952,6 +1116,10 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             continue
         if f.get("grosskunde") and not getattr(kunde, "grosskunde", False):
             continue   # v31 (Phase 153): Filter-Chip „Großkunde“
+        if f.get("taifun") and not getattr(v, "taifun_export_am", None):
+            continue   # v35 (Phase 183, Agent T): Filter-Chip „an TAIFUN übergeben“
+        if f.get("kanal_unklar") and (kunde.vertriebskanal or "").strip() != "?":
+            continue   # v35 (Phase 184): Filter-Chip „Kanal unklar“ (lead_kanaele.KANAL_UNKLAR)
         if v.lead_phase in ("gewonnen", "verloren") and not f.get("archiv"):
             stand = letzte_akt.get(v.id) or v.eingang_am or v.angelegt_am
             if stand is not None and stand < grenze:
@@ -1002,6 +1170,11 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             # v29 (Phase 142, Vertrag L2): Mail-Fehler / ungültige E-Mail → Rang 0 + Labels
             "mail_labels": mail_labels(v),
             "rang0": bool(mail_labels(v)),
+            "label_titel": label_titel(v),   # v35 (Phase 183, Agent T): Tooltips der roten Labels
+            # v35 (Phase 183, Agent T): Spalte „TAIFUN-Übergabe“ (Datum, Status, Tooltip)
+            "taifun_am": getattr(v, "taifun_export_am", None),
+            "taifun_status": getattr(v, "taifun_export_status", "") or "",
+            "taifun_text": _taifun_text(v),
             "mail_fehler_text": (getattr(v, "mail_fehler_text", "") or "") if getattr(v, "mail_fehler", False) else "",
             "email_status_grund": (getattr(v, "email_status_grund", "") or "")
             if (getattr(v, "email_status", None) or "") == "ungueltig" else "",
@@ -1016,6 +1189,12 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             "kopien": kopien.get(v.id, []),
             "hv_lead": bool(v.ad_id and v.ad_id in hv_alle),
             "hv_gruppe_offen": v.id in gruppe_offen,   # v33 (Phase 175, R 4c)
+            # v35 (PLAN_LEAD_V6 Phase 186): Rechte je Zeile, Pflichtfeld-Verletzungen (rote
+            # Zelle), Kanal „?“ = unklar, Objektart für die neue Spalte
+            "bearbeitbar": bearbeiten_erlaubt(session, benutzer, v),
+            "pflicht_zellen": pflicht_zellen(session, kunde, v),
+            "kanal_unklar": (kunde.vertriebskanal or "").strip() == KANAL_UNKLAR,
+            "objektart": (kunde.objektart or "").strip().upper(),
         }
         if not _suche_passt(zeile, suche):
             continue
@@ -1042,6 +1221,27 @@ def zeile_fuer(session: Session, benutzer, vorgang: Vorgang) -> dict | None:
                 if z["vorgang"].id == vorgang.id:
                     return z
     return None
+
+
+def hv_zeile_fuer(session: Session, benutzer, vorgang: Vorgang) -> dict | None:
+    """v35 (PLAN_LEAD_V6 Phase 186): Zeile der Handelsvertreter-Ansicht nach einer Inline-
+    Änderung – Hauptboard-Zeile (zeile_fuer) plus die HV-Felder aus
+    lead_handelsvertreter.zeilen_bauen (Vertreter, Sperren, Hinweise); None, wenn der
+    Vorgang in keiner Gruppe mehr sichtbar ist. Liefert {zeile, hv_liste, standard, gesamt}
+    für das Makro hv_zeile (leadmanagement/_hv_zeile.html)."""
+    from app import lead_handelsvertreter as hv_modul
+    basis = hv_modul.zeilen_bauen(session, [vorgang], hv_modul.hv_kreis(session))
+    if not basis:
+        return None
+    z105 = zeile_fuer(session, benutzer, vorgang)
+    zeilen = hv_modul.zeilen_zusammenfuehren(basis, {vorgang.id: z105} if z105 else None)
+    zeile = zeilen[0]
+    if z105 is None:
+        zeile["phase105"] = False
+    zeile.setdefault("bearbeitbar", bearbeiten_erlaubt(session, benutzer, vorgang))
+    return {"zeile": zeile, "hv_liste": lead_v2.handelsvertreter_liste(session),
+            "standard": lead_v2.hv_standard_benutzer(session),
+            "gesamt": hv_modul.gesamtsicht(session, benutzer)}
 
 
 def auswahl_listen(session: Session) -> dict:
@@ -1084,6 +1284,11 @@ def auswahl_listen(session: Session) -> dict:
         "kanaele": kern.kanal_werte(session),
         "sparten": list(sparten_modul.SPARTEN),           # v31 (Phase 157): Filter-Chips
         "grosskunde_farbe": grosskunde_farbe(session),     # v31 (Phase 153): Badge-Farbe
+        # v35 (PLAN_LEAD_V6 Phase 186): Inline-Dropdowns Kanal (nach Häufigkeit, Vertrag K)
+        # und Objektart (Blatt Objektarten), Langnamen der Sparten für das Interessen-Popover
+        "kanal_wahl": kanal_auswahl(session),
+        "objektarten": [{"code": c, "name": n} for c, n, _p in lead_v2.objektarten(session)],
+        "sparten_lang": dict(sparten_modul.SPARTEN_LANG),
         "gruende": {phase: [{"grund": g.grund, "freitext": g.freitext_pflicht}
                             for g in logik.gruende_der_phase(phase)]
                     for phase in ("zurueckgestellt", "unqualifiziert", "verloren")},
@@ -1318,6 +1523,37 @@ def zeile_aendern(session: Session, vorgang: Vorgang, feld: str, wert, benutzer=
         return status_setzen(session, vorgang, str(wert or ""), benutzer=benutzer,
                              grund=daten.get("grund", ""), grund_text=daten.get("grund_text", ""),
                              bis=daten.get("bis"))
+    if feld in INLINE_KARTEI_FELDER:
+        # v35 (PLAN_LEAD_V6 Phase 186): Interessen, Vertriebskanal, Großkunde, Objektart,
+        # Telefon, E-Mail – dieselbe Validierung und Aktivität wie das Autospeichern der
+        # Kartei (lead_kartei.feld_speichern: Alt → Neu, kein Eintrag ohne Änderung)
+        from app import lead_kartei
+        kunde = session.get(Kunde, vorgang.kunde_id)
+        if kunde is None:
+            return False, "Kunde fehlt."
+        kartei_feld = INLINE_KARTEI_FELDER[feld]
+        if kartei_feld == "interesse" and isinstance(wert, str) and wert.strip().startswith("["):
+            try:
+                wert = json.loads(wert)
+            except ValueError:
+                pass
+        erzwingen = (bool(daten.get("erzwingen")) and benutzer is not None
+                     and benutzer.basisrolle in ("admin", "innendienst"))
+        ergebnis = lead_kartei.feld_speichern(session, vorgang, kunde, kartei_feld, wert,
+                                              benutzer=benutzer, erzwingen=erzwingen)
+        if ergebnis["ok"] and ergebnis.get("geaendert") and kartei_feld in ("telefon", "email"):
+            try:
+                lead_kartei.vorschlaege_cache_leeren(vorgang.id)
+            except Exception:   # noqa: BLE001
+                pass
+        return bool(ergebnis["ok"]), ergebnis["meldung"]
+    if feld == "teilgenommen":
+        # Infoabend (Phase 111): ja | nein | leer über lead_info (Aktivität je Lead)
+        from app import lead_info
+        gueltig, teil = lead_info.teilgenommen_lesen(wert)
+        if not gueltig:
+            return False, "Teilgenommen: Wert ja | nein | leer erwartet."
+        return True, lead_info.teilgenommen_setzen(session, vorgang, teil, benutzer=benutzer)
     return False, f"Feld „{feld}“ ist nicht bearbeitbar."
 
 
@@ -1632,8 +1868,11 @@ def kontaktiert_daten(session: Session, benutzer, q: str = "", telefon: str = ""
         wer = benutzer_map.get(a.benutzer_id)
         ergebnis_name = ANRUF_ERGEBNIS_NAMEN.get(a.ergebnis or "", a.ergebnis or "")
         if suche:
+            # v35 (Phase 186): EINE Suchleiste – Name, Ort, PLZ, E-Mail, Notiz, Ergebnis, Benutzer
+            # (reine Ziffernfolgen ab 3 Ziffern laufen als Rufnummernsuche, siehe oben)
             text = " ".join((kunde.vorname or "", kunde.nachname or "", kunde.firma or "",
-                             kunde.ort or "", kunde.telefon or "", ergebnis_name,
+                             kunde.ort or "", kunde.plz or "", kunde.email or "",
+                             kunde.telefon or "", ergebnis_name,
                              wer.name if wer else "", a.text or "")).lower()
             if suche not in text:
                 continue
@@ -1693,3 +1932,362 @@ def migration_v33_tabellen(session: Session) -> list[str]:
     if meldungen:
         session.flush()
     return meldungen
+
+
+# --- v35 (PLAN_LEAD_V6 Phase 186): gespeicherte Filter je Nutzer und Board ------------------
+# Ablage benutzer_einstellungen Key boards_filter:
+#   {"<board>": {"filter": [{id, name, werte, erstellt_am, geteilt_id?}], "standard_id": "<id>|null"}}
+# „für alle freigeben“ (Innendienst/Admin): schreibgeschützte Kopie im globalen Eintrag
+# (benutzer_id 0, Key boards_filter_geteilt):
+#   {"<board>": {"filter": [{id, name, werte, von, von_name, erstellt_am}]}}
+# werte = Formularwerte des Filterblocks (q, status, kanal, sparte, ad_id, leadmanager_id,
+# meine, grosskunde, archiviert, archiv, gruppe, …), dazu sort {key, richtung} und
+# gruppen_zu [Gruppen-Keys, die eingeklappt sind]. Keine Kundendaten, nur Filterwerte.
+
+_FILTER_KEY_MUSTER = re.compile(r"^[a-z0-9_]{1,40}$")
+
+
+class FilterWerte(dict):
+    """Gespeicherte Filterwerte als Query-Ersatz (get/getlist/multi_items/keys wie
+    starlette.QueryParams) – für filter_aus_query der Boards, des Infoabends und der HV-Ansicht."""
+
+    def get(self, name, standard=None):   # type: ignore[override]
+        wert = super().get(name, None)
+        if wert is None:
+            return standard
+        if isinstance(wert, list):
+            return wert[0] if wert else standard
+        return wert
+
+    def getlist(self, name) -> list:
+        wert = super().get(name, None)
+        if wert is None:
+            return []
+        return list(wert) if isinstance(wert, list) else [wert]
+
+    def multi_items(self) -> list:
+        items = []
+        for k, v in super().items():
+            for teil in (v if isinstance(v, list) else [v]):
+                items.append((k, str(teil)))
+        return items
+
+
+def _filter_id() -> str:
+    return hashlib.md5(f"{datetime.now().isoformat()}{id(object())}".encode("utf-8")).hexdigest()[:10]
+
+
+def werte_normieren(werte) -> dict:
+    """Filterwerte für die Ablage bereinigen: nur Schlüssel [a-z0-9_], Werte als Text (≤ 200
+    Zeichen) oder Textlisten (≤ 20), `sort` als {key, richtung}, `gruppen_zu` als Liste; leere
+    Werte und neutrale Parameter (meldung, seite, …) fallen weg."""
+    sauber: dict = {}
+    if not isinstance(werte, dict):
+        return sauber
+    for key, wert in werte.items():
+        key = str(key or "").strip().lower()
+        if not _FILTER_KEY_MUSTER.match(key) or key in FILTER_NEUTRALE_PARAMETER:
+            continue
+        if key == "sort":
+            if isinstance(wert, dict) and str(wert.get("key") or "").strip():
+                sauber["sort"] = {"key": str(wert["key"]).strip()[:40],
+                                  "richtung": "ab" if str(wert.get("richtung", "auf")) == "ab" else "auf"}
+            continue
+        if key == "gruppen_zu":
+            liste = wert if isinstance(wert, (list, tuple)) else [wert]
+            keys = [str(k).strip()[:40] for k in liste if str(k).strip()]
+            if keys:
+                sauber["gruppen_zu"] = keys[:40]
+            continue
+        if isinstance(wert, bool):
+            wert = "1" if wert else ""
+        if isinstance(wert, (list, tuple)):
+            texte = [str(t).strip()[:200] for t in wert if str(t).strip()][:20]
+            if texte:
+                sauber[key] = texte if len(texte) > 1 else texte[0]
+            continue
+        text = str(wert if wert is not None else "").strip()[:200]
+        if text:
+            sauber[key] = text
+    return sauber
+
+
+def _filter_ablage(session: Session, benutzer_id: int, key: str) -> dict:
+    alle = lead_v2.einstellung_holen(session, benutzer_id, key, {}) or {}
+    return alle if isinstance(alle, dict) else {}
+
+
+def _filter_board(ablage: dict, board: str) -> dict:
+    eintrag = ablage.get(board)
+    if not isinstance(eintrag, dict):
+        eintrag = {"filter": [], "standard_id": None}
+        ablage[board] = eintrag
+    if not isinstance(eintrag.get("filter"), list):
+        eintrag["filter"] = []
+    return eintrag
+
+
+def filter_freigabe_erlaubt(benutzer) -> bool:
+    """„Für alle freigeben“ – Innendienst und Admin (Plan 186, bestätigt 15.10.2026)."""
+    return benutzer is not None and getattr(benutzer, "basisrolle", "") in ("admin", "innendienst")
+
+
+def filter_liste(session: Session, benutzer, board: str) -> list[dict]:
+    """Gespeicherte Filter des Nutzers (bearbeitbar) plus die für alle freigegebenen
+    (schreibgeschützt, Kennzeichen geteilt=True, von_name); je Eintrag standard=True, wenn er
+    der Standardfilter des Nutzers beim Öffnen ist."""
+    benutzer_id = _benutzer_id(benutzer)
+    eigene = _filter_board(_filter_ablage(session, benutzer_id, FILTER_KEY), board)
+    geteilt = _filter_board(_filter_ablage(session, FILTER_GLOBAL_BENUTZER, FILTER_GETEILT_KEY), board)
+    standard_id = eigene.get("standard_id")
+    liste = []
+    for f in eigene["filter"]:
+        if not isinstance(f, dict) or not f.get("id"):
+            continue
+        liste.append({"id": str(f["id"]), "name": str(f.get("name") or "")[:FILTER_NAME_MAX],
+                      "werte": werte_normieren(f.get("werte")), "geteilt": False,
+                      "geteilt_id": f.get("geteilt_id"), "von": benutzer_id, "von_name": "",
+                      "standard": str(f["id"]) == str(standard_id), "loeschbar": True,
+                      "erstellt_am": f.get("erstellt_am", "")})
+    eigene_geteilt = {f.get("geteilt_id") for f in eigene["filter"] if isinstance(f, dict)}
+    for f in geteilt["filter"]:
+        if not isinstance(f, dict) or not f.get("id") or f["id"] in eigene_geteilt:
+            continue
+        liste.append({"id": str(f["id"]), "name": str(f.get("name") or "")[:FILTER_NAME_MAX],
+                      "werte": werte_normieren(f.get("werte")), "geteilt": True, "geteilt_id": None,
+                      "von": f.get("von"), "von_name": str(f.get("von_name") or ""),
+                      "standard": str(f["id"]) == str(standard_id),
+                      "loeschbar": bool(benutzer is not None and (
+                          f.get("von") == benutzer_id or getattr(benutzer, "basisrolle", "") == "admin")),
+                      "erstellt_am": f.get("erstellt_am", "")})
+    return liste
+
+
+def filter_kontext(session: Session, benutzer, board: str) -> dict:
+    """Kontext des Makros filter_speicher (Filterleiste): Liste, Standard-ID, Freigaberecht."""
+    liste = filter_liste(session, benutzer, board)
+    return {"liste": liste, "standard_id": next((f["id"] for f in liste if f["standard"]), None),
+            "darf_freigeben": filter_freigabe_erlaubt(benutzer), "board": board}
+
+
+def filter_speichern(session: Session, benutzer, board: str, name: str, werte,
+                     standard: bool = False, filter_id: str | None = None) -> tuple[dict | None, str]:
+    """Neuen Filter anlegen oder (mit filter_id) einen eigenen überschreiben; standard=True
+    macht ihn zum Standardfilter beim Öffnen. Liefert (Eintrag, Meldung)."""
+    benutzer_id = _benutzer_id(benutzer)
+    name = re.sub(r"\s+", " ", str(name or "")).strip()[:FILTER_NAME_MAX]
+    if not name:
+        return None, "Bitte einen Namen für den Filter eingeben."
+    if not board_bekannt(board):
+        return None, "Unbekanntes Board."
+    ablage = _filter_ablage(session, benutzer_id, FILTER_KEY)
+    eintrag = _filter_board(ablage, board)
+    sauber = werte_normieren(werte)
+    ziel = None
+    if filter_id:
+        ziel = next((f for f in eintrag["filter"] if isinstance(f, dict) and str(f.get("id")) == str(filter_id)), None)
+        if ziel is None:
+            return None, "Filter nicht gefunden (freigegebene Filter anderer Nutzer sind schreibgeschützt)."
+        ziel["name"], ziel["werte"] = name, sauber
+    else:
+        if len(eintrag["filter"]) >= FILTER_MAX_JE_BOARD:
+            return None, f"Höchstens {FILTER_MAX_JE_BOARD} Filter je Board."
+        # gleicher Name → überschreiben statt doppelt anlegen
+        ziel = next((f for f in eintrag["filter"] if isinstance(f, dict)
+                     and str(f.get("name") or "").lower() == name.lower()), None)
+        if ziel is None:
+            ziel = {"id": _filter_id(), "name": name, "werte": sauber,
+                    "erstellt_am": datetime.now().strftime("%Y-%m-%d %H:%M")}
+            eintrag["filter"].append(ziel)
+        else:
+            ziel["werte"] = sauber
+    if standard:
+        eintrag["standard_id"] = ziel["id"]
+    elif eintrag.get("standard_id") == ziel["id"] and standard is False and filter_id is None:
+        pass   # bestehender Standard bleibt, wenn nur überschrieben wird
+    lead_v2.einstellung_setzen(session, benutzer_id, FILTER_KEY, ablage)
+    return ({**ziel, "geteilt": False, "standard": eintrag.get("standard_id") == ziel["id"]},
+            f"Filter „{name}“ gespeichert" + (" – Standard beim Öffnen." if standard else "."))
+
+
+def filter_umbenennen(session: Session, benutzer, board: str, filter_id: str, name: str) -> tuple[bool, str]:
+    benutzer_id = _benutzer_id(benutzer)
+    name = re.sub(r"\s+", " ", str(name or "")).strip()[:FILTER_NAME_MAX]
+    if not name:
+        return False, "Bitte einen Namen eingeben."
+    ablage = _filter_ablage(session, benutzer_id, FILTER_KEY)
+    eintrag = _filter_board(ablage, board)
+    ziel = next((f for f in eintrag["filter"] if isinstance(f, dict) and str(f.get("id")) == str(filter_id)), None)
+    if ziel is None:
+        return False, "Filter nicht gefunden (freigegebene Filter anderer Nutzer sind schreibgeschützt)."
+    ziel["name"] = name
+    lead_v2.einstellung_setzen(session, benutzer_id, FILTER_KEY, ablage)
+    return True, f"Filter in „{name}“ umbenannt."
+
+
+def filter_loeschen(session: Session, benutzer, board: str, filter_id: str) -> tuple[bool, str]:
+    """Eigenen Filter löschen (eine Freigabe dieses Filters bleibt für die anderen bestehen,
+    bis sie über „Freigabe entfernen“ zurückgenommen wird [ANNAHME])."""
+    benutzer_id = _benutzer_id(benutzer)
+    ablage = _filter_ablage(session, benutzer_id, FILTER_KEY)
+    eintrag = _filter_board(ablage, board)
+    vorher = len(eintrag["filter"])
+    eintrag["filter"] = [f for f in eintrag["filter"]
+                         if not (isinstance(f, dict) and str(f.get("id")) == str(filter_id))]
+    if len(eintrag["filter"]) == vorher:
+        # freigegebener Filter? nur Ersteller/Admin über filter_freigabe_entfernen
+        return filter_freigabe_entfernen(session, benutzer, board, filter_id)
+    if str(eintrag.get("standard_id")) == str(filter_id):
+        eintrag["standard_id"] = None
+    lead_v2.einstellung_setzen(session, benutzer_id, FILTER_KEY, ablage)
+    return True, "Filter gelöscht."
+
+
+def filter_standard_setzen(session: Session, benutzer, board: str, filter_id: str | None) -> tuple[bool, str]:
+    """Standardfilter beim Öffnen setzen (eigener oder freigegebener Filter) bzw. aufheben (None)."""
+    benutzer_id = _benutzer_id(benutzer)
+    ablage = _filter_ablage(session, benutzer_id, FILTER_KEY)
+    eintrag = _filter_board(ablage, board)
+    if filter_id:
+        bekannt = {f["id"] for f in filter_liste(session, benutzer, board)}
+        if str(filter_id) not in bekannt:
+            return False, "Filter nicht gefunden."
+        eintrag["standard_id"] = str(filter_id)
+        meldung = "Standard beim Öffnen gesetzt."
+    else:
+        eintrag["standard_id"] = None
+        meldung = "Kein Standardfilter mehr – das Board öffnet ungefiltert."
+    lead_v2.einstellung_setzen(session, benutzer_id, FILTER_KEY, ablage)
+    return True, meldung
+
+
+def filter_freigeben(session: Session, benutzer, board: str, filter_id: str) -> tuple[bool, str]:
+    """Innendienst/Admin: eigenen Filter für alle freigeben – Kopie im globalen Eintrag
+    (schreibgeschützt bei den anderen Nutzern), eigener Eintrag merkt geteilt_id."""
+    if not filter_freigabe_erlaubt(benutzer):
+        return False, "Freigeben dürfen nur Innendienst und Admin."
+    benutzer_id = _benutzer_id(benutzer)
+    ablage = _filter_ablage(session, benutzer_id, FILTER_KEY)
+    eintrag = _filter_board(ablage, board)
+    quelle = next((f for f in eintrag["filter"] if isinstance(f, dict) and str(f.get("id")) == str(filter_id)), None)
+    if quelle is None:
+        return False, "Nur eigene Filter lassen sich freigeben."
+    global_ablage = _filter_ablage(session, FILTER_GLOBAL_BENUTZER, FILTER_GETEILT_KEY)
+    global_eintrag = _filter_board(global_ablage, board)
+    geteilt = next((f for f in global_eintrag["filter"] if isinstance(f, dict)
+                    and str(f.get("id")) == str(quelle.get("geteilt_id"))), None)
+    if geteilt is None:
+        geteilt = {"id": _filter_id(), "von": benutzer_id,
+                   "erstellt_am": datetime.now().strftime("%Y-%m-%d %H:%M")}
+        global_eintrag["filter"].append(geteilt)
+    geteilt.update({"name": quelle.get("name", ""), "werte": werte_normieren(quelle.get("werte")),
+                    "von_name": getattr(benutzer, "name", "") or ""})
+    quelle["geteilt_id"] = geteilt["id"]
+    lead_v2.einstellung_setzen(session, FILTER_GLOBAL_BENUTZER, FILTER_GETEILT_KEY, global_ablage)
+    lead_v2.einstellung_setzen(session, benutzer_id, FILTER_KEY, ablage)
+    return True, f"Filter „{quelle.get('name', '')}“ für alle freigegeben."
+
+
+def filter_freigabe_entfernen(session: Session, benutzer, board: str, filter_id: str) -> tuple[bool, str]:
+    """Freigabe zurücknehmen – Ersteller oder Admin; filter_id = ID der Freigabe oder des
+    eigenen Filters, der freigegeben wurde."""
+    benutzer_id = _benutzer_id(benutzer)
+    global_ablage = _filter_ablage(session, FILTER_GLOBAL_BENUTZER, FILTER_GETEILT_KEY)
+    global_eintrag = _filter_board(global_ablage, board)
+    ablage = _filter_ablage(session, benutzer_id, FILTER_KEY)
+    eintrag = _filter_board(ablage, board)
+    eigener = next((f for f in eintrag["filter"] if isinstance(f, dict) and str(f.get("id")) == str(filter_id)), None)
+    ziel_id = str(eigener.get("geteilt_id")) if eigener and eigener.get("geteilt_id") else str(filter_id)
+    ziel = next((f for f in global_eintrag["filter"] if isinstance(f, dict) and str(f.get("id")) == ziel_id), None)
+    if ziel is None:
+        return False, "Freigabe nicht gefunden."
+    if not (ziel.get("von") == benutzer_id or getattr(benutzer, "basisrolle", "") == "admin"):
+        return False, "Freigabe zurücknehmen darf nur der Ersteller oder ein Admin."
+    global_eintrag["filter"] = [f for f in global_eintrag["filter"] if f is not ziel]
+    lead_v2.einstellung_setzen(session, FILTER_GLOBAL_BENUTZER, FILTER_GETEILT_KEY, global_ablage)
+    # Freigabe-Verweis beim Ersteller lösen – auch wenn ein Admin die Freigabe entfernt
+    ersteller_id = ziel.get("von") if isinstance(ziel.get("von"), int) else benutzer_id
+    for nutzer_id in {benutzer_id, ersteller_id}:
+        nutzer_ablage = ablage if nutzer_id == benutzer_id else _filter_ablage(session, nutzer_id, FILTER_KEY)
+        nutzer_eintrag = _filter_board(nutzer_ablage, board)
+        geaendert = False
+        for f in nutzer_eintrag["filter"]:
+            if isinstance(f, dict) and str(f.get("geteilt_id")) == ziel_id:
+                f.pop("geteilt_id", None)
+                geaendert = True
+        if geaendert:
+            lead_v2.einstellung_setzen(session, nutzer_id, FILTER_KEY, nutzer_ablage)
+    return True, "Freigabe entfernt."
+
+
+def standard_filter(session: Session, benutzer, board: str) -> dict | None:
+    """Der Standardfilter des Nutzers für dieses Board (eigener oder freigegebener) oder None."""
+    return next((f for f in filter_liste(session, benutzer, board) if f["standard"]), None)
+
+
+def filter_query(query_params, session: Session, benutzer, board: str):
+    """Query für filter_aus_query: trägt die Anfrage Filterparameter (alles außer
+    FILTER_NEUTRALE_PARAMETER) oder ?filter=0, gilt die URL; sonst greift der Standardfilter
+    des Nutzers beim Öffnen (Plan 186: „URL-Parameter überschreiben ihn“).
+    Liefert (query, aktiver_filter | None)."""
+    try:
+        keys = [k for k, _ in query_params.multi_items()]
+    except AttributeError:
+        keys = list(query_params.keys())
+    if any(k not in FILTER_NEUTRALE_PARAMETER for k in keys) or query_params.get("filter", "") == "0":
+        return query_params, None
+    standard = standard_filter(session, benutzer, board)
+    if standard is None or not standard.get("werte"):
+        return query_params, None
+    return FilterWerte(standard["werte"]), standard
+
+
+# --- v35 (Phase 186): Sofortsuche – Fragmente einer gerenderten Seite ---------------------
+
+class _ZielParser(HTMLParser):
+    """Findet Elemente mit data-lm-sofort-ziel="<name>" und ihre Zeichen-Spannen im HTML."""
+
+    def __init__(self, html: str):
+        super().__init__(convert_charrefs=False)
+        self.html = html
+        self.zeilen_start = [0]
+        for i, zeichen in enumerate(html):
+            if zeichen == "\n":
+                self.zeilen_start.append(i + 1)
+        self.offen: list[dict] = []
+        self.ziele: dict[str, str] = {}
+
+    def _pos(self) -> int:
+        zeile, spalte = self.getpos()
+        return self.zeilen_start[zeile - 1] + spalte
+
+    def handle_starttag(self, tag, attrs):
+        name = next((v for k, v in attrs if k == "data-lm-sofort-ziel"), None)
+        for eintrag in self.offen:
+            if eintrag["tag"] == tag:
+                eintrag["tiefe"] += 1
+        if name:
+            self.offen.append({"tag": tag, "name": name, "tiefe": 1, "start": self._pos()})
+
+    def handle_startendtag(self, tag, attrs):
+        return   # <x/> – keine Tiefe
+
+    def handle_endtag(self, tag):
+        for eintrag in reversed(self.offen):
+            if eintrag["tag"] == tag:
+                eintrag["tiefe"] -= 1
+                if eintrag["tiefe"] == 0:
+                    ende = self.html.find(">", self._pos())
+                    self.ziele.setdefault(eintrag["name"], self.html[eintrag["start"]:ende + 1])
+                    self.offen.remove(eintrag)
+                break
+
+
+def fragment_ziele(html: str) -> dict[str, str]:
+    """Alle Bereiche data-lm-sofort-ziel="<name>" einer gerenderten Seite als {name: html}
+    (äußeres Element eingeschlossen) – Antwort der Boards bei ?fragment=1 (JSON),
+    lm_sofort.js tauscht die Inhalte ohne Seitenneuladen."""
+    parser = _ZielParser(html)
+    parser.feed(html)
+    parser.close()
+    return parser.ziele

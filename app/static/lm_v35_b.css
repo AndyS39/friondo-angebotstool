@@ -1,0 +1,84 @@
+/* v35 (PLAN_LEAD_V6 Phase 186, Agent B): Hauptboard-Inline-Bearbeitung, gespeicherte Filter,
+   Sofortsuche. Nur Tokens aus style.css / lead_v2.css (Hell/Dunkel identisch), keine festen
+   Farbwerte. Eingebunden je Seite (Hauptboard/Deals, Kontaktiert, Infoabend, HV-Ansicht,
+   Anrufliste, Kanban, To-Dos). */
+
+/* --- Pflichtfeld-Verletzung in der Zelle (Kanal „?“, fehlender Außendienst, leere Pflichtfelder) –
+       Attribut data-pflicht am <td>, damit die Spaltenklassen (class="sp-…") unverändert bleiben --- */
+.lm-tabelle td[data-pflicht] { background: color-mix(in srgb, var(--status-rot) 10%, transparent);
+    box-shadow: inset 2px 0 0 var(--status-rot); }
+.lm-tabelle td[data-pflicht] .lm-avatar.leer { outline: 2px solid var(--status-rot); outline-offset: 1px; }
+.lm-pflicht-hinweis { display: inline-block; font-size: var(--t-xs); font-weight: 600; color: var(--status-rot);
+    white-space: nowrap; margin-left: 4px; }
+.lm-kanal-label.lm-kanal-unklar { --f: var(--status-rot); }
+.lm-status.lm-kanal-leer { --f: var(--status-grau); color: var(--text-dezent); }
+
+/* --- Interessen-Popover (Mehrfach-Häkchen) --- */
+.lm-tabelle td.sp-interessen { position: relative; white-space: nowrap; }
+.lm-popover { display: inline-block; vertical-align: middle; margin-left: 4px; }
+.lm-popover > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: var(--r-s); border: 1px solid transparent; color: var(--text-dezent); }
+.lm-popover > summary::-webkit-details-marker { display: none; }
+.lm-popover > summary:hover, .lm-popover[open] > summary { border-color: var(--linie-stark); background: var(--flaeche-karte); color: var(--text); }
+.lm-popover > summary svg { width: 14px; height: 14px; }
+.lm-popover-inhalt { position: absolute; z-index: 40; left: 0; top: 100%; min-width: 220px; margin-top: 2px; padding: 8px 10px;
+    display: grid; gap: 4px; background: var(--flaeche-karte); border: 1px solid var(--linie-stark); border-radius: var(--r-m);
+    box-shadow: var(--schatten-2); white-space: nowrap; }
+.lm-popover-zeile { display: flex; align-items: center; gap: 6px; font-size: var(--t-s); cursor: pointer; }
+.lm-popover-zeile input { margin: 0; }
+.lm-popover-fuss { display: flex; gap: 6px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--linie); }
+
+/* --- Objektart-Auswahl, Großkunde-Häkchen --- */
+.lm-objektart { max-width: 160px; }
+.lm-inline-haken { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: var(--t-xs); white-space: nowrap; }
+.lm-inline-haken input { margin: 0; }
+
+/* --- Telefon/E-Mail: Klick in die Zelle (Attribut data-lm-text) öffnet das Textfeld --- */
+.lm-tabelle td[data-lm-text] { cursor: text; }
+.lm-tabelle td[data-lm-text] .lm-text-anzeige a { cursor: pointer; }
+.lm-tabelle td[data-lm-text]:hover .lm-text-anzeige { box-shadow: inset 0 -1px 0 var(--linie-stark); }
+.lm-text { width: 100%; min-width: 150px; font: inherit; font-size: var(--t-s); padding: 3px 6px; border: 1px solid var(--akzent);
+    border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
+.lm-text[hidden] { display: none; }
+.lm-text:focus { outline: 2px solid var(--akzent-glanz); outline-offset: 0; }
+.lm-termin-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--linie-stark); }
+.lm-termin-link:hover { color: var(--link); border-bottom-color: var(--link); }
+
+/* --- Gespeicherte Filter (Leiste in der Sticky-Filterleiste) --- */
+.lm-filterspeicher { position: relative; }
+.lm-filterspeicher > summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.lm-filterspeicher > summary::-webkit-details-marker { display: none; }
+.lm-filterspeicher[data-standard-id]:not([data-standard-id=""]) > summary { border-color: var(--akzent); }
+.lm-filtermenue { position: absolute; z-index: 41; right: 0; top: 100%; min-width: 320px; max-width: 460px; margin-top: 4px;
+    padding: 8px 10px; background: var(--flaeche-karte); border: 1px solid var(--linie-stark); border-radius: var(--r-m);
+    box-shadow: var(--schatten-2); }
+.lm-filterliste { list-style: none; margin: 0 0 8px; padding: 0; max-height: 50vh; overflow: auto; }
+.lm-filterliste li { display: flex; align-items: center; gap: 6px; padding: 3px 2px; border-bottom: 1px solid var(--linie); font-size: var(--t-s); }
+.lm-filterliste li:last-child { border-bottom: 0; }
+.lm-filterliste li.standard .lm-filter-anwenden { font-weight: 700; }
+.lm-filterliste li.geteilt .lm-filter-anwenden { font-style: italic; }
+.lm-filter-anwenden { flex: 1 1 auto; text-align: left; font: inherit; background: none; border: 0; padding: 2px 4px; cursor: pointer;
+    color: var(--text); border-radius: var(--r-s); }
+.lm-filter-anwenden:hover { background: var(--flaeche-hover); color: var(--link); }
+.lm-filter-werkzeuge { display: inline-flex; gap: 2px; margin-left: auto; }
+.lm-filter-werkzeuge button { font: inherit; font-size: var(--t-s); line-height: 1; background: none; border: 1px solid transparent;
+    border-radius: var(--r-s); padding: 2px 4px; cursor: pointer; color: var(--text-dezent); display: inline-flex; align-items: center; }
+.lm-filter-werkzeuge button:hover { border-color: var(--linie-stark); background: var(--flaeche-hover); color: var(--text); }
+.lm-filter-werkzeuge button svg { width: 14px; height: 14px; }
+.lm-filter-werkzeuge .lm-filter-standard.aktiv { color: var(--status-orange); }
+.lm-filter-werkzeuge .lm-filter-loeschen:hover { color: var(--status-rot); }
+.lm-filter-fuss { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--t-xs); }
+.lm-filter-standard-badge { --f: var(--akzent); }
+#dlg-filter .kontrollfeld { display: flex; align-items: center; gap: 6px; }
+
+/* --- Sofortsuche: Bereiche beim Laden gedämpft, Formular mit Ladezustand --- */
+[data-lm-sofort-ziel][aria-busy="true"] { opacity: 0.55; transition: opacity 0.15s ease-in; }
+form.lm-laedt input[type="search"] { background-image: linear-gradient(90deg, transparent, var(--akzent-glanz), transparent);
+    background-size: 200% 100%; animation: lm-sofort-lauf 1s linear infinite; }
+@keyframes lm-sofort-lauf { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.lm-suchleiste .lm-filter-leeren[hidden], .lm-schnellfilter .lm-filter-leeren[hidden] { display: none; }
+.hv-gruppen { display: block; }
+@media (max-width: 900px) {
+    .lm-filtermenue { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; max-width: none; }
+    .lm-popover-inhalt { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; min-width: 0; white-space: normal; }
+}

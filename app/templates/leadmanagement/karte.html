@@ -49,9 +49,11 @@
     {% endif %}
     <label class="kontrollfeld">Termine (Tage)
         <input type="number" name="tage" value="60" style="width:4rem"></label>
-    <button class="knopf klein" type="submit">Aktualisieren</button>
+    {#- v35 (PLAN_LEAD_V6 Phase 186, Agent B): Filter wirken sofort (Auswahl/Häkchen sofort, Zahl 300 ms nach
+        der Eingabe) – der Knopf „Aktualisieren“ ist entfallen, Enter lädt weiterhin #}
+    <noscript><button class="knopf klein" type="submit">Aktualisieren</button></noscript>
     <span class="dezent">Pins: Leads (Farbe je Phase, Größe je Klasse) ·
-        Termine · {{ 'eigener Start' if ist_hv else 'AD-Start' }}. Kacheln © OpenStreetMap.</span>
+        Termine · {{ 'eigener Start' if ist_hv else 'AD-Start' }}. Kacheln © OpenStreetMap. Filter wirken sofort.</span>
 </form>
 
 {# v30 (PLAN_V18 Phase 145) [ANNAHME]: Kartenrahmen über die Klasse lm-karte-leaflet (Tokens,
@@ -104,6 +106,16 @@ async function laden() {
 document.getElementById('kartefilter').addEventListener('submit', e => {
     e.preventDefault();
     laden();
+});
+// v35 (Phase 186): Sofortsuche – Auswahl/Häkchen sofort, Zahlenfeld 300 ms nach der Eingabe
+let kartenTimer = null;
+document.getElementById('kartefilter').addEventListener('change', e => {
+    if (e.target.matches('select, input[type=checkbox]')) { laden(); }
+});
+document.getElementById('kartefilter').addEventListener('input', e => {
+    if (!e.target.matches('input[type=number]')) return;
+    clearTimeout(kartenTimer);
+    kartenTimer = setTimeout(laden, 300);
 });
 L.Icon.Default.prototype.options.imagePath = '/static/leaflet/images/';
 laden();

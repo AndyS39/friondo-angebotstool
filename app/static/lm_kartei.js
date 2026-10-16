@@ -282,11 +282,21 @@
         var fehlliste = $('#lk-fehlliste');
         var hinweis = $('[data-rolle="terminierung-hinweis"]');
         // v31 (Phase 159): Testphase – der Knopf bleibt gesperrt (Tooltip), nur die Fehlliste läuft mit
-        var testphase = knopf.dataset.testphase === '1' || t.aktiv === false;
+        // v35 (PLAN_LEAD_V6 Phase 183, Agent T): Testphase mit aktiver TAIFUN-Übergabe – der Knopf bleibt
+        // aktiv (nur Export: keine Buchung, keine Mail), Tooltip/Bestätigung entsprechend
+        var taifunTest = knopf.dataset.taifunTestphase === '1';
+        var testphase = (knopf.dataset.testphase === '1' || t.aktiv === false) && !taifunTest;
         if (t.bereit && !testphase) {
             knopf.disabled = false;
             knopf.type = 'submit';
             knopf.removeAttribute('aria-disabled');
+            if (taifunTest) {
+                knopf.title = 'Testphase: nur Übergabe an TAIFUN, keine Buchung, keine Mail';
+                knopf.onclick = function () { return confirm('Testphase: nur Übergabe an TAIFUN – keine Buchung, keine Mail. Jetzt die TAIFUN-Datei schreiben?'); };
+                if (fehlliste) { fehlliste.hidden = true; }
+                if (hinweis) { hinweis.hidden = true; }
+                return;
+            }
             knopf.title = 'Phase Terminiert · Outlook · Terminbestätigung (ICS) · Übergabe Leads VOT';
             knopf.onclick = function () { return confirm('Terminierung: Phase Terminiert, Outlook-Termin schreiben und Terminbestätigung mit ICS planen?'); };
             if (fehlliste) { fehlliste.hidden = true; }

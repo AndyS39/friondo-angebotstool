@@ -107,6 +107,7 @@ def schnellanlage_formular(request: Request,
                   kampagnen=session.query(Kampagne)
                   .filter(Kampagne.aktiv.is_(True)).order_by(Kampagne.name).all(),
                   wunschzeiten=_wunschzeiten_liste(), sparten=SPARTEN, sparten_wahl=SPARTEN_WAHL,
+                  kanal_wahl=kern.kanal_werte(session),   # v35 (Phase 184): Kanal-Dropdown
                   daten={}, duplikat=None,
                   meldung=request.query_params.get("meldung", ""))
 
@@ -118,7 +119,8 @@ def schnellanlage(request: Request, session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     daten = {feld: (form.get(feld) or "").strip()
              for feld in ("anrede", "vorname", "nachname", "telefon", "email",
-                          "strasse", "plz", "ort", "nachricht")}
+                          "strasse", "plz", "ort", "nachricht",
+                          "vertriebskanal")}   # v35 (Phase 184): Kanalwahl, leer → „?“
     daten["sparten"] = [s for s in form.getlist("sparten") if s in SPARTEN]
     daten["wunschzeiten"] = [w for w in form.getlist("wunschzeiten")]
     daten["einwilligung_werbung"] = form.get("einwilligung_werbung") == "on"
@@ -157,6 +159,7 @@ def schnellanlage(request: Request, session: Session = Depends(get_session)):
                       kampagnen=session.query(Kampagne)
                       .filter(Kampagne.aktiv.is_(True)).order_by(Kampagne.name).all(),
                       wunschzeiten=_wunschzeiten_liste(), sparten=SPARTEN, sparten_wahl=SPARTEN_WAHL,
+                      kanal_wahl=kern.kanal_werte(session),   # v35 (Phase 184)
                       daten=dict(daten, quelle_id=form.get("quelle_id"),
                                  kampagne_id=form.get("kampagne_id"), ad_id=form.get("ad_id")),
                       duplikat=duplikat, phasen_namen=LEAD_PHASEN_NAMEN,
@@ -1436,11 +1439,13 @@ def _karte_mittelpunkt(session: Session, benutzer, hv: bool) -> dict | None:
     if not hv:
         return None
     from app.models import AdProfil
+    # v35 (PLAN_LEAD_V6 Phase 185): Schwerpunkt der Leads der ganzen Gruppe
+    gruppe = lead_v2.hv_gruppe_fuer(session, benutzer.id) or {benutzer.id}
     punkte = [(v.lat, v.lon) for v in session.query(Vorgang)
-              .filter(Vorgang.ad_id == benutzer.id, Vorgang.lat.isnot(None))]
+              .filter(Vorgang.ad_id.in_(gruppe), Vorgang.lat.isnot(None))]
     if punkte:
-        return {"lat": sum(p[0] for p in punkte) / len(punkte),
-                "lon": sum(p[1] for p in punkte) / len(punkte), "zoom": 10}
+        return {"lat": round(sum(p[0] for p in punkte) / len(punkte), 6),
+                "lon": round(sum(p[1] for p in punkte) / len(punkte), 6), "zoom": 10}
     profil = (session.query(AdProfil).filter(AdProfil.benutzer_id == benutzer.id).first())
     if profil is not None and profil.start_lat is not None:
         return {"lat": profil.start_lat, "lon": profil.start_lon, "zoom": 10}
@@ -1480,11 +1485,13 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
     hv = lead_v2.hv_sicht(session, benutzer)
+    # v35 (PLAN_LEAD_V6 Phase 185): HV-Sicht = Leads, Termine und Startadressen der Gruppe
+    gruppe = (lead_v2.hv_gruppe_fuer(session, benutzer.id) or {benutzer.id}) if hv else None
     phase = request.query_params.get("phase", "")
     sparte = request.query_params.get("sparte", "")
     ad_filter = request.query_params.get("ad_id", "")
-    if hv:
-        ad_filter = str(benutzer.id)
+    if hv and not (ad_filter.isdigit() and int(ad_filter) in gruppe):
+        ad_filter = ""
     tage = request.query_params.get("tage", "60")
     tage = int(tage) if tage.isdigit() else 60
     pins = []
@@ -1495,7 +1502,7 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
                        Vorgang.archiviert_am.is_(None),    # v31 (Phase 154): kein Archiv
                        Vorgang.lead_phase.in_((phase,) if phase else offene_phasen)))
     if hv:
-        abfrage = abfrage.filter(Vorgang.ad_id == benutzer.id)
+        abfrage = abfrage.filter(Vorgang.ad_id.in_(gruppe))
     grosskunde = request.query_params.get("grosskunde", "") == "1"   # v31 (Phase 153)
     for v in abfrage:
         kunde = kunden.get(v.kunde_id)
@@ -1519,13 +1526,15 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
                       VotTermin.beginn <= dt.now() + timedelta(days=tage))):
         if ad_filter.isdigit() and t.ad_id != int(ad_filter):
             continue
+        if hv and t.ad_id not in gruppe:
+            continue
         ad = benutzer_map.get(t.ad_id)
         pins.append({"art": "termin", "lat": t.lat, "lon": t.lon,
                      "beginn": t.beginn.strftime("%d.%m. %H:%M"),
                      "ad": ad.name if ad else "?",
                      "vorgang_id": t.vorgang_id})
     for profil in session.query(AdProfil).filter(AdProfil.start_lat.isnot(None)):
-        if hv and profil.benutzer_id != benutzer.id:
+        if hv and profil.benutzer_id not in gruppe:
             continue
         ad = benutzer_map.get(profil.benutzer_id)
         pins.append({"art": "start", "lat": profil.start_lat,
@@ -1545,7 +1554,10 @@ def karte_termine_tag(request: Request,
     from fastapi.responses import JSONResponse
     lead_v2.gate(request, session)
     if lead_v2.hv_sicht(session, request.state.benutzer):
-        if request.query_params.get("ad_id", "") != str(request.state.benutzer.id):
+        # v35 (Phase 185): Tage der Gruppenmitglieder sind sichtbar
+        gruppe = lead_v2.hv_gruppe_fuer(session, request.state.benutzer.id) or {request.state.benutzer.id}
+        wert = request.query_params.get("ad_id", "")
+        if not (wert.isdigit() and int(wert) in gruppe):
             return JSONResponse({"pins": []})
     ad_id = request.query_params.get("ad_id", "")
     datum = request.query_params.get("datum", "")

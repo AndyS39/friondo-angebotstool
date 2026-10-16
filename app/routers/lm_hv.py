@@ -58,12 +58,26 @@ def _kontext(request: Request, session: Session) -> dict:
 def uebersicht(request: Request, session: Session = Depends(get_session)):
     """G1: Innendienst/Leadmanagement/Admin – alle Handelsvertreter-Leads
     gruppiert je Vertreter (einklappbar, Zähler, Filter, Suche); ein
-    Handelsvertreter sieht nur seine eigenen Leads plus sein Dashboard (F16)."""
+    Handelsvertreter sieht die Leads seiner Gruppe (v35 Phase 185: René nur
+    sich, Simons Gruppe alle Mitglieder) plus das Dashboard der Gruppe (F16)."""
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
     gesamt = hv_modul.gesamtsicht(session, benutzer)
-    f = hv_modul.filter_aus_query(request.query_params, gesamt)
+    # v35 (PLAN_LEAD_V6 Phase 186, Agent B): Standardfilter des Nutzers beim Öffnen ohne
+    # Filterparameter (lead_boards.filter_query), Inline-Bearbeitung in der HV-Ansicht
+    # (Rechte je Zeile z.bearbeitbar, Auswahllisten für die Inline-Elemente aus _tabelle.html)
+    from app import lead_boards
+    query, aktiver_filter = lead_boards.filter_query(request.query_params, session, benutzer,
+                                                     hv_modul.KONFIG_BOARD)
+    f = hv_modul.filter_aus_query(query, gesamt)
     daten = hv_modul.ansicht(session, benutzer, f)
+    if daten.get("phase105"):
+        daten["ctx"].update(lead_boards.auswahl_listen(session))
+        daten["ctx"]["nur_lesen"] = False
+        daten["ctx"]["grosskunde_setzbar"] = benutzer.basisrolle in ("admin", "innendienst") \
+            or benutzer.hat_rolle("leadmanagement")
+    daten["filter_kontext"] = lead_boards.filter_kontext(session, benutzer, hv_modul.KONFIG_BOARD)
+    daten["aktiver_filter"] = aktiver_filter
     # Rücksprungziel = aktuelle Filter, aber ohne die alte Meldung (sonst
     # hängen sich meldung=…-Parameter bei jeder Aktion aneinander)
     params = [(k, v) for k, v in request.query_params.multi_items() if k != "meldung"]
@@ -82,9 +96,9 @@ def uebersicht(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/handelsvertreter/dashboard")
 def dashboard(request: Request, session: Session = Depends(get_session)):
-    """F16: persönliches Dashboard des Handelsvertreters (fällige
-    Wiedervorlagen, eigene Termine der nächsten 7 Tage, offene Leads,
-    To-Dos). Innendienst/Admin wählen über ?hv=<id> einen Vertreter."""
+    """F16: Dashboard des Handelsvertreters (fällige Wiedervorlagen, Termine der
+    nächsten 7 Tage, offene Leads, To-Dos) – v35 (Phase 185): Leads und Termine
+    je Gruppe des Vertreters. Innendienst/Admin wählen über ?hv=<id> einen Vertreter."""
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
     gesamt = hv_modul.gesamtsicht(session, benutzer)
@@ -122,9 +136,13 @@ def zuweisen(request: Request, vorgang_id: int,
         meldung = hv_modul.zuweisen(session, vorgang, ad_id or None,
                                     benutzer=benutzer, erzwingen=False)
     else:
+        # v35 (PLAN_LEAD_V6 Phase 185): nur Mitglieder der eigenen Gruppe (lead_v2.ad_zuweisen
+        # prüft dieselbe Regel – hier die klare Meldung vor dem Aufruf)
         if not ad_id.isdigit() or int(ad_id) not in hv_modul.hv_ids(session):
             meldung = ("Nicht möglich: Handelsvertreter geben Leads nur an "
                        "andere Handelsvertreter weiter.")
+        elif int(ad_id) not in hv_modul.gruppe_ids(session, benutzer):
+            meldung = lead_v2.HV_GRUPPE_FREMD_TEXT
         else:
             meldung = hv_modul.zuweisen(session, vorgang, int(ad_id),
                                         benutzer=benutzer, erzwingen=False)

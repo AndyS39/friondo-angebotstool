@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<TAIFUN:AdList xmlns:TAIFUN="urn:taifun-software.de:schema:TAIFUN">
+  <TAIFUN:Ad>
+    <TAIFUN:KdUse>true</TAIFUN:KdUse>
+    <TAIFUN:Name3>Max Mustermann</TAIFUN:Name3>
+    <TAIFUN:AnschriftStr>Musterstraße</TAIFUN:AnschriftStr>
+    <TAIFUN:AnschriftHNr>1</TAIFUN:AnschriftHNr>
+    <TAIFUN:AnschriftPLZ>47051</TAIFUN:AnschriftPLZ>
+    <TAIFUN:AnschriftOrt>Duisburg</TAIFUN:AnschriftOrt>
+    <TAIFUN:Anrede>Sehr geehrter Herr Mustermann,</TAIFUN:Anrede>
+    <TAIFUN:EMail>max.mustermann@example.com</TAIFUN:EMail>
+    <TAIFUN:Telefon>0203 1234567</TAIFUN:Telefon>
+    <TAIFUN:Funk>0171 1234567</TAIFUN:Funk>
+    <TAIFUN:Kartei>Übergabe aus dem Friondo-Tool am 15.10.2026 10:15 durch Max Innendienst
+Lead/Vorgang: V4711
+Vertriebskanal: Website
+Interessen: Wärmepumpe
+Objekt: Einfamilienhaus, Musterstraße 1, 47051 Duisburg
+Vertriebler: Horst Beispiel
+Vor-Ort-Termin: vorgemerkt: 22.10.2026 10:00
+Quelle: Website/Förderrechner</TAIFUN:Kartei>
+  </TAIFUN:Ad>
+</TAIFUN:AdList>

@@ -10,7 +10,8 @@
         <span class="lm-delta">{{ dashboard.kacheln.kommend }} in den nächsten 7 Tagen</span></a>
     <a class="kachel stat" href="#hv-termine">
         <span class="stat-zahl">{{ dashboard.kacheln.termine }}</span>Termine 7 Tage
-        <span class="lm-delta">eigener Kalender</span></a>
+        {#- v35 (Phase 185): Kacheln rechnen je Gruppe #}
+        <span class="lm-delta">{{ 'Kalender der Gruppe' if dashboard.gruppe_groesse | default(1) > 1 else 'eigener Kalender' }}</span></a>
     <a class="kachel stat" href="#hv-offen">
         <span class="stat-zahl">{{ dashboard.kacheln.offen }}</span>Offene Leads
         {# v25: Labels aus dem Blatt Status („Neu · Kontaktiert · Zurückgestellt“) #}
@@ -53,12 +54,14 @@
         </ul>
     </div>
     <div class="lm-karte" id="hv-termine">
-        <h2>{{ symbol('kalender') }} Meine Termine <span class="sub">nächste 7 Tage</span></h2>
+        <h2>{{ symbol('kalender') }} {{ 'Termine der Gruppe' if dashboard.gruppe_groesse | default(1) > 1 else 'Meine Termine' }} <span class="sub">nächste 7 Tage{% if dashboard.gruppe_groesse | default(1) > 1 %} · {{ dashboard.gruppe_namen | join(', ') }}{% endif %}</span></h2>
         <ul class="hv-liste">
             {% for e in dashboard.termine %}
             <li><span><b>{{ e.termin.beginn | de_datum('%a %d.%m. %H:%M') }}</b>
                 {% if e.vorgang %}<a href="/lead-management/lead/{{ e.vorgang.id }}">{{ e.kunde.anzeige_name if e.kunde else '?' }}</a>{% endif %}
-                <small class="dezent">{{ e.termin.adresse or (e.kunde.ort if e.kunde else '') }}</small></span>
+                <small class="dezent">{{ e.termin.adresse or (e.kunde.ort if e.kunde else '') }}</small>
+                {#- v35 (Phase 185): Vertreter des Termins in der Gruppensicht #}
+                {% if dashboard.gruppe_groesse | default(1) > 1 and e.ad_name %}<span class="abzeichen" title="Vertreter">{{ e.ad_name }}</span>{% endif %}</span>
                 <span class="dezent">{{ e.typ_text }}</span></li>
             {% else %}
             <li class="hv-leer">Keine Termine in den nächsten 7 Tagen.</li>

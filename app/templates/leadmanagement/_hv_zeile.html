@@ -1,0 +1,59 @@
+{# v35 (PLAN_LEAD_V6 Phase 186, Agent B): Zeile der Handelsvertreter-Ansicht als Makro –
+   hv_uebersicht.html rendert damit jede Zeile, und POST /lead-management/boards/zeile/{id} mit
+   board=handelsvertreter liefert nach einer Inline-Änderung dieselbe Zeile neu (ohne
+   Seitenneuladen). Spalten je Nutzer (Board-Key handelsvertreter): Hauptboard-Zellen aus
+   _tabelle.html (Phase 105, inkl. der v35-Inline-Elemente – Rechte je Zeile über z.bearbeitbar),
+   sonst die Rückfall-Zellen hv_zelle; hinten die feste Spalte „Vertreter“ (hv_zuweisung.html).
+   Rückfall ohne Phase-105-Makro (konfig=False): feste Spaltenfolge wie v23. #}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import quelle_badge, kanal_badge, versuche_punkte, wiedervorlage_chip %}
+{% from "leadmanagement/hv_zuweisung.html" import hv_zuweisung %}
+{% from "leadmanagement/_tabelle.html" import zelle %}
+
+{# Rückfall-Zellen (Zeile ohne Hauptboard-Treffer) je Spalten-Key #}
+{% macro hv_zelle(key, z, jetzt, ctx) -%}
+{%- if key == 'lead' -%}
+<td class="hv-kunde sp-lead"><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
+    {{ quelle_badge(z.quelle, z.quelle_gruppe) }}
+    {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
+    {#- v31 (Phase 153): Badge „Großkunde“ in der HV-Ansicht #}
+    {% if z.grosskunde %}<span class="lm-grosskunde"{% if ctx.grosskunde_farbe %} style="--f:{{ ctx.grosskunde_farbe }}"{% endif %} title="Großkunde">Großkunde</span>{% endif %}
+    {% if z.wiedervorlage and z.offen %}{{ wiedervorlage_chip(z.wiedervorlage, jetzt) }}{% endif %}</td>
+{%- elif key == 'status' -%}
+{#- v30 (PLAN_V18 Phase 145): Status-/Kanalfarbe nur noch als --f, Tönung und Textfarbe je Modus in lead_v2.css #}
+<td><span class="hv-status" {% if z.status_farbe %}style="--f:{{ z.status_farbe }}"{% endif %}>{{ z.status_label }}</span></td>
+{%- elif key == 'kanal' -%}
+<td>{% if z.kanal %}{% if z.kanal_farbe %}<span class="hv-status" style="--f:{{ z.kanal_farbe }}">{{ z.kanal }}</span>{% else %}{{ kanal_badge(z.kanal) or z.kanal }}{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'versuche' -%}<td>{{ versuche_punkte(z.vorgang) }}</td>
+{%- elif key == 'letzter_kontakt' -%}<td class="dezent">{{ z.kontakt_text or '–' }}</td>
+{%- elif key == 'eingang' -%}<td>{{ z.eingang.strftime('%d.%m.%Y') if z.eingang else '–' }}</td>
+{%- elif key == 'ort' -%}<td>{{ z.kunde.plz }} {{ z.kunde.ort }}</td>
+{%- elif key == 'interessen' -%}<td>{% for s in z.sparten %}<span class="chip chip-{{ s | lower }}">{{ s }}</span>{% endfor %}</td>
+{%- elif key == 'telefon' -%}<td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ symbol('telefon') }} {{ z.kunde.telefon }}</a>{% endif %}</td>
+{%- elif key == 'termin' -%}<td>{% if z.termin_text %}{{ symbol('kalender') }} {{ z.termin_text }}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'strasse' -%}<td>{{ z.kunde.strasse or '–' }}</td>
+{%- elif key == 'email' -%}<td>{% if z.kunde.email %}<a href="mailto:{{ z.kunde.email }}">{{ z.kunde.email }}</a>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'wiedervorlage' -%}<td>{% if z.wiedervorlage %}{{ wiedervorlage_chip(z.wiedervorlage, jetzt) }}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'objektart' -%}<td>{{ z.kunde.objektart or '–' }}</td>
+{%- else -%}<td class="dezent">–</td>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro hv_zeile(z, spalten, ctx, hv_liste, zurueck, gesamt, standard, jetzt, konfig=True) -%}
+<tr data-vorgang="{{ z.vorgang.id }}" class="{{ 'hv-warn-zeile' if z.kanal_hinweis }}">
+    {%- if konfig %}
+    {# Spalten je Nutzer: Hauptboard-Zellen, sonst Rückfall-Zellen je Key #}
+    {%- for sp in spalten if sp.sichtbar %}{% if z.phase105 %}{{ zelle(sp.key, z, ctx) }}{% else %}{{ hv_zelle(sp.key, z, jetzt, ctx) }}{% endif %}{% endfor %}
+    {%- elif z.phase105 %}
+    {# Zellen des Hauptboards (Phase 105, _tabelle.html) – gleiche Darstellung #}
+    {{ zelle('lead', z, ctx) }}{{ zelle('status', z, ctx) }}{{ zelle('kanal', z, ctx) }}
+    {{ zelle('versuche', z, ctx) }}{{ zelle('letzter_kontakt', z, ctx) }}{{ zelle('eingang', z, ctx) }}
+    {{ zelle('ort', z, ctx) }}{{ zelle('interessen', z, ctx) }}{{ zelle('telefon', z, ctx) }}{{ zelle('termin', z, ctx) }}
+    {%- else %}
+    {%- for key in ('lead', 'status', 'kanal', 'versuche', 'letzter_kontakt', 'eingang', 'ort', 'interessen', 'telefon', 'termin') %}{{ hv_zelle(key, z, jetzt, ctx) }}{% endfor %}
+    {%- endif %}
+    <td class="sp-hv">{#- v33 (PLAN_V20 Phase 175): Kennzeichen „Simons Gruppe (noch nicht verteilt)“, solange kein Mitglied gewählt ist #}
+        {% if z.hv_gruppe_offen %}<span class="abzeichen status-versand-vorbereitet hv-gruppe-offen" data-hv-gruppe-offen="{{ z.vorgang.id }}" title="Über die Sammelaktion an Simons Gruppe verschoben – Mitglied im Dropdown wählen">Simons Gruppe (noch nicht verteilt)</span>{% endif %}
+        {{ hv_zuweisung(z, hv_liste, zurueck, gesamt, standard) }}</td>
+</tr>
+{%- endmacro %}

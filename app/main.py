@@ -25,6 +25,8 @@ from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorg
 from app.routers import konfiguration_heizreport   # v26: Parametrierung → Heizreport
 from app.routers import betrieb as betrieb_router   # v27: /health + Parametrierung → Betrieb
 from app.routers import lm_mail, lm_vorlagen   # v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor, Lead-Mails
+from app.routers import lm_taifun, lm_kanaele, lm_objektfotos   # v35 (PLAN_LEAD_V6): TAIFUN-Übergabe, Kanäle, Objektfotos
+from app import taifun_export   # v35 (PLAN_LEAD_V6 Phase 183): Scheduler-Lauf taifun-uebergaben
 from app.routers import einstellungen as einstellungen_router   # v30 (PLAN_V18 Phase 145): Darstellung
 from app.routers import suche as suche_router   # v32 (PLAN_V19 Phase 164): Kundensuche
 from app.routers import angebote_elektro, taifun_pdf   # v34 (PLAN_V21 Phase 180): Elektro ins PV, TAIFUN-PDF lesen
@@ -72,6 +74,7 @@ async def lifespan(app: FastAPI):
     # v12 (Phase 76/81): Wiedervorlage-Lauf 07:00 + Löschlauf 03:00
     from app import leadmanagement
     leadmanagement.scheduler_starten()
+    taifun_export.scheduler_starten()   # v35 (PLAN_LEAD_V6 Phase 183): Lauf taifun-uebergaben
     # v12 (Phase 77): Geokodierung im Hintergrund (alle 5 Minuten)
     from app import geocoding
     geocoding.scheduler_starten()
@@ -177,6 +180,9 @@ app.include_router(montage.router)
 # und V1-Routern, damit /lead-management/vorlagen den neuen Editor trifft
 app.include_router(lm_vorlagen.router)
 app.include_router(lm_mail.router)
+app.include_router(lm_taifun.router)   # v35 (PLAN_LEAD_V6 Phase 183)
+app.include_router(lm_kanaele.router)   # v35 (PLAN_LEAD_V6 Phase 184)
+app.include_router(lm_objektfotos.router)   # v35 (PLAN_LEAD_V6 Phase 186)
 # v23 (Lead-Management V2): V2-Router zuerst – gleiche Pfade haben Vorrang
 for _v2 in (lm_dashboard, lm_boards, lm_kartei, lm_anruf, lm_termin, lm_hv, lm_info):
     app.include_router(_v2.router)

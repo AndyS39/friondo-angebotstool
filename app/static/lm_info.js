@@ -169,11 +169,22 @@
     }
 
     // ---- Inline-Felder der Phase-105-Tabelle (eigene Route, Zeile ersetzen)
+    // v35 (Phase 186, Agent B): Textzellen (Telefon/E-Mail) und das Interessen-Popover steuert
+    // lm_boards.js seitenunabhängig und sendet über window.lmInline.senden – hier auf die Infoabend-Route
+    const inlineWert = function (el) { return (window.lmInline && window.lmInline.wert) ? window.lmInline.wert(el) : el.value; };
+    if (window.lmInline) {
+        window.lmInline.senden = function (id, nutzlast, zeile, danach) {
+            return senden('/lead-management/info-veranstaltung/' + id + '/zeile',
+                          Object.assign({ zurueck: daten.zurueck }, nutzlast), zeile)
+                .then(function (a) { if (danach) { danach(!!(a && a.ok)); } return a; });
+        };
+    }
     document.addEventListener('change', function (e) {
         const el = e.target.closest('.lm-inline');
         // Prüfung Phase 111: nur Felder in den Tabellen dieses Boards (der Seitenkopf
         // [data-li-board] enthält die Zeilen nicht – lm_boards.js ist hier ohnehin inaktiv)
         if (!el || !el.closest('table.li-tabelle')) { return; }
+        if (el.classList.contains('lm-text') || el.closest('.lm-popover')) { return; }   // v35: lm_boards.js
         const feld = el.dataset.feld;
         const zeile = el.closest('tr');
         const id = el.dataset.vorgang;
@@ -193,7 +204,7 @@
             }
             return;
         }
-        senden(url, { feld: feld, wert: el.value, zurueck: daten.zurueck }, zeile);
+        senden(url, { feld: feld, wert: inlineWert(el), zurueck: daten.zurueck }, zeile);
     });
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lm-notiz')) {
@@ -305,9 +316,10 @@
     }
     sammelAktualisieren();
 
-    // ---- Schnellsuche über die sichtbaren Zeilen (Server-Filter per Enter)
+    // ---- Schnellsuche über die sichtbaren Zeilen (Server-Filter per Enter);
+    // v35: ruht, wenn das Formular die Sofortsuche trägt (lm_sofort.js lädt vom Server)
     const suche = document.getElementById('li-suche');
-    if (suche) {
+    if (suche && !(suche.form && suche.form.dataset.lmSofort !== undefined)) {
         let timer = null;
         suche.addEventListener('input', function () {
             clearTimeout(timer);

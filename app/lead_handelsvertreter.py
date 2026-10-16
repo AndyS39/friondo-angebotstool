@@ -7,20 +7,23 @@
 # bei nachträglichem Kanalwechsel (G4, OF-G5).
 #
 # Rechte-Matrix Handelsvertreter (Hauptrolle aussendienst + Kennzeichen):
-#   DARF   eigene Leads sehen (Ansicht + Dashboard, server-seitig gefiltert)
-#   DARF   eigene Leads anrufen / Ergebnisse protokollieren (Phase 107, Gate
-#          lead_v2.gate → vorgaenge.ad_id = eigene ID)
-#   DARF   Kartei eigener Leads bearbeiten (Phase 106)
-#   DARF   Termine über Assistent/manuell setzen – nur eigener Kalender
-#          (Phase 108 erzwingt nur_ad_id = eigene ID), Terminierung (B8) auslösen
-#   DARF   Vorlagen-Mails an eigene Leads senden
-#   DARF   eigene Leads an jeden anderen Handelsvertreter umverteilen
-#          (Aktivität + Glocke, F13) – nicht entziehen, nicht an Angestellte
-#   NICHT  fremde Leads (404), Gesamtsicht, „Standard nachziehen“
+#   DARF   Leads der eigenen Gruppe sehen (Ansicht + Dashboard, server-seitig gefiltert –
+#          v35 Phase 185: Gruppe statt einzelner Benutzer, lead_v2.hv_gruppe_fuer)
+#   DARF   Leads der Gruppe anrufen / Ergebnisse protokollieren (Phase 107, Gate
+#          lead_v2.gate → vorgaenge.ad_id in der Gruppe)
+#   DARF   Kartei der Gruppen-Leads bearbeiten (Phase 106)
+#   DARF   Termine über Assistent/manuell setzen – Kalender der Gruppe
+#          (v35: Kandidaten = Gruppenmitglieder), Terminierung (B8) auslösen
+#   DARF   Vorlagen-Mails an Leads der Gruppe senden
+#   DARF   Leads innerhalb der Gruppe umverteilen (Dropdown, Aktivität + Glocke, F13)
+#          – nicht entziehen, nicht an Angestellte, nicht in die andere Gruppe
+#          (das bleibt Innendienst/Admin über die Sammelaktion, v33)
+#   NICHT  Leads der anderen Gruppe (404 bzw. 303 auf die HV-Ansicht), Gesamtsicht,
+#          „Standard nachziehen“
 #   NICHT  Schnellanlage, Import, Posteingang, Vorlagenpflege, Parametrierung
 #          (V1-_gate bzw. lead_modul_sichtbar → 404)
 #   NICHT  Preise/EK/DB/Angebotseditor (Middleware wie Außendienst, auth.py)
-# Zugriff zentral: ist_hv · eigene_vorgaenge · darf_vorgang · gate.
+# Zugriff zentral: ist_hv · gruppe_ids · eigene_vorgaenge · darf_vorgang · gate.
 
 import json
 from datetime import datetime, timedelta
@@ -37,18 +40,20 @@ from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 # Rechte-Matrix als Daten (für Doku/Abnahme; Reihenfolge = Anzeige)
 RECHTE_MATRIX = [
-    ("Eigene Leads sehen (Ansicht Handelsvertreter, Dashboard)", True,
-     "server-seitig gefiltert: vorgaenge.ad_id bzw. monday leads.benutzer_id"),
-    ("Eigene Leads anrufen, Ergebnisse protokollieren", True,
+    ("Leads der eigenen Gruppe sehen (Ansicht Handelsvertreter, Dashboard)", True,
+     "server-seitig gefiltert: vorgaenge.ad_id in der Gruppe bzw. monday leads.benutzer_id "
+     "(v35: lead_v2.hv_gruppe_fuer)"),
+    ("Leads der Gruppe anrufen, Ergebnisse protokollieren", True,
      "POST /lead-management/anruf/{id} (Phase 107, lead_v2.gate)"),
-    ("Kartei eigener Leads bearbeiten", True, "Phase 106, lead_v2.gate"),
-    ("Termine setzen (Assistent/manuell) – nur eigener Kalender", True,
-     "Phase 108 (nur_ad_id = eigene ID)"),
+    ("Kartei der Gruppen-Leads bearbeiten", True, "Phase 106, lead_v2.gate"),
+    ("Termine setzen (Assistent/manuell) – Kalender der Gruppe", True,
+     "Phase 108 / v35 (Kandidaten = Gruppenmitglieder)"),
     ("Terminierung (B8) auslösen", True, "Phase 106"),
-    ("Vorlagen-Mails senden", True, "nur eigene Leads"),
-    ("Umverteilen an andere Handelsvertreter", True,
+    ("Vorlagen-Mails senden", True, "nur Leads der Gruppe"),
+    ("Umverteilen innerhalb der Gruppe", True,
      "POST /lead-management/handelsvertreter/{id}/zuweisen, Aktivität + Glocke"),
-    ("Fremde Leads", False, "404 (lead_v2.gate / darf_vorgang)"),
+    ("Leads der anderen Gruppe, Wechsel zwischen den Gruppen", False,
+     "404 (lead_v2.gate / darf_vorgang); Gruppenwechsel nur Innendienst/Admin (Sammelaktion)"),
     ("Gesamtsicht aller Vertreter, Standard nachziehen", False,
      "nur Innendienst/Leadmanagement/Admin (lead_modul_sichtbar)"),
     ("Schnellanlage, Import, Posteingang", False, "V1-_gate → 404"),
@@ -117,21 +122,31 @@ def zustaendiger_id(session: Session, vorgang: Vorgang, lead: Lead | None = None
     return None
 
 
+def gruppe_ids(session: Session, benutzer) -> set:
+    """v35 (PLAN_LEAD_V6 Phase 185): Benutzer-IDs der HV-Gruppe des Betrachters
+    (lead_v2.hv_gruppe_fuer – René = {René}, Simons Gruppe = Simon + Mitglieder);
+    ohne Benutzer leer. Die HV-Sicht zeigt und bearbeitet alle Leads dieser IDs."""
+    if benutzer is None:
+        return set()
+    return lead_v2.hv_gruppe_fuer(session, benutzer.id) or {benutzer.id}
+
+
 def eigene_vorgaenge(session: Session, benutzer) -> list:
-    """Leads des Handelsvertreters: vorgaenge.ad_id = ich, zusätzlich monday-
-    Leads mit leads.benutzer_id = ich über vorgaenge.lead_id (noch nicht
-    nachgezogen). Reihenfolge: Eingang absteigend."""
+    """Leads der HV-Sicht: vorgaenge.ad_id in der Gruppe des Vertreters (v35 – vorher
+    nur die eigene ID), zusätzlich monday-Leads mit leads.benutzer_id in der Gruppe
+    über vorgaenge.lead_id (noch nicht nachgezogen). Reihenfolge: Eingang absteigend."""
     if benutzer is None:
         return []
+    gruppe = gruppe_ids(session, benutzer)
     # v31 (PLAN_LEAD_V5 Phase 154): archivierte Leads (Lead-Sicht) nicht in der HV-Ansicht
     treffer = {v.id: v for v in session.query(Vorgang)
-               .filter(Vorgang.ad_id == benutzer.id, Vorgang.archiviert_am.is_(None))}
+               .filter(Vorgang.ad_id.in_(gruppe), Vorgang.archiviert_am.is_(None))}
     lead_ids = [l.id for l in session.query(Lead.id)
-                .filter(Lead.benutzer_id == benutzer.id)]
+                .filter(Lead.benutzer_id.in_(gruppe))]
     if lead_ids:
         for v in (session.query(Vorgang).filter(Vorgang.lead_id.in_(lead_ids),
                                                 Vorgang.archiviert_am.is_(None))):
-            if v.ad_id in (None, benutzer.id):
+            if v.ad_id is None or v.ad_id in gruppe:
                 treffer.setdefault(v.id, v)
     return sorted(treffer.values(),
                   key=lambda v: v.eingang_am or v.angelegt_am or datetime.min,
@@ -139,16 +154,12 @@ def eigene_vorgaenge(session: Session, benutzer) -> list:
 
 
 def darf_vorgang(session: Session, benutzer, vorgang: Vorgang | None) -> bool:
-    """Modul-Sichtbare immer; Handelsvertreter nur eigene Vorgänge (ad_id =
-    ich oder monday-Zuordnung = ich, solange kein anderer ad_id trägt)."""
+    """Modul-Sichtbare immer; Handelsvertreter die Vorgänge ihrer Gruppe (ad_id in
+    der Gruppe oder monday-Zuordnung in der Gruppe, solange kein fremder ad_id
+    gesetzt ist) – v35: lead_v2.bearbeiten_erlaubt kennt beide Wege."""
     if vorgang is None:
         return lead_v2.zugriff_erlaubt(session, benutzer, None)
-    if lead_v2.zugriff_erlaubt(session, benutzer, vorgang):
-        return True
-    if not ist_hv(session, benutzer) or vorgang.ad_id:
-        return False
-    lead = _monday_lead(session, vorgang)
-    return bool(lead is not None and lead.benutzer_id == benutzer.id)
+    return lead_v2.zugriff_erlaubt(session, benutzer, vorgang)
 
 
 def gate(request, session: Session, vorgang: Vorgang | None = None) -> None:
@@ -435,7 +446,9 @@ def filter_aus_query(q, gesamt: bool) -> dict:
         return int(wert) if wert.isdigit() else None
     # v29 (PLAN_LEAD_V4 Phase 140): Filter „Gruppe“ (rene | simon | leer = alle)
     gruppe = (q.get("gruppe") or "").strip().lower() if gesamt else ""
-    return {"vertreter": _int("vertreter") if gesamt else None,
+    # v35 (Phase 185): „Vertreter“ auch in der HV-Sicht – ansicht() lässt dort nur
+    # Mitglieder der eigenen Gruppe zu (fremde IDs werden verworfen)
+    return {"vertreter": _int("vertreter"),
             "status": (q.get("status") or "").strip(),
             "kanal": (q.get("kanal") or "").strip(),
             "q": (q.get("q") or "").strip(),
@@ -444,11 +457,13 @@ def filter_aus_query(q, gesamt: bool) -> dict:
 
 
 def _kanal_farben(session: Session) -> dict:
+    """v35 (PLAN_LEAD_V6 Phase 184): Kanalfarben aus den Stammdaten (lead_boards.kanal_farben
+    liest die Tabelle `vertriebskanaele`, Parameter kanal_farben nur als Rückfall)."""
     try:
-        werte = json.loads(kern.parameter_holen(session, "kanal_farben", "") or "{}")
-    except ValueError:
-        werte = {}
-    return {str(k).strip().lower(): str(v) for k, v in werte.items()} if isinstance(werte, dict) else {}
+        from app import lead_boards
+        return lead_boards.kanal_farben(session)
+    except Exception:   # noqa: BLE001 – Farben sind Beiwerk, nie die Seite
+        return {}
 
 
 def _hex(farbe: str) -> str:
@@ -463,6 +478,16 @@ def _grosskunde_farbe(session: Session) -> str:
         return lead_boards.grosskunde_farbe(session)
     except Exception:
         return ""
+
+
+def _auswahl_listen(session: Session) -> dict:
+    """v35: Auswahllisten der Board-Tabelle (lead_boards.auswahl_listen: status_wahl, gruende,
+    ad_wahl, lm_wahl, kanal_wahl …) für die HV-Ansicht – leer, wenn das Modul fehlt."""
+    try:
+        from app import lead_boards
+        return dict(lead_boards.auswahl_listen(session))
+    except Exception:   # noqa: BLE001 – Rückfall-Tabelle ohne Werkzeuge
+        return {}
 
 
 def zeilen_bauen(session: Session, vorgaenge: list, kreis: dict | None = None) -> list:
@@ -680,10 +705,16 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
     gesamt = gesamtsicht(session, benutzer)
     kreis = hv_kreis(session)
     hv_liste = lead_v2.handelsvertreter_liste(session)
+    # v35 (PLAN_LEAD_V6 Phase 185): HV-Sicht = Gruppe des Vertreters – Leads aller
+    # Mitglieder, Dropdown „Vertreter“ und Filter „Vertreter“ nur mit der eigenen Gruppe
+    gruppe = set() if gesamt else gruppe_ids(session, benutzer)
     if gesamt:
         vorgaenge = alle_hv_vorgaenge(session, kreis)
     else:
         vorgaenge = eigene_vorgaenge(session, benutzer)
+        hv_liste = [b for b in hv_liste if b.id in gruppe]
+        if f.get("vertreter") and f["vertreter"] not in gruppe:
+            f["vertreter"] = None
     zeilen = zeilen_bauen(session, vorgaenge, kreis)
     index = None
     phase105 = bool(mit_phase105 and tabelle_makro_vorhanden())
@@ -722,7 +753,12 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
             sortierung = lead_boards.sortierung_fuer(session, benutzer, KONFIG_BOARD)
         except Exception:
             spalten, sortierung = [], None
+    gruppe_mitglieder = ([kreis[i][0] for i in sorted(gruppe, key=lambda i: (kreis[i][0].name.lower() if i in kreis else ""))
+                          if i in kreis] if gruppe else [])
     daten = {"gesamt": gesamt, "hv_liste": hv_liste, "kreis": kreis,
+             # v35 (Phase 185): Gruppe des Vertreters (Filter „Vertreter“, Titel, Kacheln)
+             "gruppe_ids": gruppe, "gruppe_mitglieder": gruppe_mitglieder,
+             "gruppe_groesse": len(gruppe),
              "zeilen": gefiltert, "anzahl_gesamt": len(zeilen),
              "status_optionen": status_optionen, "kanal_optionen": kanal_optionen,
              "standard": lead_v2.hv_standard_benutzer(session),
@@ -743,7 +779,10 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
                      "versuche_max": kern.versuche_max(session),
                      "sortierung": sortierung,
                      # v31 (Phase 153): Badge-Farbe „Großkunde“ für die Zellen aus _tabelle.html
-                     "grosskunde_farbe": _grosskunde_farbe(session)}}
+                     "grosskunde_farbe": _grosskunde_farbe(session),
+                     # v35 (Phase 185/186): Auswahllisten der Boards (status_wahl, gruende, ad_wahl …)
+                     # für Spaltenwerkzeuge/Inline-Dialoge der HV-Ansicht (lm-daten, Agent B)
+                     **_auswahl_listen(session)}}
     if gesamt:
         daten["gruppen"] = gruppieren(gefiltert, kreis)
         daten["hinweise"] = benutzer_abgleich(session)
@@ -760,6 +799,13 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
                 "offen": sum(1 for z in k_zeilen if z["offen"]), "aufgeklappt": False,
                 "erkl": "Standardregel F13 greift über „Standard nachziehen“ oder je Lead"})
         daten["dashboard"] = None
+    elif len(gruppe) > 1:
+        # v35 (Phase 185): Gruppe mit mehreren Vertretern – je Mitglied eine Gruppe wie in
+        # der Gesamtsicht (nur die eigene Gruppe), Leads ohne Mitglied (monday) darunter
+        daten["gruppen"] = gruppieren(gefiltert, {i: kreis[i] for i in gruppe if i in kreis})
+        daten["hinweise"] = None
+        daten["standard_offen"] = 0
+        daten["dashboard"] = dashboard_daten(session, benutzer)
     else:
         daten["gruppen"] = [{"key": benutzer.id, "name": "Meine Leads", "benutzer": benutzer,
                              "gekennzeichnet": True, "zeilen": gefiltert,
@@ -796,11 +842,14 @@ def _offen_labels(logik=None) -> str:
 # --- Dashboard (F16) ------------------------------------------------------------------
 
 def dashboard_daten(session: Session, benutzer) -> dict:
-    """Persönliches HV-Dashboard: fällige/kommende Wiedervorlagen (v25: nur
-    manuell gesetzte), eigene Termine der nächsten 7 Tage, offene Leads
-    (Neu · Kontaktiert · Zurückgestellt), offene To-Dos – ohne Score."""
+    """HV-Dashboard: fällige/kommende Wiedervorlagen (v25: nur manuell gesetzte),
+    Termine der nächsten 7 Tage, offene Leads (Neu · Kontaktiert · Zurückgestellt),
+    offene To-Dos – ohne Score. v35 (PLAN_LEAD_V6 Phase 185): Leads und Termine
+    rechnen je GRUPPE des Vertreters (René = nur er; Simons Gruppe = alle Mitglieder,
+    Termine mit Name des Vertreters); To-Dos bleiben persönlich [ANNAHME]."""
     jetzt = datetime.now()
     horizont = jetzt + timedelta(days=7)
+    gruppe = gruppe_ids(session, benutzer)
     eigene = eigene_vorgaenge(session, benutzer)
     kunden = {k.id: k for k in session.query(Kunde)
               .filter(Kunde.id.in_({v.kunde_id for v in eigene} or {0}))}
@@ -815,7 +864,7 @@ def dashboard_daten(session: Session, benutzer) -> dict:
     offen = [v for v in eigene if (v.lead_phase or "neu") in OFFENE_PHASEN]
     # v29 (Phase 143): Sperrzeiten (typ sperrzeit, ohne Vorgang) sind keine Kundentermine
     termine = (session.query(VotTermin)
-               .filter(VotTermin.ad_id == benutzer.id,
+               .filter(VotTermin.ad_id.in_(gruppe),
                        VotTermin.status.in_(("geplant", "bestaetigt")),
                        VotTermin.typ != "sperrzeit",
                        VotTermin.beginn >= jetzt - timedelta(hours=2),
@@ -825,6 +874,7 @@ def dashboard_daten(session: Session, benutzer) -> dict:
     for t in termine:
         v = session.get(Vorgang, t.vorgang_id)
         termin_kunden[t.id] = (v, session.get(Kunde, v.kunde_id) if v else None)
+    namen = {b.id: b.name for b in session.query(Benutzer).filter(Benutzer.id.in_(gruppe))}
     todos = (session.query(Todo)
              .filter(Todo.an_benutzer_id == benutzer.id, Todo.status == "offen")
              .order_by(Todo.faellig_am.is_(None), Todo.faellig_am).limit(20).all())
@@ -837,6 +887,9 @@ def dashboard_daten(session: Session, benutzer) -> dict:
     return {
         "jetzt": jetzt, "benutzer": benutzer,
         "offen_labels": _offen_labels(),
+        # v35 (Phase 185): Gruppe des Vertreters (Größe 1 = nur er selbst)
+        "gruppe_groesse": len(gruppe),
+        "gruppe_namen": sorted(namen.values(), key=str.lower),
         "kacheln": {"faellig": len(faellig), "kommend": len(kommend),
                     "termine": len(termine), "offen": len(offen), "todos": len(todos),
                     "gruppe_offen": len(gruppe_offen)},
@@ -849,7 +902,9 @@ def dashboard_daten(session: Session, benutzer) -> dict:
         "termine": [{"termin": t, "vorgang": termin_kunden[t.id][0],
                      "kunde": termin_kunden[t.id][1],
                      # Terminart aus der Konstante (A-2), nicht hart im Template
-                     "typ_text": TERMIN_TYP_NAMEN.get(t.typ or "vot", t.typ or "Vor Ort")}
+                     "typ_text": TERMIN_TYP_NAMEN.get(t.typ or "vot", t.typ or "Vor Ort"),
+                     # v35: Vertreter des Termins (nur angezeigt, wenn die Gruppe > 1 ist)
+                     "ad_name": namen.get(t.ad_id, "")}
                     for t in termine],
         "offen": [{"vorgang": v, "kunde": kunden.get(v.kunde_id),
                    "eingang": v.eingang_am or v.angelegt_am} for v in offen[:15]],

@@ -78,8 +78,12 @@
             <label class="{{ feldklasse('vertriebskanal') }}" data-feld-wrap="vertriebskanal"><span>Vertriebskanal{{ stern('vertriebskanal') }}</span>
                 <select name="vertriebskanal" data-feld="vertriebskanal" title="Änderung setzt den Sync-Schutz (kanal_manuell)">
                     <option value="" {{ 'selected' if not kunde.vertriebskanal }}>–</option>
-                    {% for k in kanal_werte %}<option value="{{ k }}" {{ 'selected' if kunde.vertriebskanal == k }}>{{ k }}</option>{% endfor %}
+                    {#- v35 (PLAN_LEAD_V6 Phase 184): Kanäle nach Häufigkeit (Stammdaten), aktueller inaktiver Wert
+                        „(nicht mehr wählbar)“, „?“ = Vertriebskanal unklar (kanal_labels aus lead_kartei.kontext) #}
+                    {% for k in kanal_werte %}<option value="{{ k }}" {{ 'selected' if kunde.vertriebskanal == k }}>{{ kanal_labels.get(k, k) if kanal_labels is defined else k }}</option>{% endfor %}
                 </select><small class="lk-feld-status" aria-live="polite"></small>
+                {#- v35 (Phase 184): Hinweis bei Kanal „?“ – sichtbar, solange das Feld als offenes Pflichtfeld markiert ist (lead_v2.css) #}
+                {% if kunde.vertriebskanal == '?' %}<small class="lm-rot lk-hinweis lk-kanal-unklar" data-kanal-hinweis title="Kanal „?“ = Vertriebskanal unklar – sperrt Terminierung und TAIFUN-Übergabe">Vertriebskanal klären</small>{% endif %}
                 {% if kunde.kanal_manuell %}<small class="dezent lk-hinweis">Kanal manuell gesetzt – monday-Sync überschreibt ihn nicht.</small>{% endif %}</label>
             {% if not objekte.mehrere %}
             {#- v31 (Phase 157): Häkchen inkl. MS/WA/DMS (Langname als Tooltip, Parameter sparten_langnamen) #}
@@ -122,7 +126,9 @@
             <div class="lk-feld lk-zuweisung-feld" data-feld-wrap="leadmanager_id">
                 <span>Innendienst</span>
                 <div class="lk-zuweisung">
-                    <span class="lk-avatar klein" data-avatar="leadmanager_id" title="{{ id_person.name if id_person else 'nicht zugewiesen' }}">{{ initialen_fn(id_person.name) if id_person else '–' }}</span>
+                    {#- v35 (Phase 185, Agent R): Profilbild statt Initialen, wenn vorhanden #}
+                    {% set id_bild = profilbild_url(id_person.id) if (id_person and profilbild_url is defined) else '' %}
+                    <span class="lk-avatar klein{{ ' lk-avatar-bild' if id_bild }}" data-avatar="leadmanager_id" title="{{ id_person.name if id_person else 'nicht zugewiesen' }}">{% if id_bild %}<img src="{{ id_bild }}" alt="" width="30" height="30">{% else %}{{ initialen_fn(id_person.name) if id_person else '–' }}{% endif %}</span>
                     {#- v29 (Phase 140): Handelsvertreter sehen Innendienst/Leadmanager nur als Anzeige;
                         v31 (Phase 156): nur Benutzer mit Häkchen Leadmanager, bisherige ohne Häkchen „(nicht mehr wählbar)“ #}
                     {% if readonly or ist_hv %}
@@ -138,9 +144,10 @@
             {#- v31 (Phase 157): Pflichtfeld Außendienst – rot umrandet + Hinweis; HV-Lead gilt als erfüllt #}
             {% set ad_offen = 'ad_id' in offen %}
             <div class="lk-feld lk-zuweisung-feld{{ ' lk-pflicht' if 'ad_id' in pflichtig }}{{ ' lk-pflicht-offen lk-feld-ad-offen' if ad_offen }}" data-feld-wrap="ad_id">
-                <span>Außendienst / Handelsvertreter{{ stern('ad_id') }}{% if ist_hv %} <small class="dezent">(frei umverteilen)</small>{% endif %}</span>
+                <span>Außendienst / Handelsvertreter{{ stern('ad_id') }}{% if ist_hv %} <small class="dezent">(innerhalb der eigenen Gruppe umverteilen)</small>{% endif %}</span>
                 <div class="lk-zuweisung">
-                    <span class="lk-avatar klein" data-avatar="ad_id" title="{{ ad_person.name if ad_person else 'nicht zugewiesen' }}">{{ initialen_fn(ad_person.name) if ad_person else '–' }}</span>
+                    {% set ad_bild = profilbild_url(ad_person.id) if (ad_person and profilbild_url is defined) else '' %}
+                    <span class="lk-avatar klein{{ ' lk-avatar-bild' if ad_bild }}" data-avatar="ad_id" title="{{ ad_person.name if ad_person else 'nicht zugewiesen' }}">{% if ad_bild %}<img src="{{ ad_bild }}" alt="" width="30" height="30">{% else %}{{ initialen_fn(ad_person.name) if ad_person else '–' }}{% endif %}</span>
                     {% if readonly %}
                         <span>{{ ad_person.name if ad_person else (lead_kontext.ad.name ~ ' (über Termin)' if lead_kontext.ad else '–') }}</span>
                     {% else %}
@@ -177,6 +184,11 @@
                         <span class="lk-wert">{{ 'ja' if grosskunde else 'nein' }}</span>
                     {% endif %}
                 </div><small class="lk-feld-status" aria-live="polite"></small></div>
+
+            {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Kundennummer – manuell nachgetragen (Rückgabe aus TAIFUN
+                offen, OFFEN 2); Autospeichern wie die übrigen Felder, das Kopf-Badge „TAIFUN“ zeigt die Nummer #}
+            <label class="lk-feld lk-taifun-feld" data-feld-wrap="taifun_kundennr"><span>TAIFUN-Kundennummer <small class="dezent">(manuell)</small></span>
+                <input type="text" name="taifun_kundennr" data-feld="taifun_kundennr" value="{{ kunde.taifun_kundennr or '' }}" maxlength="30" placeholder="aus TAIFUN"><small class="lk-feld-status" aria-live="polite"></small></label>
 
             {#- v29 (Phase 141): Eingangsdatum im Format „TT.MM.JJJJ, HH:MM Uhr“ (Filter de_datum_zeit);
                 v31 (Phase 157): Zelle umbricht, Eingangsart als eigene Zeile – ragt nicht mehr ins Nachbarfeld #}

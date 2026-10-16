@@ -161,7 +161,9 @@ class Phase87Quellen(Basis):
         quelle, kid = kern.quelle_kampagne_aufloesen(self.s)
         self.assertEqual((quelle.key, kid), ("unbekannt", None))
         self.assertIn("Enni", kern.kanal_werte(self.s))
-        self.assertEqual(kern.kanal_werte(self.s)[0], "Standard")
+        # v35 (PLAN_LEAD_V6 Phase 184): „Standard“ ist kein Kanal mehr – die Dropdown-Werte kommen
+        # aus den Vertriebskanal-Stammdaten (nach Häufigkeit); vorher stand „Standard“ an Position 0
+        self.assertNotIn("Standard", kern.kanal_werte(self.s))
 
 
 class Phase88Uebersicht(Basis):

@@ -17,9 +17,14 @@
         } catch (e) { /* privater Modus – egal */ }
     }
 
-    document.addEventListener("DOMContentLoaded", function () {
+    // v35 (PLAN_LEAD_V6 Phase 186, Agent B): init() läuft beim Laden und erneut nach der
+    // Sofortsuche bzw. nach einer ersetzten Zeile (document „lm-sofort:geladen“) – jedes
+    // Element wird nur einmal verdrahtet (data-lm-hv-init)
+    function init() {
         // Zuweisungs-Dropdown: Rückfrage + Absenden
         document.querySelectorAll("form.hv-zuweisung select[name=ad_id]").forEach(function (select) {
+            if (select.dataset.lmHvInit === "1") { return; }
+            select.dataset.lmHvInit = "1";
             select.addEventListener("change", function () {
                 var neu = select.options[select.selectedIndex];
                 var text = neu.value
@@ -36,11 +41,15 @@
         // Gruppen: gemerkten Zustand anwenden + Änderungen merken
         var zustand = gespeichert();
         document.querySelectorAll("details.hv-gruppe").forEach(function (gruppe) {
+            if (gruppe.dataset.lmHvInit === "1") { return; }
+            gruppe.dataset.lmHvInit = "1";
             var key = gruppe.getAttribute("data-hv") || "";
             if (key in zustand) { gruppe.open = !!zustand[key]; }
             gruppe.addEventListener("toggle", function () { merken(key, gruppe.open); });
         });
         document.querySelectorAll("[data-hv-klappen]").forEach(function (knopf) {
+            if (knopf.dataset.lmHvInit === "1") { return; }
+            knopf.dataset.lmHvInit = "1";
             knopf.addEventListener("click", function () {
                 var offen = knopf.getAttribute("data-hv-klappen") === "auf";
                 document.querySelectorAll("details.hv-gruppe").forEach(function (gruppe) {
@@ -52,9 +61,17 @@
 
         // Rückfragen (Standard nachziehen)
         document.querySelectorAll("form[data-bestaetigen]").forEach(function (form) {
+            if (form.dataset.lmHvInit === "1") { return; }
+            form.dataset.lmHvInit = "1";
             form.addEventListener("submit", function (ereignis) {
                 if (!window.confirm(form.getAttribute("data-bestaetigen"))) { ereignis.preventDefault(); }
             });
         });
-    });
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+    document.addEventListener("lm-sofort:geladen", init);
 })();

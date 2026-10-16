@@ -1737,3 +1737,17 @@ a.lmt-gesperrt[aria-disabled="true"] { opacity: .55; pointer-events: none; }
     /* Angebotstool-Tabellen scrollen auf dem Handy weiter im eigenen Container (Meine Angebote) */
     .lm-tabellen-at { overflow-x: auto; max-height: none; -webkit-overflow-scrolling: touch; }
 }
+
+/* ==================================================================== */
+/* v35 (PLAN_LEAD_V6 Phase 184, Agent K): Kanal „?“ = Vertriebskanal unklar */
+/* Nur Tokens. Rote Kontur am Kanal-Label (kanal_badge, Board-Zelle), Hinweis  */
+/* „Vertriebskanal klären“ in der Kartei nur, solange das Feld als offenes      */
+/* Pflichtfeld markiert ist (lm_kartei.js toggelt .lk-pflicht-offen).           */
+/* ==================================================================== */
+.lm-kanal.lm-kanal-unklar, .lm-status.lm-kanal-unklar { outline: 2px solid var(--status-rot); outline-offset: 1px; }
+.lk-feld:not(.lk-pflicht-offen) [data-kanal-hinweis] { display: none; }
+.lk-kanal-unklar { display: block; margin-top: 2px; }
+.lm-filterchip-unklar.aktiv { border-color: var(--status-rot); }
+.lm-kanal-wahl { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.lm-kanal-wahl .lm-filterchip { font-size: var(--t-xs); padding: 2px 8px; }
+.lm-kanal-wahl .lm-filterchip.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); border-color: var(--lm-aktiv-bg); }

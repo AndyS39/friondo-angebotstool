@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import avatar %}
+
+{% block titel %}Mein Profil – Friondo Angebotstool{% endblock %}
+
+{# v35 (PLAN_LEAD_V6 Phase 185, Agent R): eigenes Profil – Profilbild (JPG/PNG, max. 2 MB,
+   quadratischer Zuschnitt aus der Mitte: im Browser über profil_v35.js mit Vorschau,
+   serverseitig noch einmal mit Pillow), Entfernen; Vorname und Telefon [ANNAHME] selbst
+   pflegbar. Das Bild ersetzt die Initialen-Avatare in Boards, HV-Ansicht, Kartei, Mein Tag
+   und steht in der Terminbestätigung ({vertriebler_block}). Nur Tokens (lm_v35_r.css),
+   Zurück-Leiste aus base.html. #}
+{% block inhalt %}
+<link rel="stylesheet" href="/static/lm_v35_r.css?v={{ css_version }}">
+<div class="{{ 'mobil-inhalt' if mobil }} profil-seite">
+<div class="seitenkopf">
+    <h1>Mein Profil</h1>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<section class="karte profil-karte" aria-label="Profilbild">
+    <div class="profil-kopf">
+        <div class="profil-bild-wrap" id="profil-bild-wrap" data-hat-bild="{{ '1' if bild_url else '' }}">
+            {% if bild_url %}
+                <img class="profil-bild" id="profil-vorschau" src="{{ bild_url }}" alt="Profilbild von {{ anzeige_name }}" width="{{ kante }}" height="{{ kante }}">
+            {% else %}
+                <img class="profil-bild" id="profil-vorschau" alt="" hidden width="{{ kante }}" height="{{ kante }}">
+                {{ avatar(anzeige_name, person.id, 'profil-avatar gross') }}
+            {% endif %}
+        </div>
+        <div class="profil-text">
+            <h2 class="profil-name">{{ anzeige_name }}</h2>
+            <p class="dezent">{{ rollen_text }}{% if person.email %} · {{ person.email }}{% endif %}</p>
+            <p class="dezent profil-hinweis">Das Bild erscheint statt der Initialen in Boards, Kundenkartei, Handelsvertreter-Ansicht und „Mein Tag“ –
+                für Vertriebler zusätzlich in der Terminbestätigung an den Kunden.</p>
+        </div>
+    </div>
+
+    <form method="post" action="/einstellungen/profil/bild" enctype="multipart/form-data" class="formular profil-bild-form"
+          id="profil-bild-form" data-kante="{{ kante }}" data-max-bytes="{{ max_mb * 1024 * 1024 }}">
+        <div class="formzeile">
+            <label class="breit">Neues Profilbild (JPG oder PNG, höchstens {{ max_mb }} MB – quadratischer Ausschnitt aus der Mitte)
+                <input type="file" name="bild" id="profil-bild-datei" accept="image/jpeg,image/png" required>
+            </label>
+        </div>
+        <p class="dezent profil-zuschnitt-hinweis" id="profil-zuschnitt-hinweis" hidden></p>
+        <div class="formaktionen">
+            <button class="knopf" type="submit" id="profil-hochladen">{{ symbol('haken') }} Bild speichern</button>
+            {% if bild_url %}
+            <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen" formnovalidate
+                    onclick="return confirm('Profilbild entfernen? Danach erscheinen wieder die Initialen.');">Entfernen</button>
+            {% endif %}
+        </div>
+    </form>
+</section>
+
+<section class="karte profil-karte" aria-label="Angaben">
+    <h2 class="lk-abschnitt">Angaben</h2>
+    <form method="post" action="/einstellungen/profil" class="formular profil-daten-form">
+        <div class="formzeile">
+            <label>Vorname <input type="text" name="vorname" value="{{ person.vorname or '' }}" maxlength="100" placeholder="für „Hallo, …“ und die Terminbestätigung"></label>
+            <label>Telefon <input type="text" name="telefon" value="{{ person.telefon or '' }}" maxlength="50" placeholder="Durchwahl / Mobil"></label>
+        </div>
+        <div class="formzeile">
+            <label>Name <input type="text" value="{{ person.name }}" disabled title="Ändert der Admin in der Benutzerverwaltung"></label>
+            <label>E-Mail <input type="text" value="{{ person.email or '' }}" disabled title="Ändert der Admin in der Benutzerverwaltung"></label>
+        </div>
+        <div class="formaktionen">
+            <button class="knopf" type="submit">{{ symbol('haken') }} Speichern</button>
+            <span class="dezent">Name, E-Mail und Rolle pflegt der Admin in der Benutzerverwaltung.</span>
+        </div>
+    </form>
+</section>
+</div>
+<script src="/static/profil_v35.js?v={{ css_version }}" defer></script>
+{% endblock %}

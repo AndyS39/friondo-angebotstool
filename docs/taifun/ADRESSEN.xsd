@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<!--
+  ADRESSEN.xsd - TAIFUN-Adressimport (Kundenuebergabe aus dem Friondo Angebotstool, v35 / PLAN_LEAD_V6 Phase 183).
+
+  REKONSTRUIERT - durch die Original-XSD von TAIFUN ersetzen.
+  Die Originaldatei lag am 15.10.2026 nicht im Projekt vor (Rueckfrage an Andreas laeuft). Diese Fassung ist
+  aus dem Plan rekonstruiert: Namensraum urn:taifun-software.de:schema:TAIFUN, Wurzel AdList, Eintraege Ad
+  mit den Elementen KdUse, Name3, AnschriftStr, AnschriftHNr, AnschriftPLZ, AnschriftOrt, Anrede, EMail,
+  Telefon, Funk, Kartei in genau dieser Reihenfolge; Laengen laut Plan (Name 60, Strasse 60, Hausnummer 20,
+  PLZ 10, Ort 60, Briefanrede 200, E-Mail 80, Telefon/Mobil 30, Karteikarte ohne Begrenzung).
+  Das Tool liest IMMER diese Datei (app/taifun_export.py, validieren) - das Original kann ohne Codeaenderung
+  an dieselbe Stelle gelegt werden. Alle Elemente sind optional (leere Felder werden im Export weggelassen).
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:TAIFUN="urn:taifun-software.de:schema:TAIFUN"
+           targetNamespace="urn:taifun-software.de:schema:TAIFUN"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+  <xs:element name="AdList">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Ad" type="TAIFUN:AdType" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="AdType">
+    <xs:sequence>
+      <xs:element name="KdUse" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="Name3" type="TAIFUN:Text60" minOccurs="0"/>
+      <xs:element name="AnschriftStr" type="TAIFUN:Text60" minOccurs="0"/>
+      <xs:element name="AnschriftHNr" type="TAIFUN:Text20" minOccurs="0"/>
+      <xs:element name="AnschriftPLZ" type="TAIFUN:Text10" minOccurs="0"/>
+      <xs:element name="AnschriftOrt" type="TAIFUN:Text60" minOccurs="0"/>
+      <xs:element name="Anrede" type="TAIFUN:Text200" minOccurs="0"/>
+      <xs:element name="EMail" type="TAIFUN:Text80" minOccurs="0"/>
+      <xs:element name="Telefon" type="TAIFUN:Text30" minOccurs="0"/>
+      <xs:element name="Funk" type="TAIFUN:Text30" minOccurs="0"/>
+      <xs:element name="Kartei" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:simpleType name="Text10">
+    <xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Text20">
+    <xs:restriction base="xs:string"><xs:maxLength value="20"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Text30">
+    <xs:restriction base="xs:string"><xs:maxLength value="30"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Text60">
+    <xs:restriction base="xs:string"><xs:maxLength value="60"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Text80">
+    <xs:restriction base="xs:string"><xs:maxLength value="80"/></xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Text200">
+    <xs:restriction base="xs:string"><xs:maxLength value="200"/></xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

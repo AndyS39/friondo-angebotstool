@@ -566,6 +566,13 @@
 
 <div class="pj-pane on" id="dokumente">
     {% if projekt.vorgang_id %}
+    {# v35 (PLAN_LEAD_V6 Phase 186, Agent G): Objektfotos des Gewerk-Objekts aus der Kundenkartei –
+       nur Anzeige (Upload/Einsortieren über die Galerie darunter, Ordner „Objekt …“) #}
+    {% if objektfotos_gewerke %}
+    {% from "_objektfotos.html" import objektfotos_abschnitt, objektfotos_stil %}
+    {{ objektfotos_stil() }}
+    {% for e in objektfotos_gewerke %}{{ objektfotos_abschnitt(e.fotos, 'Objektfotos · ' ~ e.titel, e.gruppe) }}{% endfor %}
+    {% endif %}
     {# 27.09.2026 (Andreas): eigene Galerie je Gewerk-Sparte #}
     {% for sp in galerie_sparten %}
     {% if galerie_sparten | length > 1 %}<h3 style="margin:10px 0 4px">Galerie {{ sp }}</h3>{% endif %}

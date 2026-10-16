@@ -157,10 +157,17 @@ def info_board(request: Request, session: Session = Depends(get_session)):
         session.commit()
     except Exception:
         session.rollback()
-    f = lead_info.filter_aus_query(request.query_params)
+    # v35 (PLAN_LEAD_V6 Phase 186, Agent B): Standardfilter des Nutzers beim Öffnen ohne
+    # Filterparameter (lead_boards.filter_query), Leiste „Gespeicherte Filter“ (filter_kontext)
+    from app import lead_boards
+    query, aktiver_filter = lead_boards.filter_query(request.query_params, session, benutzer,
+                                                     lead_info.KONFIG_BOARD)
+    f = lead_info.filter_aus_query(query)
     zurueck = _zurueck_aus_query(request)
     ctx = _ctx(session, benutzer, zurueck)
     f["sort"] = ctx["sortierung"]          # v25: gemerkte Sortierung je Nutzer (Board „info“)
+    if aktiver_filter is not None and isinstance((aktiver_filter.get("werte") or {}).get("sort"), dict):
+        f["sort"] = aktiver_filter["werte"]["sort"]
     daten = lead_info.board_daten(session, benutzer, f)
     p = lead_info.parameter(session)
     # v31 (Phase 157): Sparten inkl. MS/WA/DMS (app/sparten.py) statt models.INTERESSEN
@@ -175,6 +182,8 @@ def info_board(request: Request, session: Session = Depends(get_session)):
                   # v29 (PLAN_LEAD_V4 Phase 140): Ziele „An Handelsvertreter verschieben“
                   hv_gruppen_wahl=lead_v2.hv_gruppen_wahl(session) if ctx["sammel"] else [],
                   tabelle_makro=ctx["tabelle_makro"], dialoge_makro=ctx["dialoge_makro"],
+                  filter_kontext=lead_boards.filter_kontext(session, benutzer, lead_info.KONFIG_BOARD),
+                  aktiver_filter=aktiver_filter,
                   zurueck_pfad=zurueck, phasen_namen=LEAD_PHASEN_NAMEN, parameter=p,
                   wochentag_name=["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",
                                   "Samstag", "Sonntag"][p["wochentag"]],

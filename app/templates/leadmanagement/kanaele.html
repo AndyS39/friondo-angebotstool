@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
+
+{% block titel %}Vertriebskanäle – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v35 (PLAN_LEAD_V6 Phase 184, Agent K): Vertriebskanal-Stammdaten – Liste Name · Farbe
+   (Farbwähler, Textkontrast automatisch aus der Luminanz) · aktiv · Anzahl Leads · Verwendungen
+   90 Tage in Dropdown-Reihenfolge (nach Häufigkeit, dann alphabetisch, „?“ zuletzt). Anlegen,
+   Umbenennen (wirkt überall), Farbe ändern, Löschen = deaktivieren (Leads behalten den Kanal),
+   endgültig nur ohne Lead; inaktive Kanäle unter „nicht mehr wählbar“. Pflege nur Admin/
+   Innendienst (darf_pflegen), andere Lead-Rollen sehen die Liste. Farben kommen als Daten über
+   --f (Kanalfarbe aus der Tabelle, kein fester Wert im Template); Bestätigungen laufen über
+   data-confirm (kein JSON in on*-Attributen). Styles: app/static/lm_v35_k.css. #}
+{% block inhalt %}
+{{ lm_nav('kanaele') }}
+<link rel="stylesheet" href="/static/lm_v35_k.css?v={{ css_version }}">
+<div class="seitenkopf">
+    <h1>Vertriebskanäle {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">Stammdaten der Kanäle – <b>{{ aktive | length }}</b> wählbar{% if inaktive %} · {{ inaktive | length }} nicht mehr wählbar{% endif %}{% if unklar_anzahl %} · <span class="lm-rot">{{ unklar_anzahl }} Kunden mit Kanal „?“</span>{% endif %}</span>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/hauptboard?kanal_unklar=1" title="Hauptboard mit Filter „Kanal unklar“">{{ symbol('fragezeichen') }} Kanal unklar im Hauptboard</a>
+        <a class="knopf klein zweitrangig" href="/parametrierung/profile" title="Zuordnung Kanal → Angebotsprofil (liest diese Liste)">{{ symbol('einstellungen') }} Angebotsprofile</a>
+    </div>
+</div>
+<p class="meldung {{ 'fehler' if fehler }}" id="kf-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+
+<p class="dezent kf-erklaerung">Dropdowns (Kartei, Boards, Schnellanlage, Quellen, Filter) zeigen die wählbaren Kanäle nach
+    Anzahl der Verwendungen der letzten {{ verwendung_tage }} Tage, dann alphabetisch – in dieser Reihenfolge auch hier.
+    „?“ bedeutet „Vertriebskanal unklar“: das Kanalfeld ist dann rot markiert („{{ unklar_hinweis }}“), Terminierung und
+    TAIFUN-Übergabe sind gesperrt, bis ein echter Kanal gewählt ist. Umbenennen wirkt überall (Kunden, monday-Leads,
+    Quellen, Angebotsprofil-Zuordnung, Handelsvertreter-Ausschluss, Kanal-Regel). Löschen macht den Kanal nicht mehr
+    wählbar – Leads behalten ihn; endgültig gelöscht wird nur ein Kanal, den kein Lead trägt. Kanal-Farben werden aus
+    dieser Liste abgeleitet (Parameter <code>kanal_farben</code> wird nicht mehr von Hand gepflegt).</p>
+
+{% if not gefuellt %}
+<div class="warnblock">Die Kanalliste ist noch leer – <code>migrate.py</code> legt die Startliste (30 Kanäle) an.
+    {% if darf_pflegen %}Bis dahin kann sie hier von Hand angelegt werden.{% endif %}</div>
+{% endif %}
+
+<div class="lm-zweispaltig kf-seite">
+<div class="lm-karte kf-liste">
+    <h2>Wählbare Kanäle <span class="sub">{{ aktive | length }} Einträge · Reihenfolge wie in den Dropdowns</span></h2>
+    {% if aktive %}
+    <table class="tabelle kf-tabelle" id="kf-tabelle-aktiv">
+        <thead><tr><th>Kanal</th><th>Farbe</th><th class="zahl" title="Kunden mit diesem Kanal">Leads</th><th class="zahl" title="Vorgänge mit Eingang in den letzten {{ verwendung_tage }} Tagen">{{ verwendung_tage }} Tage</th><th>Status</th><th>Aktionen</th></tr></thead>
+        <tbody>
+        {% for r in aktive %}{% set z = r.zeile %}
+        <tr data-kanal-id="{{ z.id }}" data-kanal-name="{{ z.name }}" class="{{ 'kf-unklar' if r.unklar }}">
+            <td class="kf-name">
+                <span class="kf-chip kf-text-{{ r.kontrast }}" style="--f: {{ z.farbe }}" title="Vorschau: Kanal-Label{% if r.unklar %} – {{ unklar_hinweis }}{% endif %}">{{ z.name }}</span>
+                {% if r.unklar %}<small class="dezent kf-hinweis">= {{ unklar_hinweis }} (Systemkanal, bleibt immer aktiv)</small>
+                {% elif darf_pflegen %}
+                <form method="post" action="/lead-management/kanaele/{{ z.id }}" class="kf-umbenennen" data-confirm="Kanal umbenennen? Die Änderung wirkt auf alle Kunden, Leads, Quellen und Zuordnungen.">
+                    <input type="text" name="name" value="{{ z.name }}" maxlength="120" required aria-label="Neuer Name für {{ z.name }}">
+                    <button class="knopf klein zweitrangig" type="submit" title="Umbenennen – wirkt überall">{{ symbol('stift') }} Umbenennen</button>
+                </form>
+                {% endif %}
+            </td>
+            <td class="kf-farbe">
+                {% if darf_pflegen %}
+                <form method="post" action="/lead-management/kanaele/{{ z.id }}/farbe" class="kf-farbform">
+                    <input type="color" name="farbe" value="{{ z.farbe | lower }}" aria-label="Farbe von {{ z.name }}" title="Farbe wählen – Textfarbe wird automatisch hell oder dunkel">
+                    <code class="dezent">{{ z.farbe }}</code>
+                    <button class="knopf klein zweitrangig" type="submit">{{ symbol('haken') }} Farbe</button>
+                </form>
+                {% else %}
+                <i class="kf-swatch" style="--f: {{ z.farbe }}" aria-hidden="true"></i> <code class="dezent">{{ z.farbe }}</code>
+                {% endif %}
+            </td>
+            <td class="zahl">{{ r.gesamt }}</td>
+            <td class="zahl">{{ r.tage90 }}</td>
+            <td><span class="abzeichen status-angenommen" title="wählbar in allen Dropdowns">aktiv</span></td>
+            <td class="aktionen">
+                {% if darf_pflegen and not r.unklar %}
+                <form method="post" action="/lead-management/kanaele/{{ z.id }}/deaktivieren" data-confirm="Kanal nicht mehr wählbar machen? Bestehende Leads behalten den Kanal, das Label bleibt sichtbar.">
+                    <button class="knopf klein zweitrangig" type="submit" title="Nicht mehr wählbar – Leads behalten den Kanal">{{ symbol('verbot') }} Deaktivieren</button>
+                </form>
+                {% if r.loeschbar %}
+                <form method="post" action="/lead-management/kanaele/{{ z.id }}/loeschen" data-confirm="Kanal endgültig löschen? Kein Lead trägt ihn.">
+                    <button class="knopf klein zweitrangig gefahr" type="submit" title="Endgültig löschen (kein Lead trägt den Kanal)">{{ symbol('muell') }} Löschen</button>
+                </form>
+                {% else %}
+                <span class="dezent" title="Endgültiges Löschen nur, wenn kein Lead den Kanal trägt">{{ r.gesamt }} Lead{{ 's' if r.gesamt != 1 }} – nur Deaktivieren</span>
+                {% endif %}
+                {% elif r.unklar %}<span class="dezent">Systemkanal</span>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="leer-zustand">Noch keine Vertriebskanäle.</div>
+    {% endif %}
+
+    {% if inaktive %}
+    <h2 class="kf-inaktiv-titel">Nicht mehr wählbar <span class="sub">{{ inaktive | length }} inaktive Kanäle – Leads behalten sie, Label bleibt sichtbar</span></h2>
+    <table class="tabelle kf-tabelle kf-tabelle-inaktiv" id="kf-tabelle-inaktiv">
+        <thead><tr><th>Kanal</th><th>Farbe</th><th class="zahl">Leads</th><th class="zahl">{{ verwendung_tage }} Tage</th><th>Status</th><th>Aktionen</th></tr></thead>
+        <tbody>
+        {% for r in inaktive %}{% set z = r.zeile %}
+        <tr data-kanal-id="{{ z.id }}" data-kanal-name="{{ z.name }}" class="inaktiv">
+            <td class="kf-name"><span class="kf-chip kf-chip-inaktiv kf-text-{{ r.kontrast }}" style="--f: {{ z.farbe }}">{{ z.name }}</span> <small class="dezent">(nicht mehr wählbar)</small></td>
+            <td class="kf-farbe"><i class="kf-swatch" style="--f: {{ z.farbe }}" aria-hidden="true"></i> <code class="dezent">{{ z.farbe }}</code></td>
+            <td class="zahl">{{ r.gesamt }}</td>
+            <td class="zahl">{{ r.tage90 }}</td>
+            <td><span class="abzeichen" title="nicht neu wählbar">inaktiv</span></td>
+            <td class="aktionen">
+                {% if darf_pflegen %}
+                <form method="post" action="/lead-management/kanaele/{{ z.id }}/aktivieren">
+                    <button class="knopf klein zweitrangig" type="submit" title="Wieder wählbar machen">{{ symbol('wiederherstellen') }} Aktivieren</button>
+                </form>
+                {% if r.loeschbar %}
+                <form method="post" action="/lead-management/kanaele/{{ z.id }}/loeschen" data-confirm="Kanal endgültig löschen? Kein Lead trägt ihn.">
+                    <button class="knopf klein zweitrangig gefahr" type="submit">{{ symbol('muell') }} Löschen</button>
+                </form>
+                {% else %}<span class="dezent">{{ r.gesamt }} Lead{{ 's' if r.gesamt != 1 }} – nicht endgültig löschbar</span>{% endif %}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+<div class="lm-karte kf-neu">
+    <h2>Neuer Kanal <span class="sub">Name und Farbe</span></h2>
+    {% if darf_pflegen %}
+    <form method="post" action="/lead-management/kanaele" class="kf-neuform" id="kf-neuform">
+        <label>Name
+            <input type="text" name="name" maxlength="120" required placeholder="z. B. Messe Essen" autocomplete="off"></label>
+        <label>Farbe
+            <input type="color" name="farbe" value="#3f86c6" title="Startfarbe – jederzeit änderbar"></label>{# fest: Vorbelegung des Farbwählers (Daten, kein Stil) #}
+        <button class="knopf klein" type="submit">{{ symbol('plus') }} Anlegen</button>
+    </form>
+    <p class="dezent">Ein neuer Kanal ist sofort in allen Dropdowns wählbar; die Textfarbe der Labels (hell/dunkel) ergibt sich
+        automatisch aus der Helligkeit der Kanalfarbe.</p>
+    <h2>Bestand abgleichen <span class="sub">Kunden · monday-Leads · Quellen</span></h2>
+    <form method="post" action="/lead-management/kanaele/abgleichen">
+        <button class="knopf klein zweitrangig" type="submit" title="Alte Schreibweisen auf die Liste abbilden, „Standard“ leeren, unbekannte Werte als inaktive Kanäle anlegen">{{ symbol('aktualisieren') }} Bestand abgleichen</button>
+    </form>
+    <p class="dezent">Bildet alte Schreibweisen (z. B. „SWD“, „Stadtwerke Düsseld…“, „Sparkasse DU“) auf die Liste ab, leert den
+        Alt-Kanal „Standard“ und legt unbekannte Werte aus monday oder Quellen als inaktive Kanäle an – wie die Migration beim Update.</p>
+    {% else %}
+    <p class="dezent">Vertriebskanäle pflegen nur Admin und Innendienst.</p>
+    {% endif %}
+</div>
+</div>
+<script>
+(function () {
+    'use strict';
+    var formen = document.querySelectorAll('form[data-confirm]');
+    for (var i = 0; i < formen.length; i++) {
+        formen[i].addEventListener('submit', function (ev) {
+            if (!window.confirm(this.getAttribute('data-confirm'))) { ev.preventDefault(); }
+        });
+    }
+})();
+</script>
+{% endblock %}

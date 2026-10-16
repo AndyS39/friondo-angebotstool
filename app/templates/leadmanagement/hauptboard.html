@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_nav.html" import lm_nav, lm_umschalter with context %}
-{% from "leadmanagement/_tabelle.html" import lead_tabelle %}
+{% from "leadmanagement/_tabelle.html" import lead_tabelle, filter_speicher, filter_dialog %}
 
 {% block titel %}{{ board_info.titel }} – Lead-Management{% endblock %}
 
@@ -21,12 +21,19 @@
    Verhalten: app/static/lm_boards.js (über lm_nav eingebunden).
    v29 (PLAN_LEAD_V4 Phasen 140/141): Sammelaktion „An Handelsvertreter verschieben“
    (zwei Ziel-Schaltflächen, hv_gruppen_wahl), Spaltenbreite je Nutzer (Ziehgriff
-   im Spaltenkopf, <colgroup> im Makro lead_tabelle). #}
+   im Spaltenkopf, <colgroup> im Makro lead_tabelle).
+   v35 (PLAN_LEAD_V6 Phase 186, Agent B): Sofortsuche – das Filterformular trägt
+   data-lm-sofort (lm_sofort.js: Suchfeld 300 ms nach dem Tippen, Chips/Auswahl sofort, Enter
+   erlaubt, Escape leert, laufende Anfragen verworfen, URL per replaceState), die Bereiche
+   data-lm-sofort-ziel (Zähler, Gruppen) werden ohne Seitenneuladen getauscht (?fragment=1 liefert
+   sie als JSON); kein „Filtern“-Knopf mehr (noscript-Rückfall); Leiste „Gespeicherte Filter“
+   (Makro filter_speicher, GET/POST /boards/filter, Standardfilter beim Öffnen); Inline-
+   Bearbeitung der Zellen in _tabelle.html, Verhalten in lm_boards.js. #}
 {% block inhalt %}
 {{ lm_nav(board) }}
 <div class="seitenkopf lm-boardkopf" data-lm-board="{{ board }}">
     <h1>{{ board_info.titel }} {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
-    <span class="dezent">{{ board_info.untertitel }} · <b>{{ anzahl }}</b> Leads{% if ctx.hv %} · nur eigene Leads{% endif %}</span>
+    <span class="dezent" data-lm-sofort-ziel="kopf">{{ board_info.untertitel }} · <b>{{ anzahl }}</b> Leads{% if ctx.hv %} · nur eigene Leads{% endif %}{% if aktiver_filter %} · Filter „{{ aktiver_filter.name }}“{% endif %}</span>
     <div class="aktionen">
         {{ lm_umschalter('tabelle', board) }}
         {% if board == 'hauptboard' and not ctx.hv %}<a class="knopf klein" href="/lead-management/neu">{{ symbol('plus') }} Neuer Lead</a>{% endif %}
@@ -41,8 +48,8 @@
 {% endif %}
 
 <div class="lm-filterblock" id="lm-filterblock">
-<form method="get" action="/lead-management/{{ board }}" class="suchleiste lm-suchleiste" id="lm-filterform">
-    <input type="search" name="q" id="lm-suche" value="{{ filter_werte.q }}" placeholder="Suche: Name, Ort, Telefon, E-Mail" aria-label="Suche" autocomplete="off">
+<form method="get" action="/lead-management/{{ board }}" class="suchleiste lm-suchleiste" id="lm-filterform" data-lm-sofort="1" data-lm-sofort-filter="{{ board }}">
+    <input type="search" name="q" id="lm-suche" value="{{ filter_werte.q }}" placeholder="Suche: Name, Ort, Telefon, E-Mail – sofort beim Tippen" aria-label="Suche" autocomplete="off">
     <label class="kontrollfeld">Status
         <select name="status">
             <option value="">alle</option>
@@ -75,17 +82,23 @@
     <label class="kontrollfeld"><input type="checkbox" name="meine" value="1" {{ 'checked' if filter_werte.meine }}> Meine Leads</label>
     {% endif %}
     {#- v31 (Phase 153/154): Filter-Chips „Großkunde“ und „Archiv“ (archivierte Leads, grau) #}
-    <label class="lm-filterchip {{ 'aktiv' if filter_werte.grosskunde }}" title="Nur Großkunden (Kennzeichen am Kunden)"><input type="checkbox" name="grosskunde" value="1" {{ 'checked' if filter_werte.grosskunde }} onchange="this.form.submit()"> Großkunde</label>
+    <label class="lm-filterchip {{ 'aktiv' if filter_werte.grosskunde }}" title="Nur Großkunden (Kennzeichen am Kunden)"><input type="checkbox" name="grosskunde" value="1" {{ 'checked' if filter_werte.grosskunde }}> Großkunde</label>
+    {#- v35 (PLAN_LEAD_V6 Phase 184, Agent K): Filter-Chip „Kanal unklar“ = Kanal „?“ (Vertriebskanal klären) #}
+    <label class="lm-filterchip lm-filterchip-unklar {{ 'aktiv' if filter_werte.kanal_unklar }}" title="Nur Leads mit Vertriebskanal „?“ (Vertriebskanal klären – sperrt Terminierung und TAIFUN-Übergabe)"><input type="checkbox" name="kanal_unklar" value="1" {{ 'checked' if filter_werte.kanal_unklar }}> Kanal unklar</label>
+    {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): Filter-Chip „an TAIFUN übergeben“ (vorgaenge.taifun_export_am gesetzt) #}
+    <label class="lm-filterchip {{ 'aktiv' if filter_werte.taifun }}" title="Nur Leads, die als XML an TAIFUN übergeben wurden (Kundenexport)"><input type="checkbox" name="taifun" value="1" {{ 'checked' if filter_werte.taifun }}> an TAIFUN übergeben</label>
     {% if not ctx.hv %}
-    <label class="lm-filterchip lm-filterchip-archiv {{ 'aktiv' if filter_werte.archiviert }}" title="Archivierte Leads anzeigen (Sammelaktion „Archivieren“) – mit „Wiederherstellen“ zurück ins Board"><input type="checkbox" name="archiviert" value="1" {{ 'checked' if filter_werte.archiviert }} onchange="this.form.submit()"> {{ symbol('archiv') }} Archiv</label>
+    <label class="lm-filterchip lm-filterchip-archiv {{ 'aktiv' if filter_werte.archiviert }}" title="Archivierte Leads anzeigen (Sammelaktion „Archivieren“) – mit „Wiederherstellen“ zurück ins Board"><input type="checkbox" name="archiviert" value="1" {{ 'checked' if filter_werte.archiviert }}> {{ symbol('archiv') }} Archiv</label>
     {% endif %}
     {% if board == 'terminiert' %}
     <label class="kontrollfeld" title="Gewonnen/Verloren älter als 30 Tage einblenden"><input type="checkbox" name="archiv" value="1" {{ 'checked' if filter_werte.archiv }}> Ältere Abschlüsse (&gt; 30 Tage)</label>
     {% endif %}
-    <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
-    {% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.sparte or filter_werte.ad_id or filter_werte.leadmanager_id or filter_werte.gruppe or filter_werte.meine or filter_werte.grosskunde or filter_werte.archiviert %}
-    <a class="knopf klein ghost" href="/lead-management/{{ board }}" title="Filter zurücksetzen">Filter zurücksetzen</a>
-    {% endif %}
+    {#- v35 (Phase 186): Suche und Chips wirken sofort (lm_sofort.js) – der Knopf „Filtern“ ist entfallen,
+        ohne JavaScript schickt Enter bzw. der noscript-Knopf das Formular wie bisher ab #}
+    <noscript><button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button></noscript>
+    <a class="knopf klein ghost lm-filter-leeren" href="/lead-management/{{ board }}?filter=0" title="Alle Filter leeren"{% if not (filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.sparte or filter_werte.ad_id or filter_werte.leadmanager_id or filter_werte.gruppe or filter_werte.meine or filter_werte.grosskunde or filter_werte.archiviert or filter_werte.kanal_unklar or filter_werte.taifun) %} hidden{% endif %}>Filter zurücksetzen</a>
+    {#- v35 (Phase 186): gespeicherte Filter je Nutzer und Board (Makro aus _tabelle.html) #}
+    {{ filter_speicher(filter_kontext, aktiver_filter) }}
     {#- v25: Spaltenwähler in der Filterleiste – Häkchen = sichtbar, gilt nur für den angemeldeten Nutzer, je Board #}
     <details class="lm-spaltenwahl" id="lm-spaltenwahl">
         <summary class="knopf klein zweitrangig" id="lm-spalten-knopf" title="Spalten ein-/ausblenden (je Nutzer gespeichert) · Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf">{{ symbol('spalten') }} Spalten</summary>
@@ -138,7 +151,7 @@
 </div>
 
 <div class="lm-tabellen" id="lm-tabellen">
-<div class="lm-gruppen">
+<div class="lm-gruppen" data-lm-sofort-ziel="gruppen">
     {% for g in gruppen %}
     <details class="lm-gruppe" {{ '' if g.eingeklappt else 'open' }} data-gruppe="{{ g.key }}">
         <summary class="lm-gruppe-kopf">{{ g.titel }} <span class="n">{{ g.zeilen | length }}</span><span class="erkl">{{ g.erkl }}</span></summary>
@@ -168,4 +181,8 @@
 </dialog>
 
 <script type="application/json" id="lm-daten">{{ {'board': board, 'gruende': ctx.gruende, 'status': ctx.status_wahl, 'sort': sortierung, 'spalten': spalten} | tojson }}</script>
+{#- v35 (Phase 186): Dialog „Filter speichern“ außerhalb des Filterformulars, Sofortsuche + gespeicherte Filter #}
+{{ filter_dialog(filter_kontext) }}
+<link rel="stylesheet" href="/static/lm_v35_b.css?v={{ css_version }}">
+<script src="/static/lm_sofort.js?v={{ css_version }}" defer></script>
 {% endblock %}

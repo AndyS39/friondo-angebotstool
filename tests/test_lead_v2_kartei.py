@@ -618,8 +618,11 @@ class Gate(Basis):
 
     def test_ad_lesesicht_read_only(self):
         """kern.lead_ad_sicht (nur bei lead_freigabe_modus = alle): angestellter AD
-        sieht die Kartei seines Termins read-only; Schreibrouten bleiben 404."""
-        v = self.lead(51, vollstaendig=True)
+        sieht die Kartei seines Termins read-only; Schreibrouten bleiben 404.
+        v35 (PLAN_LEAD_V6 Phase 185): die Lesesicht gilt nur noch für fremde Leads – am
+        eigenen Lead (vorgaenge.ad_id = AD) bearbeitet der Außendienst wie der Innendienst;
+        der Lead dieses Tests hängt deshalb nur über den Termin am AD (ad_id leer)."""
+        v = self.lead(51, vollstaendig=True, ad_id=None)
         t = VotTermin(vorgang_id=v.id, ad_id=self.ad.id, status="geplant", demo=True,
                       beginn=datetime.now() + timedelta(days=3))
         self.s.add(t)
@@ -630,6 +633,12 @@ class Gate(Basis):
         # DB-Parameters – parallel laufende Tests setzen ihn sonst zurück)
         from unittest import mock
         with mock.patch.object(kern, "freigabe_modus", return_value="alle"):
+            # v35: eigener Lead → voller Zugriff (keine Lesesicht)
+            eigen = self.lead(53, vollstaendig=True)
+            self.assertEqual(eigen.ad_id, self.ad.id)
+            r_eigen = ad_client.get(f"/lead-management/lead/{eigen.id}")
+            self.assertEqual(r_eigen.status_code, 200)
+            self.assertNotIn("Lesesicht", r_eigen.text)
             r = ad_client.get(f"/lead-management/lead/{v.id}")
             self.assertEqual(r.status_code, 200)
             self.assertIn("Lesesicht", r.text)

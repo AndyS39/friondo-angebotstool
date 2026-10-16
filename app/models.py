@@ -49,6 +49,8 @@ class Kunde(Base):
     liefer_ort: Mapped[str] = mapped_column(String(100), default="")
     # v31 (PLAN_LEAD_V5 Phase 153): Kennzeichen Großkunde (Badge, Filter, Spalte – keine Automatik)
     grosskunde: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v35 (PLAN_LEAD_V6 Phase 183): TAIFUN-Kundennummer (manuell nachgetragen, Rückgabe aus TAIFUN offen)
+    taifun_kundennr: Mapped[str] = mapped_column(String(30), default="")
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -546,6 +548,12 @@ class Vorgang(Base):
     # (versendet | nachgefasst | bestellung_angekuendigt | angenommen | abgelehnt)
     wiedervorlage_art: Mapped[str] = mapped_column(String(30), default="")
     verfolgung_status: Mapped[str] = mapped_column(String(30), default="")
+    # v35 (PLAN_LEAD_V6 Phase 183): TAIFUN-Kundenübergabe (XML nach ADRESSEN.xsd)
+    taifun_export_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    taifun_export_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    taifun_export_datei: Mapped[str] = mapped_column(String(120), default="")
+    taifun_export_status: Mapped[str] = mapped_column(String(20), default="")   # geschrieben|abgeholt|fehler|importiert
+    taifun_export_grund: Mapped[str] = mapped_column(Text, default="")
     # v33 (PLAN_V20 Phase 176): Zähler „Nochmal anrufen“ und zuletzt gesetzter Einwand
     nachfass_versuche: Mapped[int] = mapped_column(Integer, default=0)
     letzter_einwand_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -966,6 +974,8 @@ class GalerieDatei(Base):
     quelle: Mapped[str] = mapped_column(String(20), default="upload")  # upload | erfassung | migration | formular
     hochgeladen_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     hochgeladen_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    # v35 (PLAN_LEAD_V6 Phase 186): Objekt des Fotos (vorgang_objekte.id); leer = Zuordnung über den Ordnernamen
+    objekt_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class ProjektDokument(Base):
@@ -2189,3 +2199,37 @@ class VorgangEinwand(Base):
     einwand_id: Mapped[int] = mapped_column(Integer)
     zeit: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+# --- v35 (PLAN_LEAD_V6 Phase 183/184): TAIFUN-Übergaben und Vertriebskanal-Stammdaten --------------
+
+class TaifunUebergabe(Base):
+    """Übergabeliste der TAIFUN-Kundenexporte (eine Zeile je geschriebener XML-Datei; Status
+    geschrieben → abgeholt (Datei aus dem Ordner verschwunden) | fehler | importiert (manuell))."""
+    __tablename__ = "taifun_uebergaben"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    datei: Mapped[str] = mapped_column(String(120), default="")
+    pfad: Mapped[str] = mapped_column(String(500), default="")
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    grund: Mapped[str] = mapped_column(String(60), default="")        # terminierung | manuell | testdatei
+    status: Mapped[str] = mapped_column(String(20), default="geschrieben", index=True)
+    fehler_text: Mapped[str] = mapped_column(Text, default="")
+    geschrieben_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    abgeholt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    importiert_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class Vertriebskanal(Base):
+    """Vertriebskanal-Stammdaten (v35): Name, Farbe, aktiv; `aktiv = 0` = nicht mehr wählbar,
+    Leads behalten den Kanal. Ersetzt den von Hand gepflegten Parameter kanal_farben."""
+    __tablename__ = "vertriebskanaele"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True)
+    name: Mapped[str] = mapped_column(String(120))
+    farbe: Mapped[str] = mapped_column(String(12), default="")
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    pflicht_hinweis: Mapped[str] = mapped_column(String(200), default="")   # „?“ = Vertriebskanal klären
+    reihenfolge: Mapped[int] = mapped_column(Integer, default=0)
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+

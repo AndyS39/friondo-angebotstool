@@ -26,7 +26,10 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{#- v35 (PLAN_LEAD_V6 Phase 186, Agent B): Sofortsuche – Sichten/Fälligkeit (Links, data-lm-sofort-links)
+    und Suchfeld (300 ms) wirken ohne Seitenneuladen; Leiste und Liste sind Tauschbereiche (data-lm-sofort-ziel) #}
 <div class="lm-todo-filter">
+    <div class="lm-todo-sichten" data-lm-sofort-ziel="todo-sichten" data-lm-sofort-link-quelle="lm-todo-form">
     <nav class="lm-umschalter" aria-label="To-Do-Sicht">
         <a class="{{ 'aktiv' if sicht == 'meine' and not vorgang }}" href="/lead-management/todos?sicht=meine{{ faellig_param }}{{ '&q=' ~ (suche | urlencode) if suche }}">Meine offenen <span class="n">{{ zaehler.meine }}</span></a>
         <a class="{{ 'aktiv' if sicht == 'vergeben' and not vorgang }}" href="/lead-management/todos?sicht=vergeben{{ faellig_param }}{{ '&q=' ~ (suche | urlencode) if suche }}">Von mir vergeben <span class="n">{{ zaehler.vergeben }}</span></a>
@@ -38,13 +41,14 @@
         <a class="{{ 'aktiv' if not faellig }}" href="/lead-management/todos?{{ sicht_param }}" title="Alle To-Dos der Sicht">Alle</a>
         <a class="{{ 'aktiv' if faellig }}" href="/lead-management/todos?{{ sicht_param }}&faellig=1" title="Nur fällige (offen, Fälligkeit erreicht)">Fällig <span class="n {{ 'rot' if zaehler.faellig }}">{{ zaehler.faellig }}</span></a>
     </nav>
-    <form method="get" action="/lead-management/todos" class="suchleiste lm-todo-suche">
+    </div>
+    <form method="get" action="/lead-management/todos" class="suchleiste lm-todo-suche" id="lm-todo-form" data-lm-sofort="1" data-lm-sofort-links="sicht,faellig">
         <input type="hidden" name="sicht" value="{{ sicht }}">
         {% if faellig %}<input type="hidden" name="faellig" value="1">{% endif %}
         {% if vorgang %}<input type="hidden" name="vorgang_id" value="{{ vorgang.id }}">{% endif %}
-        <input type="text" name="q" value="{{ suche }}" placeholder="Titel oder Details durchsuchen">
-        <button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button>
-        {% if suche %}<a class="knopf klein zweitrangig" href="/lead-management/todos?sicht={{ sicht }}{{ '&vorgang_id=' ~ vorgang.id if vorgang }}">Zurücksetzen</a>{% endif %}
+        <input type="search" name="q" id="lm-suche" value="{{ suche }}" placeholder="Titel oder Details durchsuchen – sofort beim Tippen" autocomplete="off">
+        <noscript><button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button></noscript>
+        <a class="knopf klein zweitrangig lm-filter-leeren" href="/lead-management/todos?sicht={{ sicht }}{{ '&vorgang_id=' ~ vorgang.id if vorgang }}"{% if not suche %} hidden{% endif %}>Zurücksetzen</a>
     </form>
 </div>
 {% if vorgang %}
@@ -55,7 +59,7 @@
 {% endif %}
 
 <div class="lm-zweispaltig lm-todo-seite">
-    <div class="lm-karte">
+    <div class="lm-karte" data-lm-sofort-ziel="todos">
         <h2>{% if vorgang %}Zum Vorgang{% elif sicht == 'vergeben' %}Von mir vergeben{% elif sicht == 'erledigt' %}Erledigt{% else %}Meine offenen To-Dos{% endif %}
             <span class="sub">{{ zeilen | length }} Einträge{% if faellig %} · nur fällige{% elif sicht == 'meine' and not vorgang %} · fällige zuerst{% endif %}</span></h2>
         {{ todo_liste(zeilen, benutzer, heute, zurueck=zurueck, zeige_an=(sicht == 'vergeben' or vorgang is not none),
@@ -68,4 +72,7 @@
         <p class="dezent lm-todo-abgrenzung">Wiedervorlage = Kundenkontakt zu einem Zeitpunkt (am Lead oder Angebot, siehe Dashboard). To-Do = Arbeitsauftrag an eine Person, mit oder ohne Vorgang.</p>
     </div>
 </div>
+{#- v35 (Phase 186): Sofortsuche #}
+<link rel="stylesheet" href="/static/lm_v35_b.css?v={{ css_version }}">
+<script src="/static/lm_sofort.js?v={{ css_version }}" defer></script>
 {% endblock %}

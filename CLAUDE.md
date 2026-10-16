@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v34)
+# Friondo Angebotstool – Projektkontext (v35)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -37,6 +37,9 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - `projektierung_logik_v1.xlsx` (Projektierung, v11+) und
   `leadmanagement_logik_v1.xlsx` (Lead-Management, v12; seit v23 zusätzlich die
   Blätter Objektarten und Status, Kaskade mit 5 Stufen, Gründe `verloren`).
+- `docs/taifun/ADRESSEN.xsd` (TAIFUN-Schema der Kundenübergabe, v35 – Rekonstruktion aus dem Plan,
+  bis das Original von TAIFUN vorliegt; Beispiel `docs/taifun/beispiel_LM.xml`, Doku
+  `docs/taifun-kundenexport.md`).
 - Betrieb (v27): `docs/betrieb.md` (Runbook, Ist-Aufnahme, Inventar),
   `docs/betrieb-it-uebergabe.md`, `docs/lasttest-v27.md`; Skripte
   `scripts/dienst-installieren.bat`, `dienst-neustart.bat`, `dienst-status.bat`,
@@ -81,6 +84,7 @@ Nummern vergeben.
 | v32 | PLAN_V19.md | 161–165 |
 | v33 | PLAN_V20.md | 166–177 |
 | v34 | PLAN_V21.md | 178–182 |
+| v35 | PLAN_LEAD_V6.md | 183–187 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -179,7 +183,9 @@ Nummern vergeben.
 - **Lead-Zuordnung:** Personen-Zuordnung wirkt sofort rückwirkend auf bestehende
   Leads; Matching zusätzlich über Benutzer-E-Mail; Warnhinweis bei Leads ohne AD.
 - **Vertriebskanal** aus monday (Mapping je Board) an Lead/Kunde, Badge + Filter
-  in allen Listen, Auswertung in der Statistik.
+  in allen Listen, Auswertung in der Statistik. *(ergänzt v35: Kanäle sind Stammdaten der Tabelle
+  `vertriebskanaele` mit Farbe, Pflege unter Lead-Management → Vertriebskanäle; monday-/Quellen-Werte
+  werden über die Zuordnungstabelle alt → neu abgebildet, Phase 184)*
 - **Archiv:** Erfassungen archivierbar; neuer Status **„Individuell“** für
   Erfassungen und Angebote (außerhalb des Tools geschrieben); seit v7 gilt
   die Statuskette aus „Neu in v7" statt Auto-Archiv. Versendete Angebote sind (ID + Admin) mit Sicherheitsabfrage
@@ -257,7 +263,7 @@ Nummern vergeben.
 - Angebotsprofile (Standard / Enni / SWD / Sparkasse DU) bündeln je
   Vertriebskanal: Nachtext-Block, Positionsregeln und Versandregeln.
   Auto-Auswahl über den Kanal des Leads (Zuordnung Kanalwert → Profil
-  in der Parametrierung, Fallback Standard), am Angebot manuell
+  in der Parametrierung, Fallback Standard *(v35: Kanalwerte aus der Kanal-Tabelle, nur lesend)*), am Angebot manuell
   umschaltbar mit Konsistenz-Hinweis. Nach- und Vortexte sind
   editierbare Textblöcke in der Parametrierung.
 - Enni: nur HEMS-Frage (P02/P03 entfallen im Bogen); HEMS = Ja →
@@ -508,7 +514,7 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb. *überholt – siehe v
   Kanal-Report (Kosten je Lead/Termin/Auftrag), Pipeline-Wert.
 - **Rollen:** neu `leadmanagement` (Mehrfachrolle; keine EK/DB, kein Angebots-Editor),
   AD-Profile in der Benutzerverwaltung, AD-Sicht Lead-Akte read-only + No-Show/
-  Verschieben – alles erst bei `alle` wirksam. Löschlauf (`loeschlauf`, Frist
+  Verschieben *(überholt – seit v35 bearbeitet der Außendienst eigene Leads wie der Innendienst, Phase 185)* – alles erst bei `alle` wirksam. Löschlauf (`loeschlauf`, Frist
   `loeschfrist_monate`, Anonymisierung) mit Vorschau.
 - Geplant: V2 monday-Import + Parallelbetrieb, SMS, Tourenplanung Tag + „Leads in
   der Nähe", Gebietskarte, KI-Extraktion (Schalter), CTI, Webhook extern; V3
@@ -1083,7 +1089,8 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   Sonstiges) und „Nachbearbeitung, noch nicht bereit für VOT“, Blätter
   **Objektarten** und **Status** (Phase → Label/Farbe/Board/Gruppe + monday-Status,
   Mapping 5a; `logik.board_fuer`, `logik.phase_fuer_monday`). Parameter
-  `versuche_max` 5, `wv_meldet_sich_tage`, `pflichtfelder`, `kanal_farben`,
+  `versuche_max` 5, `wv_meldet_sich_tage`, `pflichtfelder`, `kanal_farben` *(überholt – seit v35 aus
+  `vertriebskanaele` abgeleitet, nicht mehr von Hand gepflegt)*,
   `hv_ausschluss`, `hv_standard_benutzer`, `ersatz_radius_stufen`,
   `ersatz_alter_tage`, `info_*`, `puffer_min` 30, `max_termine_tag_start` 3,
   `dashboard_horizont_tage`, `kanal_ad_regel`, `vorab_dauer_min`,
@@ -1104,11 +1111,12 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   Veranstaltung · E-Mail-Vorlagen + „Mehr …“ mit allen V1-Einstiegen (*seit v29 Flyout;
   HV sehen nur vier Einträge, Vorlagen-Editor mit Baum in `lm_vorlagen.py`*), Demo-Badge,
   unter 900 px untere Icon-Zeile). Tabelle nach monday-Vorbild (`_tabelle.html`):
-  Status-/Kanal-Labels mit Farbe aus Blatt Status/`kanal_farben`, 5 Versuchs-
+  Status-/Kanal-Labels mit Farbe aus Blatt Status/`kanal_farben` *(Kanal-Farbe seit v35 aus der Kanal-Tabelle)*, 5 Versuchs-
   Punkte, Avatare, tel:/mailto, Spaltenkonfiguration je Nutzer
   (`benutzer_einstellungen` key `boards_spalten`), Inline-Edit per fetch
   (`POST /lead-management/boards/zeile/{id}`: status mit Pflichtgründen, notiz,
-  ad_id, leadmanager_id, wiedervorlage), Sammelaktionen registrierbar
+  ad_id, leadmanager_id, wiedervorlage *(ergänzt v35: zusätzlich Interessen, Kanal, Großkunde, Objektart,
+  Telefon, E-Mail, Teilgenommen – Phase 186)*), Sammelaktionen registrierbar
   (`SAMMELAKTIONEN`, `POST /boards/sammelaktion`, Aktivität je Lead).
   Hauptboard = Phasen ohne aktiven VOT (Neu · Pausiert · Disqualifiziert, Label
   „Telefongespräch“), Terminiert = mit VOT bzw. terminiert/erfasst/angebot/
@@ -1116,7 +1124,8 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   Angebotsversand, Gewonnen, Verloren „vor Termin“); Verloren setzt offene
   Angebote auf Abgelehnt (`lead_boards.angebote_ablehnen`, Hook in *(ergänzt – siehe v32: Verfolgungsstufe je Vorgang, Dialog „Nächster Schritt“, fünf Gründe mit Pflicht-Freitext)*
   `kern.lead_verloren`). Kanban zeigt nur das aktive Board. Reiter Kontaktiert
-  (alle Versuche, Rufnummernsuche E.164 inkl. monday-Leads), `/vorlagen` =
+  (alle Versuche, Rufnummernsuche E.164 inkl. monday-Leads *(überholt – seit v35 EINE Suchleiste inkl.
+  Rufnummer mit Sofortsuche, Phase 186)*), `/vorlagen` =
   Vorlagen-Editor im Modul.
 - **Kundenkartei (Phase 106, `app/lead_kartei.py`):** `GET /lead-management/lead/
   {id}` dreispaltig (B1–B8): Stammdaten inline mit roten Pflichtfeldern + Zähler,
@@ -1151,7 +1160,8 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
 - **Handelsvertreter (Phase 109, `app/lead_handelsvertreter.py`, `lm_hv.py`):**
   Rechte-Matrix, `GET /lead-management/handelsvertreter` (Gesamtsicht je
   Vertreter / eigene Leads + Dashboard-Block F16), Zuweisung immer über
-  `lead_handelsvertreter.zuweisen` (Sonderregel „Deals - Rene“, Ausschluss F14,
+  `lead_handelsvertreter.zuweisen` *(v35: Handelsvertreter verteilen nur innerhalb der eigenen Gruppe um,
+  Phase 185)* (Sonderregel „Deals - Rene“, Ausschluss F14,
   monday-Abgleich `leads.benutzer_id`), Standard F13 (`standard_nachziehen`
   nach monday-Sync, Button „An Standard geben“), Kanalwechsel-Hinweis + Glocke,
   Menüeinträge/Login-Ziel für HV, Lead-Glocken für HV auch im Demo (*überholt – seit v29
@@ -1413,7 +1423,7 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
   Häkchen 2 s, Dubletten client- und serverseitig unterdrückt, jede Änderung
   schreibt eine Aktivität typ `aenderung` „<Feld>: „alt“ → „neu““
   (Timeline-Gruppe „Änderungen“); Rechte wie bisher (`lead_v2.gate`, AD-Lesesicht
-  ohne Formular). `POST /stammdaten` bleibt als noscript-Fallback. Reiter Termin
+  ohne Formular *(überholt – seit v35 `lead_v2.bearbeiten_erlaubt`: Außendienst an eigenen Leads mit Formular, Phase 185)*). `POST /stammdaten` bleibt als noscript-Fallback. Reiter Termin
   (Standard) · Anrufnotizen · E-Mail-Verlauf · Timeline (`?tab=`), Reiter
   Qualifizierung/Vorgang entfallen. Blöcke in voller Breite Termine · Angebote ·
   Erfassungen · Projekt · Anhänge · To-Dos; der Block Termine lädt nach dem
@@ -2291,7 +2301,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   hinter Login/PIN-Wechsel der v27-Middleware; Links aus dem Tool mit Referer → 303 auf die
   HV-Ansicht mit Hinweis [ANNAHME A1] – *überholt seit Nachtrag 08.10.2026: immer 303, nie 404*).
   Karte (`routers/leadmanagement.karte/karte_daten`)
-  zeigt HV nur eigene Leads/Termine/Startadresse, Mittelpunkt = eigene Leads; Kartei:
+  zeigt HV nur eigene Leads/Termine/Startadresse, Mittelpunkt = eigene Leads *(überholt – seit v35
+  Gruppensicht: alle Leads der eigenen HV-Gruppe, `lead_v2.hv_gruppe_fuer`, Phase 185)*; Kartei:
   Innendienst/Leadmanager nur Anzeige. Sammelaktion **„An Handelsvertreter verschieben“**
   (`lead_boards.SAMMELAKTION_HV`, auch Deals/Infoabend) mit zwei Ziel-Schaltflächen aus
   `hv_gruppe_rene`/`hv_gruppe_simon` (erster Eintrag = Ziel), Ausschluss F14 wird gemeldet *(überholt – seit v33 zweite Schaltfläche „Simons Gruppe“ mit Kennzeichen „noch nicht verteilt“)*
@@ -2341,7 +2352,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   editor|zulieferung|standard_kopie und `_hash`). Rahmen + individueller Block: Platzhalter
   `{vertriebler_block}` (Bild als Inline-CID `cid:vertriebler-<id>`, Name, Telefon, E-Mail,
   Infotext aus der Benutzerverwaltung – `Benutzer.vorname/infotext/bild_datei`, Upload *überholt – siehe v33 (Phase 175): ohne Infotext, Block = Bild, Name, Telefon, E-Mail*
-  JPG/PNG ≤ 2 MB im AD-Profil nach `data/benutzerbilder/`) oder ein Bereich zwischen
+  JPG/PNG ≤ 2 MB im AD-Profil nach `data/benutzerbilder/` *(ergänzt v35: eigener Upload unter „Mein Profil“,
+  Phase 185)*) oder ein Bereich zwischen
   `<!-- vertriebler_block -->` und `<!-- /vertriebler_block -->`; „Rahmen für alle
   Terminbestätigungen übernehmen“ (`lead_mail.rahmen_uebernehmen`, Sicherheitsabfrage mit
   Anzahl, Protokoll) schreibt Betreff und Rahmen in alle Vorlagen der Oberkategorie, Blöcke
@@ -2853,7 +2865,8 @@ Rückfragen: `docs/leadmanagement-entscheidungen.md` Abschnitt V5; Team-Hinweise
   `lead_mail.falsche_nummer_mail(session, vorgang, benutzer)` sendet die Vorlage
   `falsche_telefonnummer` (Platzhalter `{absender}`, `{vorname}`, `{nachname}`) nur bei vorhandener
   E-Mail.
-- **Testphase (Phase 159, T/B):** `terminierung_aktiv = aus` → Vormerken/Buchen/manuell/Umbuchen/
+- **Testphase (Phase 159, T/B)** *(ergänzt v35: „Terminierung“ erzeugt in der Testphase die TAIFUN-Übergabedatei,
+  sobald `taifun_export_aktiv = an`, Phase 183)*: `terminierung_aktiv = aus` → Vormerken/Buchen/manuell/Umbuchen/
   Absagen/Terminierung/Vorab-Gespräche liefern `lead_v5.TESTPHASE_HINWEIS` (403 JSON
   `{"ok": false, "meldung": …}` bzw. Redirect), Knöpfe ausgegraut mit Tooltip, Vorschläge als
   Aktivität „Vorschläge berechnet: …“ (max. alle 10 Min je Lead, eigene kurze Transaktion
@@ -2901,7 +2914,8 @@ Rückfragen: `docs/leadmanagement-entscheidungen.md` Abschnitt V5; Team-Hinweise
   Galerie-Ordner, DB-Ampel (WP-Rückfall), Projektierung (`projektierung_logik.SPARTEN`, Dialog,
   Steckbrief „Auftrag / Leistung“, nur ALLE-Pakete), E-Mail-Vorlage = Standard.
 - **Anruf (Phase 158, B):** Rückruf/Wiedervorlage im 5-Minuten-Raster (`lead_v5.runden_5min`);
-  Endziffern-Suche `lead_anrufliste.rufnummer_suchen` (≥ 3 Ziffern, „endet mit“ zuerst, archivierte
+  Endziffern-Suche `lead_anrufliste.rufnummer_suchen` *(seit v35 Teil der einen Suchleiste in „Kontaktiert“,
+  Phase 186)* (≥ 3 Ziffern, „endet mit“ zuerst, archivierte
   Leads markiert); „Falsche Nummer“ plant `falsche_telefonnummer` über
   `lead_mail.falsche_nummer_mail`.
 - **Ausführungsort = Objekt (Phase 153, Einfügung AT-Chat, Agent AT):** Angebotstool, Projektierung
@@ -3369,7 +3383,8 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   14.10.2026 Teil A.4):** Angebotsliste, Erfassungen (inkl. TAIFUN-Warteschlange = Reiter „In TAIFUN
   zu schreiben“/Kachel `individuell-offen`), Meine Angebote, Kunden und Leads VOT Desktop (M) haben
   dieselbe Bedienung wie die Lead-Boards: Sticky-Filterblock (heutige Filter als Chip-Selects,
-  Suchfeld mit Schnellfilter, Spaltenwähler „Spalten“), Tabelle scrollt waagerecht/senkrecht im
+  Suchfeld mit Schnellfilter, Spaltenwähler „Spalten“ *(Lead-Boards seit v35 mit serverseitiger Sofortsuche,
+  Phase 186)*), Tabelle scrollt waagerecht/senkrecht im
   eigenen Container (`.lm-tabellen-at`, Sticky-Kopf, Zweit-Scrollleiste), Sortierung per Klick
   auf den Spaltenkopf (1. Klick auf, 2. ab, Pfeil, leere Werte ans Ende, je Nutzer gemerkt und
   serverseitig vor dem Rendern angewendet), Spalten je Nutzer (ein-/ausblenden, umbenennen,
@@ -3772,3 +3787,213 @@ synthetischen Fixture gleichen Aufbaus plus Stichproben gegen die echte Datei. E
   Position, Alternativ-Darstellung, Elektro ins PV), überholt-Marker in v8/v10/v11/v13/v22/v24/v27-Nachtrag 2
   und im E-Mail-Abschnitt; `ANGEBOTSTEXTE.md` Abschnitt 10, `docs/nach-dem-update-v34.md`, `docs/updates.md`
   (4c), `docs/betrieb.md` („Ergänzungen v34“), `docs/https-intern.md`; `config.VERSION = "v34"`.
+
+## Neu in v35 – Lead-Management V6: TAIFUN-Kundenübergabe, Kanal-Stammdaten, Rechte Außendienst/HV-Gruppen, Profilbild, Inline-Bearbeitung, Filter, Sofortsuche, Objektfotos (abgestimmt 15.10.2026)
+
+(Plan: PLAN_LEAD_V6.md, Phasen 183–187 – der Plan nannte v34/178–182, diese Nummern waren durch PLAN_V21
+belegt (Hinweisblock im Plan). Umgesetzt am 15./16.10.2026 auf dem v34-Stand 7327226 in EINEM Durchlauf:
+Fundament durch den Orchestrator (Tabellen `taifun_uebergaben`, `vertriebskanaele`; Spalten
+`vorgaenge.taifun_export_am/_von/_datei/_status/_grund`, `kunden.taifun_kundennr`, `galerie_dateien.objekt_id`
+(+ Index); Router-Hüllen `lm_taifun`, `lm_kanaele`, `lm_objektfotos`; `app/taifun_export.py` mit dem 17. Scheduler-
+Lauf; `requirements.txt` lxml/Pillow/pillow-heif; Menüpunkt „Mein Profil“), dann fünf Agenten T (TAIFUN-Export,
+Phase 183), K (Kanal-Stammdaten, Phase 184), R (Rechte, HV-Gruppen, Profilbild, Phase 185), B (Inline-Edit, Filter,
+Sofortsuche, Phase 186), G (Objektfotos, Phase 186) parallel auf eigenen DB-Kopien; Integration, Rollout-
+Vorbereitung und Doku durch den Orchestrator; Berichte `diagnose/v35/<X>_ergebnis.md` (lokal). EIN Commit, kein
+Push vor Freigabe. **Ergänzungen von Andreas (15.10.2026):** `taifun_export_aktiv` standardmäßig AUS (Testen über
+„Testdatei schreiben“), lxml + Pillow + pillow-heif in `requirements.txt`, Dienstkonto = Dienst `FriondoAngebotstool`
+(SYSTEM) statt fr-wts-02, HV-Gruppen wie v31/v33 (`hv_gruppe_rene`, `hv_gruppe_simon`, `hv_gruppe_simon_mitglieder`,
+Simons Gruppe) – keine zweite Gruppenlogik. Alle Datenbankänderungen additiv – v34-Code läuft auf der v35-Datenbank
+(Rückweg-Probe im Rollout-Skript). **Zulieferung fehlt:** die Original-`ADRESSEN.xsd` von TAIFUN lag nicht vor –
+`docs/taifun/ADRESSEN.xsd` ist eine Rekonstruktion aus dem Plan (Kopfkommentar); die Validierung liest immer diese
+Datei, das Original kann ohne Codeänderung eingesetzt werden. Entscheidungen, [ANNAHME]-Listen und Rückfragen:
+`diagnose/v35/gesamtuebersicht.md`; Team-Hinweise `docs/nach-dem-update-v35.md`.)
+
+**Leitplanken ab v35 (zusätzlich zu v27/v30/v33):** Kanäle kommen ausschließlich aus `app/lead_kanaele.py`
+(Tabelle `vertriebskanaele`; nie mehr `kanal_farben` von Hand, „Standard“ ist kein Kanal); Rechte im Lead-Modul
+prüfen `lead_v2.bearbeiten_erlaubt(session, benutzer, vorgang)` (eine Funktion für Innendienst/Leadmanagement/Admin,
+angestellten Außendienst an eigenen Leads und Handelsvertreter in ihrer Gruppe `lead_v2.hv_gruppe_fuer`); der
+TAIFUN-Export schreibt Dateien nur über `taifun_export` nach `verbindung_freigeben` (nie überschreiben, immer
+validiert); Objektfotos laufen über `galerie` (Formular vor dem ersten DB-Zugriff, HEIC → JPG); Lead-Filter und
+Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `onchange="this.form.submit()"`).
+
+- **TAIFUN-Kundenübergabe (Phase 183, `app/taifun_export.py`, `app/routers/lm_taifun.py`, Agent T):** Ein Lead wird
+  als XML-Datei nach `docs/taifun/ADRESSEN.xsd` (Namensraum `urn:taifun-software.de:schema:TAIFUN`, Wurzel
+  `TAIFUN:AdList`, genau ein `TAIFUN:Ad`, Deklaration `encoding="windows-1252"` – Parameter `taifun_export_encoding`,
+  Alternative utf-8) in den Import-Ordner `taifun_import_ordner` (Standard `C:\Users\kdadmin\Desktop\LM Datenimport`)
+  geschrieben: `LM_<Vorgang>_<JJJJMMTT-HHMMSS>.xml` (Vorgang = „V<ID>“ [ANNAHME], Laufnummer „-2“ bei
+  Sekundengleichheit), atomar (.tmp + Umbenennen, nie überschreiben), vorher gegen die XSD validiert (lxml), Kopie
+  12 Monate unter `data/taifun_export/`. Feldzuordnung wörtlich nach Plan: `KdUse` true · `Name3` „Vorname Nachname“
+  (Firma bei Firmenkunden [ANNAHME]) · `AnschriftStr`/`AnschriftHNr` über die Adress-Parser-Logik (unsichere Hausnummer
+  → leer + Hinweis in der Karteikarte) · `AnschriftPLZ`/`AnschriftOrt` aus der abweichenden Rechnungsadresse (MFH,
+  v20/v31), sonst Hauptobjekt/Kundenadresse · `Anrede` = Briefanrede · `EMail` nur bei `email_status ≠ ungueltig` ·
+  `Telefon`/`Funk` nach Mobilvorwahl (015x/016x/017x bzw. +4915/16/17), national formatiert („0203 3965710“
+  [ANNAHME]) · `Kartei` mehrzeilig (Übergabe am … durch …, Lead/Vorgang, Vertriebskanal, Interessen in Langform,
+  Objekte je Zeile, Vertriebler, Vor-Ort-Termin je Objekt – „vorgemerkt: …“ in der Testphase –, Quelle/Kampagne,
+  Großkunde, Kürzungs-/Parserhinweise; keine Notizen/Anrufe/Preise); Längen laut XSD gekürzt und vermerkt.
+  **Schalter `taifun_export_aktiv` ist standardmäßig AUS** (Andreas 15.10.2026): „Terminierung“ schreibt dann keine
+  Datei (Aktivität „TAIFUN-Übergabe nicht aktiv“), der Kartei-Knopf ist ausgegraut – „Testdatei schreiben“ (Demo-Lead
+  Max Mustermann, `LM_TEST_<Zeit>.xml`) funktioniert immer. Auslöser bei `an`: (1) „Terminierung“ (B8) nach
+  erfolgreicher Pflichtfeldprüfung, **auch in der Testphase** `terminierung_aktiv = aus` – der Knopf ist dann aktiv mit
+  Tooltip „Testphase: nur Übergabe an TAIFUN, keine Buchung, keine Mail“, Buchung/Outlook/Mail/Phase bleiben gesperrt
+  (`lm_termin.terminierung` → `taifun_export.terminierung_export` VOR der Testphase-Sperre; freigeschaltet läuft der
+  Export vor der Buchung, ein Export-Fehler blockiert die Buchung nicht); (2) Kartei-Knopf „An TAIFUN übergeben“ →
+  nach Erfolg „Erneut an TAIFUN übergeben“ mit Rückfrage und Datum der letzten Übergabe (Innendienst/Leadmanagement/
+  Admin, nicht AD/HV; Kanal „?“ sperrt über `lead_kanaele.kanal_unklar`); (3) Dubletten-Hinweis vor dem Export
+  (externer TAIFUN-Eintrag mit Nummer, Bestandsimport `angebote.bestand = 1`, gefülltes `kunden.taifun_kundennr` –
+  alle über den Kunden): „Kunde ist vermutlich schon in TAIFUN angelegt (<Beleg>). Trotzdem übergeben?“ mit Ja/Nein;
+  die Terminierung überspringt den Export in diesem Fall mit Aktivität [ANNAHME]; (4) nach Erfolg
+  `vorgaenge.taifun_export_am/_von/_datei/_status = geschrieben`, Aktivität „An TAIFUN übergeben: <Datei>“, grünes
+  Badge „TAIFUN <Datum>“ (+ Kundennummer) im Kartei-Kopf, Spalte „TAIFUN-Übergabe“ im Spaltenkatalog der Boards
+  (Standard ausgeblendet), Filter-Chip „an TAIFUN übergeben“ (`taifun=1`); keine Glocke, keine Kundenmail. Fehler
+  (Ordner fehlt, keine Rechte, Validierung) → `taifun_export_status = fehler` + Grund, rotes Label „TAIFUN-Übergabe
+  fehlgeschlagen“ (Notiz-Spalte mit Rang 0 wie „Mail nicht gesendet“ v29, Kartei-Balken `_taifun_hinweis.html` mit
+  „Erneut übergeben“), Zähler in den Lead-Einstellungen. **Übergabeliste** `/lead-management/taifun-uebergaben`
+  (Datum, Vorgang, Datei, Benutzer, Status geschrieben · abgeholt · fehler · manuell importiert; „XML“ lädt die
+  Kopie, „Als importiert markieren“); Scheduler-Lauf **`taifun-uebergaben`** (900 s, Start +240 s, 17. Lauf –
+  Pool-Invariante 64 + 17 + 5 = 86 ≤ 90): Übergaben mit Status geschrieben, deren Datei nicht mehr im Ordner liegt →
+  abgeholt (ein nicht erreichbarer Ordner markiert nichts), Kopien älter als 12 Monate werden 03:00–03:20 gelöscht;
+  `db.kurz()`-Muster (lesen → Sitzung zu → Datei → kurze Sitzung je Block ≤ 50). Lead-Einstellungen → Abschnitt
+  „TAIFUN-Übergabe“: Schalter, Ordner (Speichern prüft den Ordner nach `verbindung_freigeben`), Encoding, Knöpfe
+  „Ordner prüfen“ (Testdatei schreiben und löschen, Hinweis auf das Dienstkonto SYSTEM des Dienstes
+  `FriondoAngebotstool`, UNC-Pfad bei fremdem Rechner) und „Testdatei schreiben“, Prüfpunkte für den Go-live (Ordner
+  erreichbar · Testdatei in TAIFUN importiert (Häkchen) · Encoding bestätigt (Häkchen)), Fehlerzähler mit Link.
+  Feld „TAIFUN-Kundennummer“ (`kunden.taifun_kundennr`, Autospeichern im Kundeninfo-Block, Badge zeigt sie; Rückgabe
+  aus TAIFUN OFFEN 2). Doku `docs/taifun-kundenexport.md` (Feldzuordnung als Tabelle, Beispiel `docs/taifun/
+  beispiel_LM.xml`, Ordner/Rechte, Fragen an den TAIFUN-Betreuer: automatischer Import, Dubletten, Kundennummer,
+  Encoding, Original-XSD). Tests `tests/test_lead_v6_taifun.py` (21; (a)–(j) des Plans).
+- **Vertriebskanal-Stammdaten (Phase 184, `app/lead_kanaele.py`, `app/routers/lm_kanaele.py`, Agent K):** Tabelle
+  `vertriebskanaele` (key, name, farbe, aktiv, pflicht_hinweis, reihenfolge) ist die einzige Quelle für Kanäle;
+  `migration_v35_kanaele` legt die 30 Kanäle aus dem Nachtrag 15.10. an (RegioScout · Thermondo · ED - Google ·
+  ED - Meta · Webinar · DAA · Enni · Google · Andere · Prepair Tech. · Konfigurator · Stadtwerke Düsseldorf ·
+  Mitsubishi · WhatsApp · OTC · Klimakonfigurator · Empfehlung · Bosch · Sparkasse · EEE · Messe · Showroom ·
+  Infoveranstaltung · Kontaktformular/info · Reonic · WELOVEX · Comodomo · Bestandskunde · ? · Energy Systems, mit
+  den Hex-Startwerten des Plans), bildet alte Schreibweisen ab (`lead_kanaele.ALT_NEU`: „SWD“/„Stadtwerke
+  Düsseld…“ → Stadtwerke Düsseldorf, „Sparkasse DU“ → Sparkasse, „EnergieDigital Google/Meta“ → ED - Google/Meta,
+  „info“/„Kontaktformular“ → Kontaktformular/info …), leert den Alt-Kanal „Standard“ (kein Kanal mehr; das
+  Angebotsprofil „Standard“ bleibt Fallback) und legt Bestandswerte außerhalb der Liste (EON, Provinzial,
+  EnergieDigital, ZEUS Empfehlung, RS Versicherungen …) als inaktive Kanäle an (Label bleibt sichtbar, nicht neu
+  wählbar; Meldung „als inaktiver Kanal angelegt“ – Dev-DB: keiner, Server: siehe Gesamtübersicht); der Parameter
+  `kanal_farben` wird aus der Tabelle gespiegelt (Feld in den Lead-Einstellungen entfällt). Pflege unter
+  Lead-Management → „Mehr …“ → **Vertriebskanäle** (`/lead-management/kanaele`, Link auch auf der Parametrierung-
+  Verteilerseite; Admin/Innendienst pflegen, Lead-Rollen lesen): Name, Farbe (Farbwähler, Textkontrast automatisch
+  aus der Luminanz), Anzahl Leads, Verwendungen 90 Tage, Anlegen, Umbenennen (wirkt auf Kunden, monday-Leads,
+  Quellen, Angebotsprofil-Zuordnung, `hv_ausschluss`, `kanal_ad_regel`), Deaktivieren (= Löschen; Leads behalten den
+  Kanal, Filter zeigen ihn unter „weitere“), endgültig löschen nur ohne Lead, „Bestand abgleichen“. Alle Kanal-
+  Dropdowns (`leadmanagement.kanal_werte` → Tabelle, Kartei, Inline-Bearbeitung über `kanal_sortiert`, Schnellanlage
+  mit neuem Kanalfeld, Benutzer-Import, Quelle, Leads VOT, Filter) zeigen die aktiven Kanäle nach Verwendungen der
+  letzten 90 Tage absteigend, dann alphabetisch; inaktive nur am betroffenen Lead „(nicht mehr wählbar)“; Labels
+  (Boards, Kartei, Anrufliste, Leads VOT, Angebots- und Kundenliste) holen die Farbe aus der Tabelle (Makro
+  `kanal_badge` ohne Farbparameter, Jinja-Global `lm_kanal_farbe` mit 60-s-Lesecache). Die Zuordnung Kanal →
+  Angebotsprofil (v9) bleibt der Teilstring-Abgleich, die Profil-Seite bekommt eine Vorschlagsliste. **Kanal „?“ =
+  Vertriebskanal unklar:** Eingang ohne erkennbaren Kanal (Quelle ohne Kanal, API, Parser, Import, Schnellanlage ohne
+  Wahl – alle über `leadmanagement.lead_anlegen`) setzt „?“ statt leer; das Kanalfeld ist rot markiert
+  („Vertriebskanal klären“), zählt im Pflichtfeld-Zähler (`lead_v2.pflichtfelder_offen`, unabhängig vom Parameter
+  `pflichtfelder`), sperrt Terminierung und TAIFUN-Übergabe (`lead_kanaele.kanal_unklar(vorgang)`), Filter-Chip
+  „Kanal unklar“ im Hauptboard; „?“ ist Systemkanal (nie umbenenn-/löschbar, in Dropdowns zuletzt). Die Anrufliste
+  zeigt den Filterwert `Standard` als „ohne Kanal“ (trifft leer und „?“). monday-Leads ohne Label behalten einen
+  leeren Kanal (Sync außerhalb des Geltungsbereichs, Rückfrage). Tests `tests/test_lead_v6_kanaele.py` (14).
+- **Außendienst bearbeitet eigene Leads wie der Innendienst (Phase 185, `app/lead_v2.py`, Agent R):**
+  `lead_v2.bearbeiten_erlaubt(session, benutzer, vorgang) -> bool` ist die eine Rechtefunktion des Lead-Moduls –
+  Innendienst/Leadmanagement/Admin überall, angestellter Außendienst an Leads mit `vorgaenge.ad_id` = eigene ID,
+  Handelsvertreter an Leads seiner Gruppe (auch monday-Leads ohne `ad_id` über `leads.benutzer_id`);
+  `zugriff_erlaubt`/`gate` entscheiden mit Vorgang darüber. Der Außendienst öffnet die Kundenkartei eigener Leads
+  ohne Lesesicht (Autospeichern aller Felder, Status mit Pflichtgründen, Innendienst-Dropdown = Leadmanager,
+  Außendienst-Dropdown wie v31, Kanal, Objekte, Objektfotos, Notizen, To-Dos, Anruf-Ergebnisse, Wiedervorlage,
+  Termine im Rahmen der Testphase-Sperren); jede Änderung ist eine Aktivität mit Autor. Nicht: Archivieren/
+  Duplizieren/Sammelaktionen (Boards bleiben dem AD verschlossen), Parametrierung, Löschlauf; fremde Leads bleiben
+  Lesesicht (`kern.lead_ad_sicht` + `gehoert_benutzer`); EK/DB unverändert unsichtbar; `auth.py` brauchte keine
+  Änderung. Mobile Kartei bei 390 px geprüft (Markup-Test + Chrome-Screenshots).
+- **HV-Gruppensicht (Phase 185, Agent R):** `lead_v2.hv_gruppe_fuer(session, benutzer_id) -> set[int]` liefert die
+  Gruppe aus den v31/v33-Parametern (`hv_gruppe_rene` → {René}; `hv_gruppe_simon` ∪ `hv_gruppe_simon_mitglieder`,
+  leer = alle Handelsvertreter außer der René-Gruppe – v31-Rückfall, Rückfrage) – keine zweite Gruppenlogik. Ein
+  Handelsvertreter sieht und bearbeitet alle Leads, deren `ad_id` in seiner Gruppe liegt: Handelsvertreter-Ansicht
+  je Mitglied gruppiert („Leads meiner Gruppe“, Filter „Vertreter“ nur die Gruppe), Dashboard/Kacheln und Karte je
+  Gruppe (Block „Simons Gruppe – noch nicht verteilt“ sehen alle Mitglieder), To-Dos, Kartei-Gate (fremde Gruppe
+  404, gesperrte Seiten 303 wie v29), Terminassistent (Kandidaten = Gruppenmitglieder, Buchen/Umbuchen/Vormerken/
+  Vorab nur auf Kalender der Gruppe über `lead_termin.hv_gruppe_ids`/`hv_ad_erlaubt`; `hv_nur_eigene` bleibt
+  Kennzeichen), `board_zeilen`, Lead-Dashboard; nie Leads der anderen Gruppe. Umverteilung innerhalb der Gruppe per
+  Dropdown (Kartei, HV-Ansicht; Sperre in `lead_v2.ad_zuweisen`: kein Entziehen, kein Gruppenwechsel, „An Standard
+  geben“ nur innerhalb der Gruppe), zwischen den Gruppen nur Innendienst/Admin über die Sammelaktion (v33). Der
+  zentrale Kalender `/kalender` zeigt dem HV weiter nur die eigene Zeile (Rückfrage).
+- **Profilbild „Mein Profil“ (Phase 185, `app/profilbild.py`, `app/routers/einstellungen.py`, Agent R):** Menü ☰ →
+  „Mein Profil“ (`GET/POST /einstellungen/profil`, alle Rollen): JPG/PNG ≤ 2 MB, quadratischer Zuschnitt (Mitte) im
+  Browser (`profil_v35.js`, Canvas, Vorschau) und serverseitig (Pillow, 512 px JPEG), Entfernen, zusätzlich Vorname
+  und Telefon [ANNAHME]; Ablage wie v29 (`data/benutzerbilder/<id>.jpg`, `benutzer.bild_datei`; `POST
+  /einstellungen/profil/bild` liest Formular + Pillow VOR dem ersten Datenbankzugriff). Das Bild ersetzt die
+  Initialen-Avatare (Makro `avatar(name, id, klasse, bild)` + Jinja-Global `profilbild_url`, `_tabelle.avatar` in
+  Boards/HV-Ansicht, Kartei-Zuständige, HV-Gruppenkopf, Mein Tag, Benutzerverwaltung; CSS `lm_v35_r.css` in
+  `base.html`) und steht in der Terminbestätigung `{vertriebler_block}` (v29-Weg); Bild-Route `GET /einstellungen/
+  profil/bild/{id}` (angemeldet, Cache ein Tag mit `?v=`, 30-s-Ordnercache, ohne Datenbank). Admin setzt Bilder
+  weiterhin in der Benutzerverwaltung. Tests `tests/test_lead_v6_rechte.py` (10; (l)–(n)).
+- **Hauptboard: Zeilen direkt bearbeiten (Phase 186, `app/lead_boards.py`, `_tabelle.html`, `lm_boards.js`,
+  Agent B):** Inline-Edit (v23: Status, Notiz, AD, Innendienst, Wiedervorlage) erweitert auf **Interessen** (Popover
+  mit Mehrfach-Häkchen, alle Sparten inkl. MS/WA/DMS; Häkchen speichern 600 ms verzögert, „Übernehmen“ sofort),
+  **Vertriebskanal** (Auswahl hinter der Pille, Kanäle nach Häufigkeit aus `lead_kanaele.kanal_sortiert`, „?“ rot
+  mit „Vertriebskanal klären“ und wählbar [Rückfrage]), **Großkunde** (Häkchen, nur Innendienst/Leadmanagement/
+  Admin), **Objektart** (neue Spalte, Standard ausgeblendet), **Telefon/E-Mail** (Klick in die Zelle öffnet das
+  Textfeld, Enter/Verlassen speichert, Escape bricht ab; Fehler stellen den alten Wert wieder her), **Vor-Ort-Termin**
+  nur Anzeige + Link in die Kartei, **Teilgenommen** (Infoabend, auch über die Board-Route). Validierung und
+  Aktivität „<Feld>: „alt“ → „neu““ über `lead_kartei.feld_speichern` (dieselbe Funktion wie das Autospeichern der
+  Kartei); Rechte je Zeile über `lead_v2.bearbeiten_erlaubt` (fremde Leads 404, lesbare ohne Recht 403 JSON);
+  Pflichtfeld-Verletzungen (Kanal „?“, fehlender Außendienst, leere Pflichtfelder) färben die Zelle
+  (`td[data-pflicht]`, Spaltenklassen bleiben exakt). Gilt für Hauptboard, Deals, Infoabend (eigene Route, Sender
+  `window.lmInline.senden`) und die Handelsvertreter-Ansicht (Zeile als Makro `hv_zeile` in `_hv_zeile.html`,
+  `POST /boards/zeile/{id}` mit `board=handelsvertreter` liefert sie neu); Sortierung/Spaltenbreiten bleiben, keine
+  Seitenneuladung.
+- **Gespeicherte Filter je Nutzer und Board (Phase 186, Agent B):** Leiste „Gespeicherte Filter“ in der Sticky-
+  Filterleiste (Hauptboard, Deals, Infoabend, HV-Ansicht): „Filter speichern“ (Name, Häkchen „als Standard beim
+  Öffnen“), Anwenden, ★ Standard, Umbenennen, Löschen, „Filter zurücksetzen“; Ablage `benutzer_einstellungen` Key
+  `boards_filter` (`{board: {filter: [{id, name, werte, geteilt_id}], standard_id}}` – werte = Chips, Suche,
+  Auswahlfelder, Sortierung, eingeklappte Gruppen); der Standardfilter greift beim Öffnen ohne Filterparameter
+  (`lead_boards.filter_query`), URL-Parameter überschreiben ihn, `?filter=0` hebt ihn für den Aufruf auf (seine
+  Sortierung gilt nur für den Aufruf [Rückfrage]). Innendienst/Admin „für alle freigeben“ → schreibgeschützte Kopie
+  im globalen Eintrag `boards_filter_geteilt` (benutzer_id 0; andere Nutzer können sie als eigenen Standard setzen,
+  Freigabe entfernen nur Ersteller/Admin) [ANNAHME; Leadmanagement-Rolle: Rückfrage]. Routen `GET/POST
+  /lead-management/boards/filter` (speichern · umbenennen · loeschen · standard · freigeben · freigabe_entfernen);
+  keine Datenbankänderung. Der Dialog „Filter speichern“ liegt als eigenes Makro `filter_dialog` außerhalb des
+  Filterformulars (Befund: `<form>` im `<form>`).
+- **Eine Suchleiste, Sofortsuche (Phase 186, `app/static/lm_sofort.js`, `lm_v35_b.css`, Agent B):** „Kontaktiert“
+  hat nur noch eine Suchleiste – Name, Ort, PLZ, E-Mail, Notiz, Ergebnis, Benutzer und Rufnummer (Ziffernfolge ab
+  3 Ziffern = Endziffern-/Teilsuche v31, E.164-normalisiert, Leerzeichen/Schrägstrich/Plus egal; `telefon=` bleibt
+  Alias). Alle Suchfelder und Filter des Lead-Moduls (Hauptboard, Deals, Kontaktiert, Infoabend, Handelsvertreter,
+  Anrufliste, Kanban, Karte, To-Dos, TAIFUN-Übergabeliste) wirken sofort: Formulare mit `data-lm-sofort` – Suchfeld
+  300 ms nach dem Tippen, Chips/Auswahl sofort, Chip-Links über `data-lm-sofort-links`, Enter erlaubt, Escape leert,
+  laufende Anfragen verworfen (AbortController), URL per `history.replaceState` (Zurück-Navigation v30 bleibt);
+  Boards und Kontaktiert liefern `?fragment=1` als JSON `{ziele: {name: html}}` (`lead_boards.fragment_ziele`), die
+  übrigen Seiten werden geparst und nur die Bereiche `data-lm-sofort-ziel` getauscht (Klappzustand der Gruppen
+  bleibt); danach feuert `lm-sofort:geladen` (`lm_boards.js`/`lm_info.js`/`lm_hv.js`/Anrufliste binden neu). Die
+  Knöpfe „Filtern“/„Suchen“/„Anwenden“ sind entfallen (noscript-Rückfall), `onchange="this.form.submit()"` kommt im
+  Modul nicht mehr vor; gespeicherte Filter speichern den Suchtext mit. Tests `tests/test_lead_v6_boards.py` (12,
+  davon einer in Chrome headless; (o), (p), (r)).
+- **Fotos je Objekt (Phase 186, `app/galerie.py` Abschnitt „Fotos je Objekt“, `app/routers/lm_objektfotos.py`,
+  `templates/_objektfotos.html`, `kartei_objekte.html`, `static/objektfotos_v35.js`/`lm_v35_g.css`, Agent G):** Die
+  Galerie des Vorgangs (v15) erhält je aktivem Objekt (`vorgang_objekte`, v31) einen Ordner „Objekt <Bezeichnung>“ –
+  bei Ein-Objekt-Vorgängen „Objekt“ – hinter den Sparten-Ordnern (`galerie.ordner_liste(session, sparte,
+  vorgang=…)`); Zuordnung Foto ↔ Objekt über `galerie_dateien.objekt_id` (Migration `migration_v35_objektfotos`
+  füllt sie aus den Ordnernamen; Alt-Namen „Objekt“/„Objekt <Nr>“ werden toleriert, eine Umbenennung in der Kartei
+  zieht den Ordner nach – `objekt_umbenannt`). Kundenkartei: Block „Fotos“ in jeder Objektkarte bzw. „Fotos zum
+  Objekt“ beim Ein-Objekt-Vorgang – Vorschaukacheln mit Lightbox v28, „Foto aufnehmen“ (Kamera) / „Fotos wählen“
+  (mehrere), Upload sofort nach der Auswahl (auf dem Gerät verkleinert, `bild_verkleinern.js`), `POST
+  /lead-management/lead/{id}/objekt/{oid}/fotos` (JPG/PNG/HEIC → JPG über pillow-heif, max. 10 MB je Bild,
+  Teilerfolg je Datei, JSON oder Redirect; Formular VOR dem ersten DB-Zugriff, Dateien ohne Sitzung, Zeilen in einer
+  kurzen Schreibtransaktion), Löschen `POST …/fotos/{datei_id}/loeschen` durch Hochladenden/Innendienst/Admin
+  (+ Projektierung [ANNAHME]) mit Chat-Notiz. Rechte `galerie.objektfotos_erlaubt` = Galerie-Rechte
+  (`darf_hochladen`) ∪ `lead_v2.bearbeiten_erlaubt` (Außendienst am eigenen Lead). Zuordnung „Objekt“ auch beim
+  Galerie-Upload und beim Einsortieren aus der Sammelbox (Vorgangs-/Projektakte, Montage-Backend, Erfassungs-
+  Sammelbox); Erfassung (Sparten-Start, Übersicht) und Projektakte (Reiter Dokumente) zeigen die Objektfotos des
+  jeweiligen Objekts nur an. **HEIC/HEIF wird bei jedem Galerie-Upload nach JPG gewandelt** (Befund: iPhone-Fotos
+  lagen bisher nicht darstellbar in der Galerie). Tests `tests/test_lead_v6_objektfotos.py` (21; (q)).
+- **Tests, Rollout-Vorbereitung, Doku (Phase 187, Orchestrator):** neue Testdateien `tests/test_lead_v6_taifun.py`
+  (21), `test_lead_v6_kanaele.py` (14), `test_lead_v6_rechte.py` (10), `test_lead_v6_boards.py` (12),
+  `test_lead_v6_objektfotos.py` (21); `tests/test_v27_scheduler.py` kennt den 17. Lauf. Angepasste Alt-Tests
+  (Begründung in der Gesamtübersicht): Kanal „Standard“/Nav-Eintrag/„ohne Kanal“ (`test_lead_v11.py`,
+  `test_lead_v3_anruf.py`, `test_lead_v3.py`, `test_lead_v3_boards.py` – K), HV-Gruppen statt Einzel-HV und AD am
+  eigenen Lead ohne Lesesicht (`test_lead_v2_handelsvertreter.py`, `test_lead_v2_kartei.py`,
+  `test_lead_v3_kartei.py`, `test_lead_v4.py`, `test_lead_v2_dashboard.py`, `test_lead_v3.py`,
+  `test_lead_v3_phase120.py` – R). **Ergebnis der Rollout-Prüfung:** [ZAHLEN_FOLGEN]. Rollout-Vorbereitung
+  `diagnose/v35/abschluss_tests.sh` (Server-Kopie, `migrate.py` zweimal, Testbenutzer, Rückweg-Probe v34-Code
+  (Worktree 7327226) auf der v35-DB, Gesamtsuite, Abnahme, Voll-Crawl sechs Basisrollen + drei Varianten hell/dunkel,
+  Smoke, Lasttest normal + schreibsturm). Doku: dieser Abschnitt, Zuordnungstabelle, Titelzeile, Zentrale Dateien,
+  überholt-/ergänzt-Marker in v6/v9/v12/v23/v25/v29/v31/v33; `docs/taifun-kundenexport.md`, `docs/taifun/`,
+  `docs/nach-dem-update-v35.md`, `docs/updates.md` (4d), `docs/betrieb.md` („Ergänzungen v35“);
+  `config.VERSION = "v35"`.

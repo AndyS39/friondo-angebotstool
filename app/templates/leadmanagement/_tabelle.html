@@ -25,14 +25,29 @@
    den Angebotstool-Tabellen (Angebote, Erfassungen, Meine Angebote, Warteschlange, Kunden,
    Leads VOT) genutzt; neue Makros spaltenwahl (Aufklappmenü „Spalten“) und tabellen_daten
    (JSON #lm-daten + lm_boards.js). Phase 175 (R 4c): Badge „Simons Gruppe (noch nicht
-   verteilt)“ in der AD-Zelle (z.hv_gruppe_offen). #}
+   verteilt)“ in der AD-Zelle (z.hv_gruppe_offen).
+   v35 (PLAN_LEAD_V6 Phase 186, Agent B): Inline-Bearbeitung je Zeile – `lesen` = ctx.nur_lesen
+   oder Zeile ohne Bearbeitungsrecht (z.bearbeitbar aus lead_boards.bearbeiten_erlaubt);
+   neue Inline-Elemente: Vertriebskanal (Auswahl hinter der Pille, Kanal „?“ = unklar rot),
+   Interessen (Popover mit Mehrfach-Häkchen, lm_sparten inkl. MS/WA/DMS), Großkunde (Häkchen,
+   nur Innendienst/Leadmanagement/Admin), Objektart (Auswahl, eigene Spalte), Telefon/E-Mail
+   (Klick in die Zelle öffnet das Textfeld), Vor-Ort-Termin nur Anzeige + Link in die Kartei;
+   Pflichtfeld-Verletzungen (z.pflicht_zellen) färben die Zelle (Attribut data-pflicht am <td>,
+   die Spaltenklassen class="sp-…" bleiben unverändert);
+   Makro filter_speicher = Leiste „Gespeicherte Filter“ (lm_sofort.js, POST /boards/filter). #}
 {% from "_symbole.html" import symbol %}
 {% from "_sparten.html" import chip %}
 {% from "_komponenten.html" import wiedervorlage_chip, status_badge %}
 
 {% macro avatar(b, titel='') -%}
 {%- if b -%}
+{#- v35 (PLAN_LEAD_V6 Phase 185, Agent R): Profilbild statt Initialen (Global profilbild_url) -#}
+{%- set bild_url = profilbild_url(b.id) if profilbild_url is defined else '' -%}
+{%- if bild_url -%}
+<span class="lm-avatar lm-avatar-bild" title="{{ titel ~ ': ' if titel }}{{ b.name }}"><img src="{{ bild_url }}" alt="" width="26" height="26"></span>
+{%- else -%}
 <span class="lm-avatar" style="--f:{{ lm_avatar_farbe(b.id) }}" title="{{ titel ~ ': ' if titel }}{{ b.name }}">{{ lm_initialen(b.name) }}</span>
+{%- endif -%}
 {%- else -%}
 <span class="lm-avatar leer" title="{{ titel ~ ': ' if titel }}nicht zugewiesen">{{ symbol('nutzer') }}</span>
 {%- endif -%}
@@ -73,6 +88,10 @@
 
 {% macro zelle(key, z, ctx) -%}
 {%- set v = z.vorgang -%}{%- set k = z.kunde -%}
+{#- v35 (Phase 186): lesen = Lesesicht der Seite ODER Zeile ohne Bearbeitungsrecht; pflicht =
+    Spalten-Keys mit Pflichtfeld-Verletzung (rote Zelle) #}
+{%- set lesen = ctx.nur_lesen or (z.bearbeitbar is defined and not z.bearbeitbar) -%}
+{%- set pflicht = z.pflicht_zellen if z.pflicht_zellen is defined and z.pflicht_zellen else [] -%}
 {%- if key == 'lead' -%}
 <td class="sp-lead" data-wert="{{ ((k.nachname or k.firma or '') ~ ' ' ~ (k.vorname or '')) | trim | lower }}">
     <a class="lm-lead-name" href="/lead-management/lead/{{ v.id }}" title="Kundenkartei öffnen">{{ (lm_kundenname(k) if lm_kundenname is defined else k.anzeige_name) or '(ohne Namen)' }}</a>
@@ -93,8 +112,8 @@
 {%- elif key == 'nachname' -%}<td>{{ k.nachname or k.firma or '–' }}</td>
 {%- elif key == 'status' -%}
 <td class="sp-status">
-    <span class="lm-status-wahl"><span class="lm-status-pille{{ ' mit-pfeil' if not ctx.nur_lesen }}">{{ status_pille(z) }}
-    {%- if not ctx.nur_lesen %}
+    <span class="lm-status-wahl"><span class="lm-status-pille{{ ' mit-pfeil' if not lesen }}">{{ status_pille(z) }}
+    {%- if not lesen %}
     <select class="lm-inline lm-mini" data-feld="status" data-vorgang="{{ v.id }}" data-aktuell="{{ v.lead_phase }}"
             title="Status ändern (Pflichtgründe im Dialog)" aria-label="Status ändern">
         {#- v25: gleiche Labels („Kontaktiert“) nur einmal – die zweite Phase nur, wenn sie der aktuelle Wert ist #}
@@ -108,14 +127,60 @@
 {%- elif key == 'score' -%}
 <td class="sp-score" data-wert="{{ v.score_punkte if v.score_punkte is not none else '' }}">{% if v.score_klasse %}<span class="abzeichen" title="Score-Klasse {{ v.score_klasse }}{{ ' · ' ~ v.score_punkte ~ ' Punkte' if v.score_punkte is not none }}">{{ v.score_klasse }}</span>{% if v.score_punkte is not none %} <small class="dezent">{{ v.score_punkte }}</small>{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'kanal' -%}
-<td class="sp-kanal">{% if z.kanal %}<span class="lm-status lm-kanal-label" style="--f:{{ z.kanal_farbe }}" title="Vertriebskanal – steuert das Angebotsprofil">{{ z.kanal }}</span>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{#- v35 (Phase 186): Auswahl hinter der Kanal-Pille (Kanäle nach Häufigkeit, Vertrag K);
+    Kanal „?“ = Vertriebskanal unklar → rote Zelle + Hinweis „Vertriebskanal klären“ #}
+<td class="sp-kanal"{% if 'kanal' in pflicht %} data-pflicht="1"{% endif %} data-wert="{{ z.kanal | lower }}">
+    <span class="lm-status-wahl"><span class="lm-status-pille{{ ' mit-pfeil' if not lesen }}">
+    {%- if z.kanal %}<span class="lm-status lm-kanal-label{{ ' lm-kanal-unklar' if z.kanal_unklar }}" style="--f:{{ z.kanal_farbe }}" title="{{ 'Vertriebskanal unklar – bitte klären' if z.kanal_unklar else 'Vertriebskanal – steuert das Angebotsprofil' }}">{{ z.kanal }}</span>
+    {%- else %}<span class="lm-status lm-kanal-leer" title="{{ 'Kein Vertriebskanal – Klick wählt' if not lesen else 'Kein Vertriebskanal' }}">–</span>{% endif %}
+    {%- if not lesen %}
+    <select class="lm-inline lm-mini" data-feld="kanal" data-vorgang="{{ v.id }}" data-aktuell="{{ z.kanal }}" title="Vertriebskanal ändern (Aktivität, steuert das Angebotsprofil)" aria-label="Vertriebskanal ändern">
+        <option value="" {{ 'selected' if not z.kanal }}>– kein Kanal –</option>
+        {%- for kn in (ctx.kanal_wahl or []) %}
+        <option value="{{ kn.wert }}" {{ 'selected' if kn.wert | lower == z.kanal | lower }}{{ ' disabled' if not kn.waehlbar and kn.wert | lower != z.kanal | lower }}>{{ kn.wert }}{{ ' (unklar)' if kn.wert == '?' }}{{ ' (nicht mehr wählbar)' if not kn.waehlbar }}</option>
+        {%- endfor %}
+        {%- if z.kanal and z.kanal | lower not in ((ctx.kanal_wahl or []) | map(attribute='wert') | map('lower') | list) %}<option value="{{ z.kanal }}" selected>{{ z.kanal }} (nicht mehr wählbar)</option>{% endif %}
+    </select>
+    {%- endif %}</span>
+    {%- if z.kanal_unklar %} <span class="lm-pflicht-hinweis" title="Kanal „?“ = Vertriebskanal unklar – Pflichtfeld, bis ein echter Kanal gewählt ist">Vertriebskanal klären</span>{% endif %}</span>
+</td>
 {%- elif key == 'grosskunde' -%}
-{#- v31 (Phase 153): Spalte „Großkunde“ (Standard ausgeblendet, sortierbar) #}
-<td class="sp-grosskunde" data-wert="{{ '1' if z.grosskunde else '0' }}">{% if z.grosskunde %}{{ grosskunde_badge(ctx) }}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{#- v31 (Phase 153): Spalte „Großkunde“ (Standard ausgeblendet, sortierbar);
+    v35 (Phase 186): Häkchen inline (nur Innendienst/Leadmanagement/Admin – lead_kartei.feld_speichern) #}
+{%- set gk_setzbar = not lesen and (ctx.grosskunde_setzbar if ctx.grosskunde_setzbar is defined else ctx.sammel) -%}
+<td class="sp-grosskunde" data-wert="{{ '1' if z.grosskunde else '0' }}">
+    {%- if gk_setzbar %}<label class="lm-inline-haken" title="Großkunde setzen/entfernen (Aktivität)"><input type="checkbox" class="lm-inline" data-feld="grosskunde" data-vorgang="{{ v.id }}" value="1" {{ 'checked' if z.grosskunde }} aria-label="Großkunde"> {% if z.grosskunde %}{{ grosskunde_badge(ctx) }}{% else %}<span class="dezent">Großkunde</span>{% endif %}</label>
+    {%- elif z.grosskunde %}{{ grosskunde_badge(ctx) }}{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'interessen' -%}
-<td class="sp-interessen"><span class="sparten-chips">
+{#- v35 (Phase 186): Popover mit Mehrfach-Häkchen (alle Sparten inkl. MS/WA/DMS, Jinja-Global
+    lm_sparten) – Häkchen speichern verzögert, „Übernehmen“ sofort, Escape/Abbrechen verwirft #}
+<td class="sp-interessen"{% if 'interessen' in pflicht %} data-pflicht="1"{% endif %} data-wert="{{ z.sparten | join(',') }}"><span class="sparten-chips">
     {%- for s in z.sparten %}{{ chip(s, z.sparten_status.get(s, 'offen') if ctx.board == 'terminiert' else 'offen') }}{% else %}<span class="dezent">–</span>{% endfor -%}
-</span></td>
+</span>
+    {%- if not lesen %}
+    <details class="lm-popover" data-feld="interessen" data-vorgang="{{ v.id }}" data-aktuell="{{ z.sparten | join(',') }}">
+        <summary class="lm-popover-knopf" title="Interessen ändern (Mehrfachauswahl)" aria-label="Interessen ändern">{{ symbol('stift') }}</summary>
+        <div class="lm-popover-inhalt" role="group" aria-label="Interessen">
+            {%- for s in lm_sparten %}
+            <label class="lm-popover-zeile"><input type="checkbox" value="{{ s }}" {{ 'checked' if s in z.sparten }}> <b>{{ s }}</b> <small class="dezent">{{ lm_sparten_lang.get(s, s) }}</small></label>
+            {%- endfor %}
+            <div class="lm-popover-fuss">
+                <button type="button" class="knopf klein lm-popover-ok">Übernehmen</button>
+                <button type="button" class="knopf klein zweitrangig lm-popover-abbruch">Abbrechen</button>
+            </div>
+        </div>
+    </details>
+    {%- endif %}</td>
+{%- elif key == 'objektart' -%}
+{#- v35 (Phase 186): Objektart (Blatt Objektarten) – Auswahl inline, Standard ausgeblendet #}
+<td class="sp-objektart"{% if 'objektart' in pflicht %} data-pflicht="1"{% endif %} data-wert="{{ z.objektart | lower }}">
+    {%- if not lesen %}
+    <select class="lm-inline lm-mini lm-objektart" data-feld="objektart" data-vorgang="{{ v.id }}" data-aktuell="{{ z.objektart }}" title="Objektart ändern (Aktivität)" aria-label="Objektart">
+        <option value="" {{ 'selected' if not z.objektart }}>–</option>
+        {%- for o in (ctx.objektarten or []) %}<option value="{{ o.code }}" {{ 'selected' if o.code == z.objektart }}>{{ o.code }} – {{ o.name }}</option>{% endfor %}
+        {%- if z.objektart and z.objektart not in ((ctx.objektarten or []) | map(attribute='code') | list) %}<option value="{{ z.objektart }}" selected>{{ z.objektart }}</option>{% endif %}
+    </select>
+    {%- elif z.objektart %}<span class="abzeichen" title="Objektart">{{ z.objektart }}</span>{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'angebot' -%}
 <td class="sp-angebot">
     <div class="lm-mini-aktionen">
@@ -154,13 +219,13 @@
 {%- elif key == 'eingang' -%}
 <td class="sp-eingang" data-wert="{{ z.eingang.strftime('%Y-%m-%d %H:%M') if z.eingang else '' }}">{% if z.eingang %}<span title="{{ z.eingang.strftime('%d.%m.%Y %H:%M') }}{{ ' · ' ~ z.quelle.name if z.quelle }}">{{ z.eingang | de_datum('%d.%m.%Y') }}</span>{% else %}–{% endif %}</td>
 {%- elif key == 'notiz' -%}
-<td class="sp-notiz">{%- if z.mail_labels %}<span class="lm-mail-labels">{% for l in z.mail_labels %}<span class="lm-mail-label" title="{{ z.email_status_grund if l == 'E-Mail falsch' else z.mail_fehler_text }}">{{ l }}</span>{% endfor %}</span>{% endif -%}
-    {% if ctx.nur_lesen %}{{ k.notizen or '' }}{% else %}<input type="text" class="lm-inline lm-notiz" data-feld="notiz" data-vorgang="{{ v.id }}"
+<td class="sp-notiz">{%- if z.mail_labels %}<span class="lm-mail-labels">{% for l in z.mail_labels %}<span class="lm-mail-label" title="{{ (z.label_titel or {}).get(l) or (z.email_status_grund if l == 'E-Mail falsch' else z.mail_fehler_text) }}">{{ l }}</span>{% endfor %}</span>{% endif -%}
+    {% if lesen %}{{ k.notizen or '' }}{% else %}<input type="text" class="lm-inline lm-notiz" data-feld="notiz" data-vorgang="{{ v.id }}"
        value="{{ k.notizen or '' }}" placeholder="Notiz …" title="{{ k.notizen or 'Notiz (speichert beim Verlassen des Feldes)' }}" aria-label="Notiz">{% endif %}</td>
 {%- elif key == 'ad' -%}
 {#- v30 (Phase 146): Avatar mit Pfeil, das Auswahlfeld liegt unsichtbar über Avatar + Pfeil (.lm-person-pille) #}
-<td class="sp-ad"><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.ad, 'Außendienst') }}
-    {%- if not ctx.nur_lesen %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
+<td class="sp-ad"{% if 'ad' in pflicht %} data-pflicht="1" title="Pflichtfeld: Außendienst fehlt"{% endif %}><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.ad, 'Außendienst') }}
+    {%- if not lesen %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
     {#- v31 (PLAN_LEAD_V5 Phase 156): angestellte AD ohne Handelsvertreter; liegt der Lead bei einem HV,
         nur dessen Gruppe (ctx.ad_gruppen[hv_id]: René → René; Simon-Gruppe → Simon + Mitglieder) #}
     {%- set ad_wahl = (ctx.ad_gruppen or {}).get(v.ad_id) if (ctx.ad_gruppen and v.ad_id in ctx.ad_gruppen) else ctx.ad_wahl %}
@@ -178,7 +243,7 @@
     {%- if z.hv_gruppe_offen %} <span class="abzeichen status-versand-vorbereitet" data-hv-gruppe-offen="{{ v.id }}" title="Über die Sammelaktion an Simons Gruppe verschoben – Mitglied wählen">Simons Gruppe (noch nicht verteilt)</span>{% endif %}</td>
 {%- elif key == 'innendienst' -%}
 <td class="sp-id"><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.leadmanager, 'Innendienst') }}
-    {%- if not ctx.nur_lesen and not ctx.hv %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
+    {%- if not lesen and not ctx.hv %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
     {#- v31 (Phase 156): nur Benutzer mit Häkchen „Leadmanager“ (lead_dropdowns); ein zugewiesener
         Nicht-Leadmanager bleibt am Lead als „(nicht mehr wählbar)“ #}
     <select class="lm-inline lm-mini" data-feld="leadmanager_id" data-vorgang="{{ v.id }}" title="Innendienst (Leadmanager) zuweisen" aria-label="Innendienst zuweisen">
@@ -189,27 +254,40 @@
     {%- endif %}</span></span></td>
 {%- elif key == 'ort' -%}<td class="sp-ort">{{ k.plz or '' }} {{ k.ort or '' }}{% if not (k.plz or k.ort) %}–{% endif %}</td>
 {%- elif key == 'strasse' -%}<td class="sp-strasse">{{ k.strasse or '–' }}</td>
-{%- elif key == 'telefon' -%}<td class="sp-telefon">{% if k.telefon %}<a href="tel:{{ k.telefon | replace(' ', '') }}" title="Anrufen (Click-to-Call)">{{ symbol('telefon') }} {{ k.telefon }}</a>{% else %}<span class="dezent">–</span>{% endif %}</td>
-{%- elif key == 'email' -%}<td class="sp-email">{% if k.email %}<a href="mailto:{{ k.email }}">{{ k.email }}</a>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'telefon' -%}
+{#- v35 (Phase 186): Klick in die Zelle (nicht auf den Link) öffnet das Textfeld; Enter/Verlassen
+    speichert (lead_kartei.telefon_pruefen), Escape bricht ab #}
+<td class="sp-telefon" data-wert="{{ k.telefon or '' }}"{% if 'telefon' in pflicht %} data-pflicht="1"{% endif %}{% if not lesen %} data-lm-text="1" title="Klick in die Zelle: Telefon bearbeiten"{% endif %}>
+    <span class="lm-text-anzeige">{% if k.telefon %}<a href="tel:{{ k.telefon | replace(' ', '') }}" title="Anrufen (Click-to-Call)">{{ symbol('telefon') }} {{ k.telefon }}</a>{% else %}<span class="dezent">–</span>{% endif %}</span>
+    {%- if not lesen %}<input type="tel" class="lm-inline lm-text" data-feld="telefon" data-vorgang="{{ v.id }}" data-aktuell="{{ k.telefon or '' }}" value="{{ k.telefon or '' }}" placeholder="Telefon" aria-label="Telefon" hidden>{% endif %}</td>
+{%- elif key == 'email' -%}
+<td class="sp-email" data-wert="{{ k.email or '' }}"{% if 'email' in pflicht %} data-pflicht="1"{% endif %}{% if not lesen %} data-lm-text="1" title="Klick in die Zelle: E-Mail bearbeiten"{% endif %}>
+    <span class="lm-text-anzeige">{% if k.email %}<a href="mailto:{{ k.email }}">{{ k.email }}</a>{% else %}<span class="dezent">–</span>{% endif %}</span>
+    {%- if not lesen %}<input type="email" class="lm-inline lm-text" data-feld="email" data-vorgang="{{ v.id }}" data-aktuell="{{ k.email or '' }}" value="{{ k.email or '' }}" placeholder="E-Mail" aria-label="E-Mail" hidden>{% endif %}</td>
 {%- elif key == 'termin' -%}
+{#- v35 (Phase 186): Vor-Ort-Termin nur Anzeige + Link in die Kartei (Block Termine) – keine Buchung #}
 <td class="sp-termin" data-wert="{{ z.termin.beginn.strftime('%Y-%m-%d %H:%M') if z.termin and z.termin.beginn else '' }}">{% if z.termin %}
-    <span title="{{ 'Vor-Ort-Termin' if (z.termin.typ or 'vot') == 'vot' else ('Online-Termin (Teams)' if z.termin.typ == 'online' else 'Telefongespräch') }} · Status {{ z.termin.status }}{{ ' · ' ~ z.termin_ad.name if z.termin_ad }}">
-        {{ z.termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if z.termin.beginn else 'ohne Zeit' }}</span>
+    <a class="lm-termin-link" href="/lead-management/lead/{{ v.id }}?tab=termin" title="{{ 'Vor-Ort-Termin' if (z.termin.typ or 'vot') == 'vot' else ('Online-Termin (Teams)' if z.termin.typ == 'online' else 'Telefongespräch') }} · Status {{ z.termin.status }}{{ ' · ' ~ z.termin_ad.name if z.termin_ad }} – Kartei, Block Termine">
+        {{ z.termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if z.termin.beginn else 'ohne Zeit' }}</a>
     {%- if (z.termin.typ or 'vot') != 'vot' %} <span class="abzeichen">{{ 'Teams' if z.termin.typ == 'online' else 'Telefon' }}</span>{% endif %}
     {%- if z.termin.status == 'vorgemerkt' %} <span class="abzeichen" title="vorgemerkt – Terminierung (Pflichtfelder) steht noch aus">vorgemerkt</span>{% endif %}
     {%- if z.termin_ad %} <small class="dezent">{{ lm_initialen(z.termin_ad.name) }}</small>{% endif %}
     {#- H5/A-9: an jedem Lead des Boards Deals (Key terminiert) – Terminbestätigung erneut senden
         (Route Phase 108: gleiche ICS-UID, SEQUENCE+1, Aktivität; Rücksprung über Referer) #}
-    {%- if ctx.board == 'terminiert' and not ctx.nur_lesen and (z.termin.typ or 'vot') == 'vot' and z.termin.status in ('geplant', 'bestaetigt') %}
+    {%- if ctx.board == 'terminiert' and not lesen and (z.termin.typ or 'vot') == 'vot' and z.termin.status in ('geplant', 'bestaetigt') %}
     <form method="post" action="/lead-management/termin/{{ z.termin.id }}/bestaetigung-erneut" class="lm-inline-form"
           onsubmit="return window.confirm('Terminbestätigung mit aktuellem Kalendereintrag (ICS) erneut an den Kunden senden?')">
         <button type="submit" class="knopf klein zweitrangig lm-bestaetigung-erneut" title="Terminbestätigung erneut senden (Vorlage terminbestaetigung mit aktuellem ICS, Protokoll als Aktivität)">{{ symbol('aktualisieren') }} Bestätigung erneut</button>
     </form>
     {%- endif %}
-{% else %}<span class="dezent">–</span>{% endif %}</td>
+{% else %}<a class="dezent lm-termin-link" href="/lead-management/lead/{{ v.id }}?tab=termin" title="Kein Termin – Kartei, Block Termine">–</a>{% endif %}</td>
+{%- elif key == 'taifun' -%}
+{#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): Spalte „TAIFUN-Übergabe“ (Standard ausgeblendet) – grün nach
+    erfolgter Übergabe, rot bei Status fehler; Tooltip aus z.taifun_text #}
+<td class="sp-taifun" data-wert="{{ z.taifun_am.strftime('%Y-%m-%d %H:%M') if z.taifun_am else '' }}">{% if z.taifun_status == 'fehler' %}<span class="abzeichen status-abgelehnt" title="{{ z.taifun_text }}">TAIFUN-Übergabe fehlgeschlagen</span>{% elif z.taifun_am %}<span class="abzeichen status-angenommen" title="{{ z.taifun_text }}">TAIFUN {{ z.taifun_am | de_datum('%d.%m.%Y') }}</span>{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'wiedervorlage' -%}
 <td class="sp-wv" data-wert="{{ z.wiedervorlage.strftime('%Y-%m-%d %H:%M') if z.wiedervorlage else '' }}">{{ wiedervorlage_chip(z.wiedervorlage, ctx.jetzt) }}
-    {%- if not ctx.nur_lesen %} <input type="date" class="lm-inline lm-mini-datum" data-feld="wiedervorlage" data-vorgang="{{ v.id }}"
+    {%- if not lesen %} <input type="date" class="lm-inline lm-mini-datum" data-feld="wiedervorlage" data-vorgang="{{ v.id }}"
        value="{{ z.wiedervorlage.strftime('%Y-%m-%d') if z.wiedervorlage }}" title="Wiedervorlage setzen/ändern" aria-label="Wiedervorlage">{% endif %}</td>
 {%- else -%}<td></td>
 {%- endif -%}
@@ -299,4 +377,59 @@
 {% macro tabellen_daten(board, spalten, sortierung) -%}
 <script type="application/json" id="lm-daten">{{ {'board': board, 'sort': sortierung, 'spalten': spalten} | tojson }}</script>
 <script src="/static/lm_boards.js?v={{ css_version }}" defer></script>
+{%- endmacro %}
+
+{# v35 (PLAN_LEAD_V6 Phase 186, Agent B): Leiste „Gespeicherte Filter“ in der Sticky-Filterleiste –
+   fk = lead_boards.filter_kontext(session, benutzer, board) (liste, standard_id, darf_freigeben,
+   board), aktiver = beim Öffnen angewendeter Standardfilter (oder None). Verhalten in
+   lm_sofort.js: Anwenden setzt die Formularfelder aus data-werte (JSON, tojson|forceescape) und
+   lädt sofort, ★ = Standard beim Öffnen, Stift = Umbenennen, Nutzer-Symbol = für alle freigeben
+   (Innendienst/Admin), Papierkorb = Löschen bzw. Freigabe entfernen, „Filter speichern“ öffnet den
+   Dialog (Name + Häkchen Standard), „Filter zurücksetzen“ leert alle Felder (?filter=0). #}
+{% macro filter_speicher(fk, aktiver=None) -%}
+<details class="lm-filterspeicher" id="lm-filterspeicher" data-board="{{ fk.board }}" data-darf-freigeben="{{ '1' if fk.darf_freigeben else '' }}" data-standard-id="{{ fk.standard_id or '' }}">
+    <summary class="knopf klein zweitrangig" id="lm-filter-knopf" title="Gespeicherte Filter – je Nutzer und Board (Suche, Chips, Sortierung, Gruppen); Standardfilter gilt beim Öffnen, URL-Parameter überschreiben ihn">{{ symbol('filter') }} <span class="lm-filter-aktiv-name" id="lm-filter-aktiv-name">{{ ('Filter: ' ~ aktiver.name) if aktiver else 'Gespeicherte Filter' }}</span></summary>
+    <div class="lm-filtermenue" role="group" aria-label="Gespeicherte Filter">
+        <ul class="lm-filterliste" id="lm-filterliste">
+            {%- for f in fk.liste %}
+            <li data-id="{{ f.id }}" data-name="{{ f.name }}" data-geteilt="{{ '1' if f.geteilt else '' }}" data-werte="{{ f.werte | tojson | forceescape }}" class="{{ 'geteilt' if f.geteilt }}{{ ' standard' if f.standard }}">
+                <button type="button" class="lm-filter-anwenden" title="Filter anwenden{{ ' (für alle freigegeben von ' ~ f.von_name ~ ')' if f.geteilt and f.von_name }}">{{ f.name }}</button>
+                {%- if f.geteilt %} <span class="abzeichen" title="Für alle freigegeben{{ ' von ' ~ f.von_name if f.von_name }} – schreibgeschützt">alle</span>{% endif %}
+                {%- if f.standard %} <span class="abzeichen lm-filter-standard-badge" title="Standard beim Öffnen">Standard</span>{% endif %}
+                <span class="lm-filter-werkzeuge">
+                    <button type="button" class="lm-filter-standard{{ ' aktiv' if f.standard }}" title="{{ 'Standard beim Öffnen – Klick hebt ihn auf' if f.standard else 'Als Standard beim Öffnen setzen' }}" aria-pressed="{{ 'true' if f.standard else 'false' }}" aria-label="Standard beim Öffnen">★</button>
+                    {%- if not f.geteilt %}<button type="button" class="lm-filter-umbenennen" title="Umbenennen" aria-label="Filter umbenennen">{{ symbol('stift') }}</button>{% endif %}
+                    {%- if fk.darf_freigeben and not f.geteilt %}<button type="button" class="lm-filter-freigeben" title="{{ 'Freigabe für alle aktualisieren' if f.geteilt_id else 'Für alle freigeben (schreibgeschützte Kopie bei allen Nutzern)' }}" aria-label="Für alle freigeben">{{ symbol('nutzer') }}</button>{% endif %}
+                    {%- if f.loeschbar %}<button type="button" class="lm-filter-loeschen" title="{{ 'Freigabe entfernen' if f.geteilt else 'Filter löschen' }}" aria-label="{{ 'Freigabe entfernen' if f.geteilt else 'Filter löschen' }}">{{ symbol('loeschen') }}</button>{% endif %}
+                </span>
+            </li>
+            {%- else %}
+            <li class="dezent lm-filter-leer">Noch keine gespeicherten Filter – Suche und Chips setzen, dann „Filter speichern“.</li>
+            {%- endfor %}
+        </ul>
+        <div class="lm-filter-fuss">
+            <button type="button" class="knopf klein" id="lm-filter-speichern" title="Aktuelle Suche, Chips, Sortierung und Gruppen-Klappzustand unter einem Namen speichern">{{ symbol('plus') }} Filter speichern</button>
+            <button type="button" class="knopf klein zweitrangig" id="lm-filter-zuruecksetzen" title="Alle Filter leeren (auch den Standardfilter für diesen Aufruf)">{{ symbol('zuruecksetzen') }} Filter zurücksetzen</button>
+            <span class="dezent">Gilt nur für Sie, je Board.{{ ' „Für alle freigeben“ legt eine schreibgeschützte Kopie bei allen Nutzern ab.' if fk.darf_freigeben }}</span>
+        </div>
+    </div>
+</details>
+{%- endmacro %}
+
+{# Dialog „Filter speichern“ – AUSSERHALB des Filterformulars einbinden (ein <form> im <form> ist
+   ungültig: der Browser verwirft das innere Formular, das schließende Tag beendet das äußere) #}
+{% macro filter_dialog(fk) -%}
+<dialog id="dlg-filter" class="lm-dialog">
+    <form method="dialog" class="formular" id="dlg-filter-form">
+        <h3>Filter speichern</h3>
+        <p class="dezent">Gespeichert werden Suche, Chips, Auswahlfelder, die gemerkte Sortierung und der Klappzustand der Gruppen – nur für Sie, nur für dieses Board.</p>
+        <label>Name (Pflicht) <input type="text" name="name" maxlength="60" required list="dlg-filter-namen" placeholder="z. B. Enni offen" autocomplete="off"></label>
+        <datalist id="dlg-filter-namen">{% for f in fk.liste if not f.geteilt %}<option value="{{ f.name }}"></option>{% endfor %}</datalist>
+        <label class="kontrollfeld"><input type="checkbox" name="standard" value="1"> als Standard beim Öffnen</label>
+        <div class="formzeile">
+            <button class="knopf" type="submit" value="ok">Speichern</button>
+            <button class="knopf zweitrangig" type="button" value="abbrechen">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
 {%- endmacro %}

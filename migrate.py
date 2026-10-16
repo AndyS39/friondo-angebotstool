@@ -791,7 +791,12 @@ def _daten() -> list[str]:
                                     # v34 (PLAN_V21 Phase 180): Auslegungs-Position aus Entwuerfen entfernen
                                     ("app.angebot_aufbau", "migration_v34_auslegung"),
                                     # v34 (PLAN_V21 Phase 178/179): WB-Artikel-Import (nur mit Dateien) + Textbloecke WB
-                                    ("app.import_wallbox", "migration_v34_wallbox")):
+                                    ("app.import_wallbox", "migration_v34_wallbox"),
+                                    # v35 (PLAN_LEAD_V6): TAIFUN-Übergabe-Parameter, Vertriebskanal-Stammdaten,
+                                    # Objektfotos (objekt_id aus den Ordnernamen), Rechte/Profilbild, Boards
+                                    ("app.taifun_export", "migration_v35_taifun"),
+                                    ("app.lead_kanaele", "migration_v35_kanaele"),
+                                    ("app.galerie", "migration_v35_objektfotos")):
             try:
                 modul = importlib.import_module(modulname)
             except ImportError:

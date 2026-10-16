@@ -50,7 +50,9 @@ NAV_MEHR = [("anrufliste", "/lead-management/anrufliste"), ("board", "/lead-mana
             ("uebersicht", "/lead-management/uebersicht"), ("statistik", "/lead-management/statistik"),
             ("kanal_report", "/lead-management/statistik/kanal"),
             ("posteingang", "/lead-management/posteingang"), ("import", "/lead-management/import"),
-            ("neu", "/lead-management/neu"), ("lead-einstellungen", "/parametrierung/lead-einstellungen")]
+            ("neu", "/lead-management/neu"),
+            ("kanaele", "/lead-management/kanaele"),   # v35 (PLAN_LEAD_V6 Phase 184): Vertriebskanal-Stammdaten
+            ("lead-einstellungen", "/parametrierung/lead-einstellungen")]
 NAV_LEGACY = {"tabelle": "hauptboard", "info-veranstaltung": "info"}
 STANDARD_KEYS = [k for k, _, _ in lead_boards.SPALTEN]
 

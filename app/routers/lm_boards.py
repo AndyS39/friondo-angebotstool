@@ -9,6 +9,13 @@
 # Phasen-Labels aus dem Blatt Status, Kanban-Spalte „Kontaktiert“ (in_kontaktierung
 # + qualifiziert), Score nur bei lead_v2.score_aktiv, Spaltenkonfiguration mit
 # Umbenennen/Sortierung/Zurücksetzen (GET/POST /boards/spalten).
+# v35 (PLAN_LEAD_V6 Phase 186, Agent B): Inline-Bearbeitung mit Rechten je Zeile
+# (lead_boards.bearbeiten_erlaubt → lead_v2.bearbeiten_erlaubt, Vertrag R) und
+# Zeilen-Rendern auch für die Handelsvertreter-Ansicht (board=handelsvertreter),
+# gespeicherte Filter (GET/POST /boards/filter, Standardfilter beim Öffnen über
+# lead_boards.filter_query), Sofortsuche: ?fragment=1 liefert die Bereiche
+# data-lm-sofort-ziel der Seite als JSON (lead_boards.fragment_ziele) für lm_sofort.js;
+# „Kontaktiert“ mit einer Suchleiste (Rufnummer in q, telefon= bleibt als Alias).
 
 import json
 from datetime import datetime
@@ -112,6 +119,10 @@ def _tabellen_kontext(session: Session, benutzer, board: str) -> dict:
         "versuche_max": kern.versuche_max(session),
         "score_aktiv": lead_v2.score_aktiv(session),
         "sortierung": lead_boards.sortierung_fuer(session, benutzer, board),
+        # v35 (Phase 186): Großkunde-Häkchen inline nur für Innendienst/Leadmanagement/Admin
+        # (dieselbe Regel wie lead_kartei.feld_speichern)
+        "grosskunde_setzbar": benutzer is not None and (
+            benutzer.basisrolle in ("admin", "innendienst") or benutzer.hat_rolle("leadmanagement")),
         **listen,
     }
 
@@ -121,31 +132,79 @@ def _zeile_html(z: dict, spalten: list, ctx: dict) -> str:
     return str(modul.lead_zeile(z, spalten, ctx))
 
 
+def _hv_zeile_html(session: Session, benutzer, vorgang: Vorgang, zurueck: str) -> str | None:
+    """v35 (Phase 186): Zeile der Handelsvertreter-Ansicht neu rendern (Makro hv_zeile in
+    leadmanagement/_hv_zeile.html) – Spalten je Nutzer unter dem Board-Key handelsvertreter."""
+    from app import lead_handelsvertreter as hv_modul
+    daten = lead_boards.hv_zeile_fuer(session, benutzer, vorgang)
+    if daten is None:
+        return None
+    jetzt = datetime.now()
+    ctx = {"nur_lesen": False, "board": "hauptboard", "jetzt": jetzt, "heute": jetzt.date(),
+           "hv": not daten["gesamt"], "sammel": False, "versuche_max": kern.versuche_max(session),
+           "sortierung": lead_boards.sortierung_fuer(session, benutzer, hv_modul.KONFIG_BOARD),
+           **lead_boards.auswahl_listen(session)}
+    spalten = lead_boards.spalten_fuer(session, benutzer, hv_modul.KONFIG_BOARD)
+    modul = templates.env.get_template("leadmanagement/_hv_zeile.html").module
+    return str(modul.hv_zeile(daten["zeile"], spalten, ctx, daten["hv_liste"], zurueck,
+                              daten["gesamt"], daten["standard"], jetzt, True))
+
+
+def fragment_antwort(antwort, **zusatz) -> JSONResponse:
+    """v35 (Phase 186, Sofortsuche): aus der gerenderten Seite nur die Bereiche
+    data-lm-sofort-ziel als JSON {ziele: {name: html}, …} – lm_sofort.js tauscht die Inhalte
+    ohne Seitenneuladen; ohne Fragment-Unterstützung fällt das Skript auf die ganze Seite zurück."""
+    html = antwort.body.decode("utf-8") if isinstance(antwort.body, bytes) else str(antwort.body)
+    return JSONResponse({"ok": True, "ziele": lead_boards.fragment_ziele(html), **zusatz})
+
+
+def fragment_gewuenscht(request: Request) -> bool:
+    return request.query_params.get("fragment", "") == "1"
+
+
 # --- Boards als Tabelle -----------------------------------------------------------------
 
 def _board_seite(request: Request, session: Session, board: str):
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
-    f = lead_boards.filter_aus_query(request.query_params)
+    # v35 (Phase 186): Standardfilter des Nutzers beim Öffnen ohne Filterparameter
+    query, aktiver_filter = lead_boards.filter_query(request.query_params, session, benutzer, board)
+    f = lead_boards.filter_aus_query(query)
     f["sort"] = lead_boards.sortierung_fuer(session, benutzer, board)     # v25: gemerkt
+    gruppen_zu: list = []
+    if aktiver_filter is not None:
+        werte = aktiver_filter.get("werte") or {}
+        if isinstance(werte.get("sort"), dict) and werte["sort"].get("key"):
+            f["sort"] = werte["sort"]
+        gruppen_zu = list(werte.get("gruppen_zu") or [])
     daten = lead_boards.board_zeilen(session, benutzer, board, f)
+    if gruppen_zu:
+        for g in daten["gruppen"]:
+            g["eingeklappt"] = g["key"] in gruppen_zu
     ctx = _tabellen_kontext(session, benutzer, board)
     ctx["archiv_sicht"] = bool(f.get("archiviert"))     # v31 (Phase 154): Filter-Chip „Archiv“
     # v31 (Phase 154): Ergebnis „Duplizieren“ mit Links auf die neuen Vorgänge (?kopien=1,2)
     kopien = [int(t) for t in (request.query_params.get("kopien") or "").split(",") if t.strip().isdigit()]
-    return render(request, "leadmanagement/hauptboard.html" if board == "hauptboard"
-                  else "leadmanagement/terminiert.html",
-                  aktiv="/lead-management", board=board, board_info=lead_boards.board_info(board),
-                  gruppen=daten["gruppen"], anzahl=daten["anzahl"], filter_werte=f,
-                  spalten=lead_boards.spalten_fuer(session, benutzer, board),
-                  sortierung=f["sort"], score_aktiv=ctx["score_aktiv"],
-                  sammelaktionen=lead_boards.sammelaktionen_fuer(board, archiv=ctx["archiv_sicht"]),
-                  ctx=ctx, kopien=kopien,
-                  # v29 (Phase 140): Ziele der Sammelaktion „An Handelsvertreter verschieben“
-                  hv_gruppen_wahl=lead_v2.hv_gruppen_wahl(session) if ctx["sammel"] else [],
-                  phasen_namen=lead_boards.phasen_labels(), jetzt=daten["jetzt"],
-                  meldung=request.query_params.get("meldung", ""),
-                  fehler=request.query_params.get("fehler", "") == "1", **_badge(session))
+    antwort = render(request, "leadmanagement/hauptboard.html" if board == "hauptboard"
+                     else "leadmanagement/terminiert.html",
+                     aktiv="/lead-management", board=board, board_info=lead_boards.board_info(board),
+                     gruppen=daten["gruppen"], anzahl=daten["anzahl"], filter_werte=f,
+                     spalten=lead_boards.spalten_fuer(session, benutzer, board),
+                     sortierung=f["sort"], score_aktiv=ctx["score_aktiv"],
+                     sammelaktionen=lead_boards.sammelaktionen_fuer(board, archiv=ctx["archiv_sicht"]),
+                     ctx=ctx, kopien=kopien,
+                     # v29 (Phase 140): Ziele der Sammelaktion „An Handelsvertreter verschieben“
+                     hv_gruppen_wahl=lead_v2.hv_gruppen_wahl(session) if ctx["sammel"] else [],
+                     phasen_namen=lead_boards.phasen_labels(), jetzt=daten["jetzt"],
+                     # v35 (Phase 186): gespeicherte Filter (Leiste), aktiver Standardfilter
+                     filter_kontext=lead_boards.filter_kontext(session, benutzer, board),
+                     aktiver_filter=aktiver_filter,
+                     meldung=request.query_params.get("meldung", ""),
+                     fehler=request.query_params.get("fehler", "") == "1", **_badge(session))
+    if fragment_gewuenscht(request):
+        return fragment_antwort(antwort, anzahl=daten["anzahl"],
+                                gruppen={g["key"]: len(g["zeilen"]) for g in daten["gruppen"]})
+    return antwort
 
 
 @router.get("/hauptboard")
@@ -262,12 +321,22 @@ def board_kanban(request: Request, session: Session = Depends(get_session)):
 def zeile_aendern(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     """JSON {feld, wert, grund?, grund_text?, bis?, board?} → {ok, meldung,
-    zeile_html?}. Felder: status, notiz, ad_id, leadmanager_id, wiedervorlage."""
+    zeile_html?}. Felder: status, notiz, ad_id, leadmanager_id, wiedervorlage;
+    v35 (Phase 186): interessen, kanal, grosskunde, objektart, telefon, email,
+    teilgenommen – Rechte je Zeile über lead_boards.bearbeiten_erlaubt (Innendienst/
+    Leadmanagement/Admin alle, Außendienst und Handelsvertreter nur eigene Leads: fremde
+    Leads 404, lesbare ohne Bearbeitungsrecht 403); board=handelsvertreter liefert die Zeile
+    der HV-Ansicht (Makro hv_zeile)."""
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
         raise HTTPException(status_code=404)
-    lead_v2.gate(request, session, vorgang)
+    lead_v2.hv_umleitung(request, session)
     benutzer = request.state.benutzer
+    if not lead_boards.bearbeiten_erlaubt(session, benutzer, vorgang):
+        if lead_v2.zugriff_erlaubt(session, benutzer, vorgang):
+            return JSONResponse({"ok": False, "meldung": "Diese Zeile dürfen Sie nur lesen."},
+                                status_code=403)
+        raise HTTPException(status_code=404)
     try:
         daten = anfrage.json_lesen(request)
     except Exception:
@@ -284,6 +353,18 @@ def zeile_aendern(request: Request, vorgang_id: int,
     antwort = {"ok": ok, "meldung": meldung, "phase": vorgang.lead_phase}
     board = daten.get("board") or "hauptboard"
     try:
+        if board == "handelsvertreter":
+            # v35 (Phase 186): Zeile der HV-Ansicht (Spalten je Nutzer + Vertreter-Spalte)
+            zurueck = str(daten.get("zurueck") or "/lead-management/handelsvertreter")
+            if not zurueck.startswith("/lead-management") or "//" in zurueck or "\n" in zurueck:
+                zurueck = "/lead-management/handelsvertreter"
+            html = _hv_zeile_html(session, benutzer, vorgang, zurueck)
+            if html:
+                antwort["board"] = "handelsvertreter"
+                antwort["zeile_html"] = html
+            else:
+                antwort["verschoben"] = "Lead ist in der Handelsvertreter-Ansicht nicht mehr sichtbar."
+            return JSONResponse(antwort, status_code=200 if ok else 422)
         z = lead_boards.zeile_fuer(session, benutzer, vorgang)
         if z is not None:
             antwort["board"] = z["board"]
@@ -301,6 +382,71 @@ def zeile_aendern(request: Request, vorgang_id: int,
     except Exception:
         pass
     return JSONResponse(antwort, status_code=200 if ok else 422)
+
+
+# --- v35 (PLAN_LEAD_V6 Phase 186): gespeicherte Filter je Nutzer und Board --------------------
+
+@router.get("/boards/filter")
+def filter_holen(request: Request, session: Session = Depends(get_session)):
+    """{board, filter: [{id, name, werte, geteilt, von_name, standard, loeschbar}], standard_id,
+    darf_freigeben} – eigene Filter plus die für alle freigegebenen (schreibgeschützt)."""
+    board = request.query_params.get("board", "hauptboard")
+    if not lead_boards.board_bekannt(board):
+        board = "hauptboard"
+    _spalten_gate(request, session, board)
+    kontext = lead_boards.filter_kontext(session, request.state.benutzer, board)
+    return JSONResponse({"ok": True, "board": board, "filter": kontext["liste"],
+                         "standard_id": kontext["standard_id"],
+                         "darf_freigeben": kontext["darf_freigeben"]})
+
+
+@router.post("/boards/filter")
+def filter_aendern(request: Request, session: Session = Depends(get_session)):
+    """JSON {board, aktion: speichern | umbenennen | loeschen | standard | freigeben |
+    freigabe_entfernen, id?, name?, werte?, standard?} → {ok, meldung, filter: [...],
+    standard_id}. Nur für den angemeldeten Nutzer; „freigeben“ Innendienst/Admin."""
+    try:
+        daten = anfrage.json_lesen(request)
+    except Exception:
+        form = anfrage.formular(request)
+        try:
+            daten = json.loads(form.get("daten") or "{}")
+        except ValueError:
+            daten = {}
+    if not isinstance(daten, dict):
+        return JSONResponse({"ok": False, "meldung": "Ungültige Anfrage."}, status_code=400)
+    board = str(daten.get("board") or "hauptboard")
+    if not lead_boards.board_bekannt(board):
+        return JSONResponse({"ok": False, "meldung": "Unbekanntes Board."}, status_code=400)
+    _spalten_gate(request, session, board)
+    benutzer = request.state.benutzer
+    aktion = str(daten.get("aktion") or "speichern").strip()
+    filter_id = str(daten.get("id") or "").strip() or None
+    ok, meldung = False, "Unbekannte Aktion."
+    if aktion == "speichern":
+        eintrag, meldung = lead_boards.filter_speichern(
+            session, benutzer, board, daten.get("name", ""), daten.get("werte") or {},
+            standard=bool(daten.get("standard")), filter_id=filter_id)
+        ok = eintrag is not None
+    elif aktion == "umbenennen":
+        ok, meldung = lead_boards.filter_umbenennen(session, benutzer, board, filter_id or "", daten.get("name", ""))
+    elif aktion == "loeschen":
+        ok, meldung = lead_boards.filter_loeschen(session, benutzer, board, filter_id or "")
+    elif aktion == "standard":
+        ok, meldung = lead_boards.filter_standard_setzen(session, benutzer, board, filter_id)
+    elif aktion == "freigeben":
+        ok, meldung = lead_boards.filter_freigeben(session, benutzer, board, filter_id or "")
+    elif aktion == "freigabe_entfernen":
+        ok, meldung = lead_boards.filter_freigabe_entfernen(session, benutzer, board, filter_id or "")
+    if ok:
+        session.commit()
+    else:
+        session.rollback()
+    kontext = lead_boards.filter_kontext(session, benutzer, board)
+    return JSONResponse({"ok": ok, "meldung": meldung, "board": board, "filter": kontext["liste"],
+                         "standard_id": kontext["standard_id"],
+                         "darf_freigeben": kontext["darf_freigeben"]},
+                        status_code=200 if ok else 400)
 
 
 # --- Sammelaktionen (H3) -------------------------------------------------------------------
@@ -460,13 +606,19 @@ def kontaktiert(request: Request, session: Session = Depends(get_session)):
         seite = int(q.get("seite", "1"))
     except ValueError:
         seite = 1
+    # v35 (Phase 186): EINE Suchleiste – die Rufnummer steht im Feld q (Endziffern ab 3,
+    # lead_anrufliste.rufnummer_suchen); telefon= bleibt als Alias für alte Links
     daten = lead_boards.kontaktiert_daten(session, request.state.benutzer,
                                           q.get("q", ""), q.get("telefon", ""), seite)
     # v25: Phasen-Labels nur aus dem Blatt Status (beide Kontakt-Phasen „Kontaktiert“)
-    return render(request, "leadmanagement/kontaktiert.html", aktiv="/lead-management",
-                  **daten, phasen_namen=lead_boards.phasen_labels(),
-                  score_aktiv=lead_v2.score_aktiv(session),
-                  meldung=q.get("meldung", ""), **_badge(session))
+    antwort = render(request, "leadmanagement/kontaktiert.html", aktiv="/lead-management",
+                     **daten, phasen_namen=lead_boards.phasen_labels(),
+                     score_aktiv=lead_v2.score_aktiv(session),
+                     meldung=q.get("meldung", ""), **_badge(session))
+    if fragment_gewuenscht(request):
+        return fragment_antwort(antwort, gesamt=daten["gesamt"], treffer=len(daten["treffer"]),
+                                telefon=daten["telefon"])
+    return antwort
 
 
 # --- E-Mail-Vorlagen im Modul --------------------------------------------------------------

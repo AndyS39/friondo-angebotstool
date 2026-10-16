@@ -103,6 +103,10 @@
         {% if ist_admin %}
         {{ eintrag('Lead-Demo-Daten', 'Demo-Leads anlegen und wieder entfernen', '/parametrierung/lead-demo') }}
         {% endif %}
+        {#- v35 (PLAN_LEAD_V6 Phase 184): Vertriebskanal-Stammdaten (Pflege Admin/Innendienst) #}
+        {% if ist_admin or request.state.benutzer.basisrolle == 'innendienst' %}
+        {{ eintrag('Vertriebskanäle', 'Stammdaten der Kanäle: Name, Farbe, aktiv – Dropdowns nach Häufigkeit', '/lead-management/kanaele') }}
+        {% endif %}
     </ul>
 </section>
 {% endif %}

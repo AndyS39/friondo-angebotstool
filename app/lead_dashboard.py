@@ -151,11 +151,20 @@ def ist_buero(benutzer) -> bool:
         benutzer.basisrolle in ("admin", "innendienst") or benutzer.hat_rolle("leadmanagement"))
 
 
-def _meine_leads(abfrage, benutzer, hv: bool, mit_freien: bool = True):
-    """Zuständigkeitsfilter: HV = vorgaenge.ad_id; Büro = leadmanager_id
-    (freie Leads ohne Leadmanager zählen mit, wie in der Anrufliste)."""
+def _gruppe(session: Session, benutzer, hv: bool) -> set | None:
+    """v35 (PLAN_LEAD_V6 Phase 185): IDs der HV-Gruppe des Betrachters (lead_v2.hv_gruppe_fuer),
+    None für Büro-Rollen – alle HV-Filter des Dashboards rechnen mit der Gruppe."""
+    if not hv or benutzer is None:
+        return None
+    return lead_v2.hv_gruppe_fuer(session, benutzer.id) or {benutzer.id}
+
+
+def _meine_leads(abfrage, benutzer, hv: bool, mit_freien: bool = True, gruppe: set | None = None):
+    """Zuständigkeitsfilter: HV = vorgaenge.ad_id in der Gruppe (v35; ohne `gruppe`
+    nur die eigene ID); Büro = leadmanager_id (freie Leads ohne Leadmanager zählen
+    mit, wie in der Anrufliste)."""
     if hv:
-        return abfrage.filter(Vorgang.ad_id == benutzer.id)
+        return abfrage.filter(Vorgang.ad_id.in_(gruppe or {benutzer.id}))
     if mit_freien:
         return abfrage.filter((Vorgang.leadmanager_id == benutzer.id)
                               | (Vorgang.leadmanager_id.is_(None)))
@@ -210,7 +219,8 @@ def lead_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
     abfrage = (session.query(Vorgang)
                .filter(Vorgang.lead_phase.isnot(None),
                        ~Vorgang.lead_phase.in_(ABGESCHLOSSEN)))
-    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv))   # v31: kein Archiv
+    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv,
+                                                    gruppe=_gruppe(session, benutzer, hv)))   # v31: kein Archiv
     if horizont is None:
         abfrage = abfrage.filter(
             ((Vorgang.lead_phase == "zurueckgestellt")
@@ -317,7 +327,8 @@ def ohne_naechsten_schritt(session: Session, benutzer, jetzt: datetime,
                        Vorgang.versuch_nr.isnot(None), Vorgang.versuch_nr >= 1,
                        Vorgang.naechste_aktion_am.is_(None),
                        Vorgang.zurueckgestellt_bis.is_(None)))
-    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv))
+    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv,
+                                                    gruppe=_gruppe(session, benutzer, hv)))
     vorgaenge = abfrage.all()
     if not vorgaenge:
         return []
@@ -358,7 +369,8 @@ def zugeteilte(session: Session, benutzer, hv: bool) -> dict:
     Nachtrag 08.10.2026 (Antwort Andreas): nicht mehr Teil des Dashboards
     (Block entfernt); die Funktion bleibt für Auswertungen/Tests erhalten."""
     abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
-    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv, mit_freien=False))
+    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv, mit_freien=False,
+                                                    gruppe=_gruppe(session, benutzer, hv)))
     vorgaenge = abfrage.order_by(Vorgang.eingang_am.desc().nullslast(), Vorgang.id.desc()).all()
     kunden = _kunden(session, vorgaenge)
     je_phase: dict[str, list] = {p: [] for p in LEAD_PHASEN}
@@ -390,8 +402,8 @@ def zugeteilte(session: Session, benutzer, hv: bool) -> dict:
 def termine(session: Session, benutzer, jetzt: datetime, horizont: int,
             hv: bool, alle: bool = False) -> list[dict]:
     """Termine (vot_termine, alle Terminarten außer Sperrzeiten) ab heute bis
-    Horizont: HV = eigene ad_id; Büro = Termine der eigenen Leads
-    (leadmanager_id), mit Umschalter alle."""
+    Horizont: HV = ad_id in der eigenen Gruppe (v35, vorher nur die eigene ID);
+    Büro = Termine der eigenen Leads (leadmanager_id), mit Umschalter alle."""
     start = _tag(jetzt)
     ende = start + timedelta(days=horizont + 1)
     abfrage = (session.query(VotTermin)
@@ -400,7 +412,7 @@ def termine(session: Session, benutzer, jetzt: datetime, horizont: int,
                        VotTermin.beginn.isnot(None),
                        VotTermin.beginn >= start, VotTermin.beginn < ende))
     if hv:
-        abfrage = abfrage.filter(VotTermin.ad_id == benutzer.id)
+        abfrage = abfrage.filter(VotTermin.ad_id.in_(_gruppe(session, benutzer, hv) or {benutzer.id}))
     liste = abfrage.order_by(VotTermin.beginn).all()
     vorgang_ids = {t.vorgang_id for t in liste}
     vorgaenge = ({v.id: v for v in session.query(Vorgang).filter(Vorgang.id.in_(vorgang_ids))}
@@ -634,7 +646,7 @@ def daten(session: Session, benutzer, termine_alle: bool = False,
 
 # --- Schnellaktionen Wiedervorlage (Erledigt / Verschieben) -----------------------
 
-def _zugriff_wv(benutzer, vorgang: Vorgang, art: str, hv: bool) -> bool:
+def _zugriff_wv(benutzer, vorgang: Vorgang, art: str, hv: bool, gruppe: set | None = None) -> bool:
     if benutzer is None:
         return False
     if benutzer.basisrolle == "admin":
@@ -644,7 +656,8 @@ def _zugriff_wv(benutzer, vorgang: Vorgang, art: str, hv: bool) -> bool:
             return vorgang.wiedervorlage_benutzer_id == benutzer.id
         return vorgang.wiedervorlage_benutzer_id in (None, benutzer.id)
     if hv:
-        return vorgang.ad_id == benutzer.id
+        # v35 (Phase 185): Lead-Wiedervorlagen der ganzen Gruppe
+        return vorgang.ad_id in (gruppe or {benutzer.id})
     return ist_buero(benutzer) and vorgang.leadmanager_id in (None, benutzer.id)
 
 
@@ -662,7 +675,7 @@ def wiedervorlage_rueckgaengig(session: Session, vorgang: Vorgang, benutzer, art
     """v31 (PLAN_LEAD_V5 Phase 158): „Rückgängig“ nach Erledigt – alten Zeitpunkt wieder
     setzen (zurückgestellt: Phase und Datum). Liefert {ok, meldung}."""
     hv = ist_hv(session, benutzer)
-    if not _zugriff_wv(benutzer, vorgang, art, hv):
+    if not _zugriff_wv(benutzer, vorgang, art, hv, _gruppe(session, benutzer, hv)):
         return {"ok": False, "meldung": "Kein Zugriff auf diese Wiedervorlage."}
     alt = lead_todos.faellig_parsen(datum_text)
     if alt is None:
@@ -693,7 +706,7 @@ def wiedervorlage_aktion_voll(session: Session, vorgang: Vorgang, benutzer, art:
     """Wie wiedervorlage_aktion, liefert {ok, meldung, rueckgaengig: {art, datum, quelle} | None}
     – rueckgaengig trägt nach „Erledigt“ den alten Zeitpunkt für den Rückgängig-Link."""
     hv = ist_hv(session, benutzer)
-    if not _zugriff_wv(benutzer, vorgang, art, hv):
+    if not _zugriff_wv(benutzer, vorgang, art, hv, _gruppe(session, benutzer, hv)):
         return {"ok": False, "meldung": "Kein Zugriff auf diese Wiedervorlage.", "rueckgaengig": None}
     kunde = session.get(Kunde, vorgang.kunde_id)
     name = kunde.anzeige_name if kunde else f"Vorgang {vorgang.id}"

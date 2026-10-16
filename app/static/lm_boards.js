@@ -43,11 +43,36 @@
       /einstellungen/spalten, sonst /lead-management/boards/spalten) und data-lm-suche="1"
       (Schnellfilter über data-suche der Zeilen). Zeilen tragen data-zeile statt
       data-vorgang; feste Spalten kommen aus draggable="false" (Kopf) bzw. dem gesperrten
-      Häkchen im Spaltenwähler – kein fester Key „lead“ mehr im Skript. */
+      Häkchen im Spaltenwähler – kein fester Key „lead“ mehr im Skript.
+   6. v35 (PLAN_LEAD_V6 Phase 186, Agent B): Inline-Bearbeitung erweitert – Vertriebskanal
+      (Auswahl hinter der Pille), Interessen (Popover mit Häkchen: Häkchen speichern 600 ms
+      verzögert, „Übernehmen“ sofort, Abbrechen/Escape verwirft, Verlassen speichert), Großkunde
+      (Häkchen), Objektart (Auswahl), Telefon/E-Mail (Klick in die Zelle öffnet das Textfeld,
+      Enter/Verlassen speichert, Escape bricht ab). Die Widget-Logik ist seitenunabhängig und
+      sendet über window.lmInline.senden(vorgangId, nutzlast, zeile) – Standard ist die
+      Board-Route (zeileSenden); der Infoabend (lm_info.js) ersetzt den Sender durch seine
+      Route. Die Handelsvertreter-Ansicht trägt data-lm-inline="handelsvertreter" und bekommt
+      damit die Inline-Felder (Rechte je Zeile serverseitig, Zeile kommt vom Makro hv_zeile).
+      Nach der Sofortsuche (document „lm-sofort:geladen“, lm_sofort.js) werden Layout,
+      Spaltenbreiten, Zähler und Markierungen neu berechnet; die lokale Schnellsuche ruht,
+      wenn das Suchfeld zu einem Sofortsuche-Formular gehört (data-lm-sofort). */
 (function () {
     'use strict';
     if (window.__lmBoardsGeladen) { return; }
     window.__lmBoardsGeladen = true;
+
+    // ---------- 6. v35: gemeinsame Inline-Helfer (auch für lm_info.js) ----------
+    window.lmInline = window.lmInline || {
+        wert: function (el) {
+            if (!el) { return ''; }
+            if (el.type === 'checkbox') { return el.checked ? '1' : ''; }
+            return el.value;
+        },
+        popoverWerte: function (details) {
+            return Array.from(details.querySelectorAll('input[type=checkbox]:checked')).map(function (cb) { return cb.value; });
+        },
+        senden: null
+    };
 
     // ---------- 1. Icon-Leiste ----------
     function kopfHoehe() {
@@ -82,6 +107,9 @@
     if (!kopf && !spaltenTraeger) { return; }
     const board = kopf ? kopf.dataset.lmBoard : spaltenTraeger.dataset.lmSpaltenBoard;
     const nurSpalten = !kopf;
+    // v35 (Phase 186): HV-Ansicht mit Inline-Feldern (data-lm-inline) – Senden über die Board-Route
+    const inlineTraeger = document.querySelector('[data-lm-inline]');
+    const inlineAktiv = !nurSpalten || !!inlineTraeger;
     // v33 (Phase 174): Speicher-Route je Rolle (data-lm-spalten-url), sonst die Lead-Route;
     // Zeilen-Selektor für Lead-Boards (data-vorgang) und Angebotstool-Tabellen (data-zeile);
     // Schnellfilter auch im Nur-Spalten-Modus, wenn die Seite data-lm-suche="1" trägt
@@ -118,6 +146,7 @@
     // ---- fetch: Zeile ändern
     async function zeileSenden(vorgangId, nutzlast, zeile, danach) {
         nutzlast.board = board;
+        if (inlineTraeger) { nutzlast.zurueck = window.location.pathname + window.location.search; }   // v35: HV-Ansicht
         let antwort;
         try {
             const r = await fetch('/lead-management/boards/zeile/' + vorgangId, {
@@ -156,6 +185,8 @@
                     zeile.replaceWith(neu);
                     neu.classList.add('lm-geaendert');
                 }
+                // v35: andere Skripte (lm_hv.js) hängen ihre Handler an die neue Zeile
+                document.dispatchEvent(new CustomEvent('lm-sofort:geladen', { detail: { zeile: neu } }));
             } else if (antwort.verschoben) {
                 zeile.remove();
                 melden(antwort.meldung + ' ' + antwort.verschoben, false);
@@ -169,6 +200,7 @@
         if (danach) { danach(!!antwort.ok); }
         return antwort;
     }
+    if (inlineAktiv) { window.lmInline.senden = function (id, nutzlast, zeile, danach) { return zeileSenden(id, nutzlast, zeile, danach); }; }
 
     // ---- Status-Dialog (Pflichtgründe), gemeinsam für Inline und Sammelaktion
     const dlgStatus = document.getElementById('dlg-status');
@@ -246,16 +278,17 @@
         }
     }
 
-    // ---- Inline-Felder (delegiert; Zeilen werden ersetzt) – nicht auf Infoabend/HV
-    // (dort schreiben lm_info.js bzw. lm_hv.js über eigene Routen)
-    if (!nurSpalten) {
+    // ---- Inline-Felder (delegiert; Zeilen werden ersetzt) – nicht auf dem Infoabend
+    // (dort schreibt lm_info.js über seine eigene Route); v35: auch in der HV-Ansicht
+    // (data-lm-inline), Textfelder (.lm-text) und das Interessen-Popover laufen unten (Teil 6)
+    if (inlineAktiv) {
         document.addEventListener('change', function (e) {
             const el = e.target.closest('.lm-inline');
-            if (!el) { return; }
+            if (!el || el.classList.contains('lm-text') || el.closest('.lm-popover')) { return; }
             const feld = el.dataset.feld;
             if (feld === 'status') { statusWechsel(el); return; }
             const zeile = el.closest('tr');
-            zeileSenden(el.dataset.vorgang, { feld: feld, wert: el.value }, zeile);
+            zeileSenden(el.dataset.vorgang, { feld: feld, wert: window.lmInline.wert(el) }, zeile);
         });
         // Notiz: Enter speichert (blur löst change aus)
         document.addEventListener('keydown', function (e) {
@@ -264,6 +297,95 @@
             }
         });
     }
+
+    // ---------- 6. v35 (Phase 186): Textzellen (Telefon/E-Mail) und Interessen-Popover ----------
+    // seitenunabhängig – der Sender kommt aus window.lmInline.senden (Board-Route bzw. Infoabend)
+    function inlineSenden(id, nutzlast, zeile, danach) {
+        const senden = window.lmInline.senden;
+        if (!senden) { return Promise.resolve(null); }
+        return senden(id, nutzlast, zeile, danach);
+    }
+    function textzelleOeffnen(td) {
+        const eingabe = td.querySelector('input.lm-text');
+        const anzeige = td.querySelector('.lm-text-anzeige');
+        if (!eingabe || !eingabe.hidden) { return; }
+        eingabe.hidden = false;
+        if (anzeige) { anzeige.hidden = true; }
+        eingabe.focus(); eingabe.select();
+    }
+    function textzelleSchliessen(eingabe, speichern) {
+        const td = eingabe.closest('td');
+        const anzeige = td ? td.querySelector('.lm-text-anzeige') : null;
+        const alt = eingabe.dataset.aktuell || '';
+        const neu = eingabe.value.trim();
+        if (speichern && neu !== alt) {
+            eingabe.dataset.aktuell = neu;
+            inlineSenden(eingabe.dataset.vorgang, { feld: eingabe.dataset.feld, wert: neu }, eingabe.closest('tr'),
+                function (ok) { if (!ok) { eingabe.dataset.aktuell = alt; eingabe.value = alt; } });
+            return;
+        }
+        eingabe.value = alt;
+        eingabe.hidden = true;
+        if (anzeige) { anzeige.hidden = false; }
+    }
+    document.addEventListener('click', function (e) {
+        const td = e.target.closest('td[data-lm-text]');
+        if (!td || e.target.closest('a, input, button, select')) { return; }
+        textzelleOeffnen(td);
+    });
+    document.addEventListener('keydown', function (e) {
+        const el = e.target;
+        if (!el.classList || !el.classList.contains('lm-text')) { return; }
+        if (e.key === 'Enter') { e.preventDefault(); el.dataset.lmFertig = '1'; textzelleSchliessen(el, true); }
+        else if (e.key === 'Escape') { e.preventDefault(); el.dataset.lmFertig = '1'; textzelleSchliessen(el, false); }
+    });
+    document.addEventListener('focusout', function (e) {
+        const el = e.target;
+        if (!el.classList || !el.classList.contains('lm-text') || el.hidden) { return; }
+        if (el.dataset.lmFertig === '1') { delete el.dataset.lmFertig; return; }
+        textzelleSchliessen(el, true);
+    });
+    // Interessen-Popover: Häkchen speichern verzögert (mehrere Klicks sammeln), Übernehmen sofort,
+    // Abbrechen/Escape stellt den gespeicherten Stand wieder her, Klick daneben = Verlassen (speichert)
+    const popoverTimer = new WeakMap();
+    function popoverGeaendert(details) {
+        const aktuell = (details.dataset.aktuell || '').split(',').filter(Boolean).sort().join(',');
+        return window.lmInline.popoverWerte(details).slice().sort().join(',') !== aktuell;
+    }
+    function popoverSpeichern(details) {
+        clearTimeout(popoverTimer.get(details));
+        const werte = window.lmInline.popoverWerte(details);
+        if (!popoverGeaendert(details)) { details.removeAttribute('open'); return; }
+        details.dataset.aktuell = werte.join(',');
+        details.removeAttribute('open');
+        inlineSenden(details.dataset.vorgang, { feld: details.dataset.feld || 'interessen', wert: werte }, details.closest('tr'));
+    }
+    function popoverVerwerfen(details) {
+        clearTimeout(popoverTimer.get(details));
+        const aktuell = (details.dataset.aktuell || '').split(',').filter(Boolean);
+        details.querySelectorAll('input[type=checkbox]').forEach(function (cb) { cb.checked = aktuell.indexOf(cb.value) >= 0; });
+        details.removeAttribute('open');
+    }
+    document.addEventListener('change', function (e) {
+        const details = e.target.closest('details.lm-popover');
+        if (!details || e.target.type !== 'checkbox') { return; }
+        clearTimeout(popoverTimer.get(details));
+        popoverTimer.set(details, setTimeout(function () { if (details.open) { popoverSpeichern(details); } }, 600));
+    });
+    document.addEventListener('click', function (e) {
+        const ok = e.target.closest('.lm-popover-ok');
+        const abbruch = e.target.closest('.lm-popover-abbruch');
+        if (ok) { e.preventDefault(); popoverSpeichern(ok.closest('details.lm-popover')); return; }
+        if (abbruch) { e.preventDefault(); popoverVerwerfen(abbruch.closest('details.lm-popover')); return; }
+        document.querySelectorAll('details.lm-popover[open]').forEach(function (d) {
+            if (!d.contains(e.target)) { popoverSpeichern(d); }
+        });
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') { return; }
+        const details = e.target.closest ? e.target.closest('details.lm-popover[open]') : null;
+        if (details) { e.preventDefault(); popoverVerwerfen(details); }
+    });
 
     // ---- Sticky-Geometrie (v25): Filterblock bleibt stehen, Tabellen-Container scrollt
     const filterblock = document.getElementById('lm-filterblock');
@@ -479,9 +601,10 @@
         window.addEventListener('scroll', function () { clearTimeout(scrollTimer); scrollTimer = setTimeout(layoutNeu, 80); }, { passive: true });
     }
 
-    // ---- Schnellsuche über die sichtbaren Zeilen (Server-Filter bleibt per Enter)
+    // ---- Schnellsuche über die sichtbaren Zeilen (Server-Filter bleibt per Enter);
+    // v35: ruht, wenn das Suchfeld zu einem Sofortsuche-Formular gehört (lm_sofort.js lädt vom Server)
     const suche = document.getElementById('lm-suche');
-    if (suche && schnellsuche) {
+    if (suche && schnellsuche && !(suche.form && suche.form.dataset.lmSofort !== undefined)) {
         let timer = null;
         suche.addEventListener('input', function () {
             clearTimeout(timer);
@@ -760,8 +883,17 @@
         });
     }
     // gespeicherte Breiten: Layout beim Laden fixieren
-    alleTabellen().forEach(function (tabelle) {
-        if (tabelle.dataset.lmBreiten === '1') { layoutFixieren(tabelle); }
+    function breitenFixieren() {
+        alleTabellen().forEach(function (tabelle) {
+            if (tabelle.dataset.lmBreiten === '1') { layoutFixieren(tabelle); }
+        });
+    }
+    breitenFixieren();
+    // v35 (Phase 186): nach der Sofortsuche sind die Tabellen neu – Breiten, Zähler, Markierungen, Layout
+    document.addEventListener('lm-sofort:geladen', function () {
+        breitenFixieren();
+        zaehlerAktualisieren();
+        sammelAktualisieren();
     });
     let zieht = null;
     document.addEventListener('pointerdown', function (e) {

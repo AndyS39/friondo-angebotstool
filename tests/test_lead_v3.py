@@ -71,6 +71,7 @@ NAV_MEHR = [("anrufliste", "/lead-management/anrufliste"),
             ("posteingang", "/lead-management/posteingang"),
             ("import", "/lead-management/import"),
             ("neu", "/lead-management/neu"),
+            ("kanaele", "/lead-management/kanaele"),   # v35 (PLAN_LEAD_V6 Phase 184): Vertriebskanal-Stammdaten
             ("lead-einstellungen", "/parametrierung/lead-einstellungen")]
 NAV_KEYS = {k for k, _ in NAV_HAUPT} | {k for k, _ in NAV_MEHR} | {"tabelle", "info-veranstaltung"}
 # weitere GET-Einstiege des Moduls ohne Pfadparameter (V1 + V2)
@@ -151,7 +152,8 @@ def zeile_html(seite: str, vorgang_id: int) -> str:
 
 class Basis(unittest.TestCase):
     PARAMETER = ("lead_freigabe_modus", "score_aktiv", "ohne_schritt_tage",
-                 "kanal_ad_regel", "routing_anbieter", "kalender_sync", "mail_modus")
+                 "kanal_ad_regel", "routing_anbieter", "kalender_sync", "mail_modus",
+                 "hv_gruppe_simon_mitglieder")   # v35 (Phase 185): Test-HV steht allein
 
     @classmethod
     def setUpClass(cls):
@@ -165,6 +167,11 @@ class Basis(unittest.TestCase):
 
         def _vorbereiten():
             cls.s.rollback()
+            # v35 (PLAN_LEAD_V6 Phase 185): die HV-Sicht arbeitet mit der Gruppe; ohne Mitgliederliste
+            # zöge der v31-Rückfall („alle HV außer René“) die Dev-DB-Vertreter in die Gruppe des
+            # Test-HV – Simons Mitglieder = nur der Dev-DB-Eintrag, der Test-HV steht allein
+            kern.parameter_setzen(cls.s, "hv_gruppe_simon_mitglieder",
+                                  kern.parameter_holen(cls.s, "hv_gruppe_simon", "") or "0")
             kern.parameter_setzen(cls.s, "lead_freigabe_modus", "admin")
             kern.parameter_setzen(cls.s, "score_aktiv", "aus")
             kern.parameter_setzen(cls.s, "ohne_schritt_tage", "2")
@@ -1115,7 +1122,7 @@ class L_Pruefung(Basis):
         self.assertIn('class="lm-th-stift" data-key="ort"', kopf)
         self.assertIn('<th class="sp-hv">Vertreter</th>', kopf)
         zeile = zeile_html(seite, v.id)
-        self.assertIn('class="sp-lead"', zeile)
+        self.assertIn('class="sp-lead', zeile)   # v35 (Phase 186, B): Zelle trägt ggf. lm-pflicht-fehlt
         self.assertIn('class="sp-hv"', zeile)
         # Standard der HV-Ansicht = v23-Spalten (Außendienst = Spalte „Vertreter“, Innendienst,
         # Notiz, Straße, E-Mail, Wiedervorlage ausgeblendet, aber einblendbar)

@@ -2,6 +2,7 @@
 {% from "_symbole.html" import symbol %}
 {% import "_interesse.html" as interesse_ui %}
 {% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
+{% from "_komponenten.html" import kanal_badge %}
 
 {% block titel %}Kunden – Friondo Angebotstool{% endblock %}
 {% block mainklasse %}breit{% endblock %}
@@ -26,7 +27,7 @@
 {%- elif key == 'kunden_nr' -%}
 <td class="sp-kunden_nr">{{ kunde.kunden_nr }}</td>
 {%- elif key == 'kanal' -%}
-<td class="sp-kanal dezent">{{ kunde.vertriebskanal or '–' }}</td>
+<td class="sp-kanal dezent">{#- v35 (Phase 184): Kanal-Label mit Farbe aus den Stammdaten #}{% if kunde.vertriebskanal %}{{ kanal_badge(kunde.vertriebskanal) }}{% else %}–{% endif %}</td>
 {%- elif key == 'objektart' -%}
 <td class="sp-objektart">{{ kunde.objektart or '' }}{% if kunde.objektart == 'MFH' and kunde.parteien %} <span class="dezent">({{ kunde.parteien }} Parteien)</span>{% endif %}</td>
 {%- elif key == 'interessen' -%}

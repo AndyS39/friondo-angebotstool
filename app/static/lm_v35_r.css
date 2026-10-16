@@ -1,0 +1,50 @@
+/* v35 (PLAN_LEAD_V6 Phase 185, Agent R): Profilbild in den Avataren und Seite „Mein Profil“.
+   Nur Tokens (Design v2, beide Modi). Eingebunden über base.html (Orchestrator) – die Avatar-
+   Bilder erscheinen in Boards (.lm-avatar), Kartei (.lk-avatar), HV-Ansicht (.hv-avatar),
+   Benutzerverwaltung/Mein Tag (.avatar). Ohne diese Datei zeigen die <img width/height>-
+   Attribute das Bild in Avatar-Größe, nur nicht rund. */
+
+/* --- Avatare mit Bild (Makros avatar / _tabelle.avatar / Kartei / HV-Gruppe) --- */
+.avatar.avatar-bild,
+.lm-avatar.lm-avatar-bild,
+.lk-avatar.lk-avatar-bild,
+.hv-avatar.hv-avatar-bild {
+    overflow: hidden;
+    padding: 0;
+    background: var(--flaeche-abgesetzt);
+    color: transparent;
+    text-indent: 0;
+}
+.avatar-bild img,
+.lm-avatar-bild img,
+.lk-avatar-bild img,
+.hv-avatar-bild img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* --- Seite „Mein Profil“ --- */
+.profil-seite .profil-karte { margin-bottom: var(--a-4, 1rem); padding: var(--a-4, 1rem); }
+.profil-kopf { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+.profil-bild-wrap { position: relative; flex: 0 0 auto; }
+.profil-bild { width: 128px; height: 128px; border-radius: 50%; object-fit: cover; display: block;
+    border: 2px solid var(--linie); background: var(--flaeche-abgesetzt); }
+.profil-bild[hidden] { display: none; }
+.avatar.profil-avatar { width: 128px; height: 128px; font-size: 2.4rem; }
+.profil-text { min-width: 0; flex: 1 1 240px; }
+.profil-name { margin: 0 0 0.25rem; font-size: var(--t-l, 1.25rem); color: var(--text-titel); }
+.profil-hinweis { max-width: 60ch; }
+.profil-bild-form .formaktionen, .profil-daten-form .formaktionen { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.profil-zuschnitt-hinweis { margin: 0 0 0.75rem; }
+.profil-zuschnitt-hinweis.lm-rot { color: var(--status-rot); }
+@media (max-width: 600px) {
+    .profil-kopf { flex-direction: column; align-items: flex-start; }
+    .profil-bild, .avatar.profil-avatar { width: 96px; height: 96px; }
+    /* Handy (390 px): Felder untereinander statt nebeneinander (sonst ragt Telefon aus dem Bild) */
+    .profil-daten-form .formzeile, .profil-bild-form .formzeile { flex-wrap: wrap; }
+    .profil-daten-form .formzeile label, .profil-bild-form .formzeile label { flex: 1 1 100%; min-width: 0; }
+    .profil-seite .formular { padding: 1rem; }
+}

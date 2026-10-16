@@ -97,6 +97,11 @@ templates.env.globals["darstellung_werte"] = (
 from app.projektierung_logik import FORMULAR_NAMEN as _FORMULAR_NAMEN  # noqa: E402
 templates.env.globals["formular_namen"] = _FORMULAR_NAMEN
 
+# v35 (PLAN_LEAD_V6 Phase 185, Agent R): Profilbild-URL je Benutzer für die Avatar-Makros
+# (_komponenten.avatar, _tabelle.avatar, Kartei, HV-Ansicht) – leer = Initialen
+from app import profilbild as _profilbild  # noqa: E402
+templates.env.globals["profilbild_url"] = _profilbild.url_fuer
+
 # Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
     ("/leads", "Leads VOT"),

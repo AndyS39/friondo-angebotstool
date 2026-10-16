@@ -31,7 +31,9 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<form method="get" action="/lead-management/board" class="suchleiste">
+{#- v35 (PLAN_LEAD_V6 Phase 186, Agent B): Sofortsuche – Auswahl/Häkchen sofort, Suchfeld 300 ms nach dem
+    Tippen, das Kanban (data-lm-sofort-ziel) wird ohne Seitenneuladen getauscht; kein „Filtern“-Knopf #}
+<form method="get" action="/lead-management/board" class="suchleiste" data-lm-sofort="1">
     <input type="hidden" name="board" value="{{ board | default('hauptboard') }}">
     <label class="kontrollfeld">
         <select name="meine">
@@ -74,12 +76,12 @@
            value="{{ filter_werte.eingang_von.strftime('%Y-%m-%d') if filter_werte.eingang_von }}"></label>
     <label class="kontrollfeld">bis <input type="date" name="eingang_bis"
            value="{{ filter_werte.eingang_bis.strftime('%Y-%m-%d') if filter_werte.eingang_bis }}"></label>
-    <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Suche">
+    <input type="search" name="q" id="lm-suche" value="{{ filter_werte.q }}" placeholder="Suche – sofort beim Tippen" autocomplete="off">
     {% if board != 'terminiert' %}
     <label class="kontrollfeld"><input type="checkbox" name="seiten" value="1"
            {{ 'checked' if filter_werte.seiten }}> Zurückgestellt/Nicht erreicht/Disqualifiziert</label>
     {% endif %}
-    <button class="knopf klein" type="submit">Filtern</button>
+    <noscript><button class="knopf klein" type="submit">Filtern</button></noscript>
 </form>
 
 {% macro lead_karte(k) %}
@@ -114,7 +116,7 @@
 </div>
 {% endmacro %}
 
-<div class="kanban lm-kanban-{{ board | default('hauptboard') }}">
+<div class="kanban lm-kanban-{{ board | default('hauptboard') }}" data-lm-sofort-ziel="kanban">
     {% for phase in spalten_reihenfolge %}
     <div class="kanban-spalte" data-phase="{{ phase }}"
          ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
@@ -228,4 +230,7 @@ function kartenDrop(e, ziel) {
     boardGezogen = null;
 }
 </script>
+{#- v35 (Phase 186): Sofortsuche #}
+<link rel="stylesheet" href="/static/lm_v35_b.css?v={{ css_version }}">
+<script src="/static/lm_sofort.js?v={{ css_version }}" defer></script>
 {% endblock %}

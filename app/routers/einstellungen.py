@@ -139,3 +139,118 @@ def signatur_speichern(request: Request):
     _ok, meldung = signaturen.speichern(benutzer.id, dateien)
     return RedirectResponse("/einstellungen/signatur?meldung=" + quote_plus(meldung),
                             status_code=303)
+
+
+# --- v35 (PLAN_LEAD_V6 Phase 185, Agent R): „Mein Profil“ – Profilbild je Benutzer -----------
+# Jede Rolle (Menüpunkt in base.html): Bild hochladen (JPG/PNG, max. 2 MB, quadratischer
+# Zuschnitt im Browser über profil_v35.js UND serverseitig mit Pillow, app/profilbild.py),
+# Vorschau, Entfernen. Ablage wie v29 (data/benutzerbilder/<id>.jpg, benutzer.bild_datei) –
+# das Bild ersetzt die Initialen-Avatare (Makros avatar/_tabelle/Kartei/HV-Ansicht/Mein Tag)
+# und steht in der Terminbestätigung ({vertriebler_block}). Admin setzt Bilder weiterhin in
+# der Benutzerverwaltung (AD-Profil). Zusätzlich [ANNAHME]: Vorname und Telefon pflegt der
+# Benutzer hier selbst (beide erscheinen in der Terminbestätigung/„Hallo, <Vorname>“); Name,
+# E-Mail und Rolle bleiben Sache des Admins.
+# v27-Regel: die Upload-Route liest das Formular VOR dem ersten Datenbankzugriff und schreibt
+# die Datei ohne offene Sitzung; erst danach die kurze Schreibtransaktion (bild_datei).
+
+from urllib.parse import quote_plus  # noqa: E402 – Meldungen der Profil-Routen
+
+PROFIL_PFAD = "/einstellungen/profil"
+
+
+def _rollen_text(benutzer) -> str:
+    """Anzeigename(n) der Rollen aus dem Katalog (v33), z. B. „Außendienst · Handelsvertreter“."""
+    try:
+        from app import rollen as rollen_modul
+        namen = rollen_modul.namen()
+    except Exception:   # noqa: BLE001
+        namen = {}
+    return " · ".join(namen.get(r, r) for r in benutzer.rollen_liste)
+
+
+@router.get("/profil")
+def profil_seite(request: Request, session: Session = Depends(get_session)):
+    """Eigenes Profil: Bild (Vorschau/Upload/Entfernen), Vorname, Telefon; Name, E-Mail und
+    Rolle nur zur Anzeige."""
+    from app import profilbild
+    from app.models import Benutzer
+    from app.templating import render
+    benutzer = request.state.benutzer
+    person = session.get(Benutzer, benutzer.id) if benutzer is not None else None
+    if person is None:
+        return RedirectResponse("/login", status_code=303)
+    anzeige = (f"{person.vorname} {person.name}".strip() if person.vorname
+               and person.vorname.lower() not in person.name.lower() else person.name)
+    return render(request, "einstellungen/profil.html", aktiv="/einstellungen",
+                  person=person, anzeige_name=anzeige, rollen_text=_rollen_text(person),
+                  bild_url=profilbild.url_fuer(person.id),
+                  mobil=person.basisrolle in ("aussendienst", "montage"),
+                  max_mb=profilbild.MAX_BYTES // (1024 * 1024), kante=profilbild.KANTE,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/profil")
+def profil_speichern(request: Request, session: Session = Depends(get_session)):
+    """Vorname und Telefon des angemeldeten Benutzers [ANNAHME: Selbstpflege dieser
+    beiden Felder]; Name/E-Mail/Rolle ändert nur der Admin (Benutzerverwaltung)."""
+    from app.models import Benutzer
+    form = anfrage.formular(request)
+    benutzer = request.state.benutzer
+    person = session.get(Benutzer, benutzer.id) if benutzer is not None else None
+    if person is None:
+        return RedirectResponse("/login", status_code=303)
+    if form.get("vorname") is not None:
+        person.vorname = (form.get("vorname") or "").strip()[:100]
+    if form.get("telefon") is not None:
+        person.telefon = (form.get("telefon") or "").strip()[:50]
+    session.commit()
+    return RedirectResponse(PROFIL_PFAD + "?meldung=" + quote_plus("Profil gespeichert."),
+                            status_code=303)
+
+
+@router.post("/profil/bild")
+def profil_bild_speichern(request: Request, session: Session = Depends(get_session)):
+    """Upload (Feld `bild`, JPG/PNG ≤ 2 MB) oder `aktion=entfernen` – immer nur das eigene
+    Bild. Formular und Bilddatei VOR dem ersten Datenbankzugriff (Upload = Netz-I/O, v27),
+    Datei ohne offene Sitzung schreiben, danach nur bild_datei setzen."""
+    from app import profilbild
+    from app.models import Benutzer
+    form = anfrage.formular(request)
+    benutzer = request.state.benutzer
+    if benutzer is None:
+        return RedirectResponse("/login", status_code=303)
+    if form.get("aktion") == "entfernen":
+        profilbild.entfernen(benutzer.id)
+        person = session.get(Benutzer, benutzer.id)
+        if person is not None:
+            person.bild_datei = ""
+            session.commit()
+        return RedirectResponse(PROFIL_PFAD + "?meldung=" + quote_plus("Profilbild entfernt."),
+                                status_code=303)
+    datei = form.get("bild")
+    daten = b""
+    if datei is not None and getattr(datei, "filename", ""):
+        daten = datei.file.read(profilbild.MAX_BYTES + 1)
+    ok, meldung, rel = profilbild.speichern(benutzer.id, daten)
+    if ok:
+        person = session.get(Benutzer, benutzer.id)
+        if person is not None:
+            person.bild_datei = rel
+            session.commit()
+    return RedirectResponse(PROFIL_PFAD + "?meldung=" + quote_plus(meldung), status_code=303)
+
+
+@router.get("/profil/bild/{benutzer_id}")
+def profil_bild(request: Request, benutzer_id: int):
+    """Profilbild eines Benutzers für die Avatare (jede angemeldete Rolle); 404 ohne Bild.
+    Cache-Header: privat, ein Tag – die Avatar-URL trägt ?v=<Änderungszeit> (profilbild.url_fuer),
+    nach einem Upload laden Browser also sofort das neue Bild. Kein Datenbankzugriff."""
+    from fastapi.responses import FileResponse, Response
+    from app import profilbild
+    if getattr(request.state, "benutzer", None) is None:
+        return Response(status_code=404)
+    pfad = profilbild.pfad_fuer(benutzer_id)
+    if pfad is None:
+        return Response(status_code=404)
+    return FileResponse(str(pfad), media_type=profilbild.mime_fuer(pfad),
+                        headers={"Cache-Control": "private, max-age=86400"})

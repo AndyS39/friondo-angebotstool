@@ -90,6 +90,16 @@
                 {% endfor %}
             </select>
         </label>
+        {# v35 (PLAN_LEAD_V6 Phase 184): Vertriebskanal aus den Stammdaten (nach Häufigkeit); ohne Wahl gilt
+           der Kanal der Quelle, sonst „?“ = Vertriebskanal unklar (rotes Pflichtfeld in der Kartei) #}
+        <label>Vertriebskanal
+            <select name="vertriebskanal">
+                <option value="">– aus der Quelle, sonst „?“ (unklar) –</option>
+                {% for kn in kanal_wahl | default([]) %}
+                    <option value="{{ kn }}" {{ 'selected' if daten.get('vertriebskanal') == kn }}>{{ kn }}</option>
+                {% endfor %}
+            </select>
+        </label>
     </div>
     <label>Notiz / Anfragetext
         <textarea name="nachricht" rows="3">{{ daten.get('nachricht', '') }}</textarea>

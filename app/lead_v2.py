@@ -248,6 +248,12 @@ def pflichtfelder_offen(session: Session, kunde: Kunde, vorgang: Vorgang | None 
             offen.append("Anzahl Parteien")
         if not ((kunde.rechnung_strasse or "").strip() and (kunde.rechnung_ort or "").strip()):
             offen.append("Rechnungsadresse")
+    # v35 (PLAN_LEAD_V6 Phase 184): Kanal „?“ = „Vertriebskanal unklar“ zählt immer als offenes
+    # Pflichtfeld („Vertriebskanal klären“) – unabhängig vom Parameter pflichtfelder; sperrt
+    # damit Terminierung (lead_kartei.terminierung_pruefung) und TAIFUN-Übergabe (Agent T)
+    from app import lead_kanaele
+    if lead_kanaele.kanal_unklar(kunde) and lead_kanaele.UNKLAR_HINWEIS not in offen:
+        offen.append(lead_kanaele.UNKLAR_HINWEIS)
     return offen
 
 
@@ -357,16 +363,77 @@ def bestand_nachziehen(session: Session) -> list:
 def zugriff_erlaubt(session: Session, benutzer, vorgang: Vorgang | None = None) -> bool:
     """Darf dieser Benutzer das Lead-Modul bzw. diesen Vorgang bearbeiten?
     Modul-Sichtbare (kern.lead_modul_sichtbar) immer; Handelsvertreter (A-1)
-    nur an Vorgaengen mit vorgaenge.ad_id = eigene ID (ohne Vorgang: ja, die
-    Sicht filtert dann server-seitig auf eigene Leads)."""
+    ohne Vorgang ja (die Sicht filtert dann server-seitig auf die Gruppe).
+    v35 (PLAN_LEAD_V6 Phase 185): mit Vorgang entscheidet bearbeiten_erlaubt –
+    Handelsvertreter an allen Leads ihrer Gruppe (hv_gruppe_fuer), angestellte
+    Außendienstler an Leads mit vorgaenge.ad_id = eigene ID; ohne Vorgang bleibt
+    der angestellte Außendienst außen vor (Boards, Listen, Sammelaktionen)."""
     from app import leadmanagement as kern
     if benutzer is None:
         return False
     if kern.lead_modul_sichtbar(session, benutzer):
         return True
+    if vorgang is not None:
+        return bearbeiten_erlaubt(session, benutzer, vorgang)
+    return ist_handelsvertreter(session, benutzer)
+
+
+# --- v35 (PLAN_LEAD_V6 Phase 185): HV-Gruppen und Bearbeitungsrecht --------------------
+# Ergänzung 4 von Andreas (15.10.2026): die HV-Gruppen sind die aus v31/v33 – Parameter
+# hv_gruppe_rene, hv_gruppe_simon, hv_gruppe_simon_mitglieder (Lead-Einstellungen), gelesen
+# über lead_dropdowns.hv_gruppe_mitglieder; hier keine zweite Gruppenlogik, nur EINE
+# Funktion, die die Benutzer-IDs der Gruppe eines Vertreters liefert.
+
+def hv_gruppe_fuer(session: Session, benutzer_id: int | None) -> set[int]:
+    """Benutzer-IDs der HV-Gruppe eines Benutzers: Gruppe René = {René} (hv_gruppe_rene),
+    Gruppe Simon = {Simon} ∪ hv_gruppe_simon_mitglieder (leer = alle Handelsvertreter außer
+    der René-Gruppe – Rückfall aus v31). Ein Benutzer außerhalb beider Gruppen (angestellter
+    AD, HV ohne Gruppe) bildet eine Gruppe nur mit sich selbst; ohne ID leere Menge."""
+    if not benutzer_id:
+        return set()
+    from app import lead_dropdowns
+    benutzer_id = int(benutzer_id)
+    key = lead_dropdowns.hv_gruppe_fuer(session, benutzer_id)
+    ids = {benutzer_id}
+    if key:
+        ids |= {int(i) for i in lead_dropdowns.hv_gruppe_mitglieder(session, key)}
+    return ids
+
+
+def hv_gruppe_sicht(session: Session, benutzer) -> set[int] | None:
+    """Sichtfilter für Handelsvertreter: die IDs der eigenen Gruppe (für
+    `Vorgang.ad_id.in_(...)` in Ansicht, Dashboard, Karte, Boards, Terminassistent) –
+    None für alle anderen Benutzer (kein Filter)."""
+    if benutzer is None or not ist_handelsvertreter(session, benutzer):
+        return None
+    return hv_gruppe_fuer(session, benutzer.id)
+
+
+def bearbeiten_erlaubt(session: Session, benutzer, vorgang: Vorgang | None) -> bool:
+    """Vertrag Phase 185 (B ruft es für jede Inline-Änderung auf): darf dieser Benutzer
+    diesen Vorgang bearbeiten? Innendienst/Leadmanagement/Admin überall; angestellter
+    Außendienst an Leads mit vorgaenge.ad_id = eigene ID; Handelsvertreter an Leads, deren
+    ad_id in seiner Gruppe liegt (hv_gruppe_fuer) – zusätzlich an monday-Leads ohne ad_id,
+    deren monday-Zuordnung (leads.benutzer_id) in der Gruppe liegt (wie
+    lead_handelsvertreter.darf_vorgang). Fremde Leads bleiben für den Außendienst
+    read-only (Lesesicht der Kartei, kern.lead_ad_sicht)."""
+    from app import leadmanagement as kern
+    if benutzer is None or vorgang is None:
+        return False
+    if kern.lead_modul_sichtbar(session, benutzer):
+        return True
+    if benutzer.basisrolle != "aussendienst":
+        return False
     if ist_handelsvertreter(session, benutzer):
-        return vorgang is None or vorgang.ad_id == benutzer.id
-    return False
+        gruppe = hv_gruppe_fuer(session, benutzer.id)
+        if vorgang.ad_id:
+            return vorgang.ad_id in gruppe
+        if vorgang.lead_id:
+            from app.models import Lead
+            lead = session.get(Lead, vorgang.lead_id)
+            return bool(lead is not None and lead.benutzer_id and lead.benutzer_id in gruppe)
+        return False
+    return bool(vorgang.ad_id) and vorgang.ad_id == benutzer.id
 
 
 # --- v29 (PLAN_LEAD_V4 Phase 140): Handelsvertreter-Sicht und 404-Gate ----------------
@@ -402,7 +469,9 @@ HV_GATE_HINWEIS = ("Diese Seite gibt es in der Handelsvertreter-Sicht nicht – 
 def hv_sicht(session: Session, benutzer) -> bool:
     """v29 (Phase 140): Handelsvertreter-Sicht = Kennzeichen terminiert_selbst
     UND keine Modul-Sichtbarkeit (Innendienst/Leadmanagement/Admin sehen die
-    volle Oberfläche, auch wenn sie ein AD-Profil mit Kennzeichen hätten)."""
+    volle Oberfläche, auch wenn sie ein AD-Profil mit Kennzeichen hätten).
+    v35 (Phase 185): die Sicht zeigt und bearbeitet die Leads der ganzen Gruppe
+    (hv_gruppe_fuer) – gesperrte Seiten und 303-Umleitung unverändert."""
     from app import leadmanagement as kern
     return (ist_handelsvertreter(session, benutzer)
             and not kern.lead_modul_sichtbar(session, benutzer))
@@ -496,6 +565,12 @@ def hv_gruppen_wahl(session: Session) -> list[dict]:
 # Simon (oder der Innendienst) über das Zuständigen-Dropdown ein Mitglied, schließt
 # ad_zuweisen den Marker (ergebnis verteilt) und schreibt „Zuständiger: <Name>“.
 HV_GRUPPE_SIMON_NAME = "Simons Gruppe"
+# v35 (PLAN_LEAD_V6 Phase 185): Meldungen der Gruppen-Sperre in ad_zuweisen (HV-Sicht)
+HV_GRUPPE_ENTZIEHEN_TEXT = ("Nicht möglich: Handelsvertreter geben Leads nur an Mitglieder "
+                            "der eigenen Gruppe weiter.")
+HV_GRUPPE_FREMD_TEXT = ("Nicht möglich: Umverteilung nur innerhalb der eigenen Handelsvertreter-"
+                        "Gruppe – der Wechsel in eine andere Gruppe läuft über den Innendienst "
+                        "(Sammelaktion).")
 HV_GRUPPE_MARKER = "hv_gruppe_offen"
 HV_GRUPPE_OFFEN_TEXT = "An Simons Gruppe verschoben – noch nicht verteilt"
 HV_GRUPPE_KENNZEICHEN = "Simons Gruppe (noch nicht verteilt)"
@@ -588,6 +663,14 @@ def ad_zuweisen(session: Session, vorgang: Vorgang, ad_id: int | None,
     Liefert eine Meldung; leerer Text = Fehler bereits als Meldung."""
     from app import leadmanagement as kern
     alt_id = vorgang.ad_id
+    # v35 (PLAN_LEAD_V6 Phase 185): in der Handelsvertreter-Sicht nur Umverteilung innerhalb
+    # der eigenen Gruppe (Dropdown v31); kein Entziehen, kein Wechsel in die andere Gruppe –
+    # das bleibt Innendienst/Admin über die Sammelaktion (v33)
+    if benutzer is not None and hv_sicht(session, benutzer):
+        if ad_id in (None, 0, ""):
+            return HV_GRUPPE_ENTZIEHEN_TEXT
+        if not str(ad_id).strip().isdigit() or int(ad_id) not in hv_gruppe_fuer(session, benutzer.id):
+            return HV_GRUPPE_FREMD_TEXT
     # v33 (Phase 175): offenes Kennzeichen „Simons Gruppe (noch nicht verteilt)“ merken –
     # jede Änderung des Zuständigen löst es auf
     gruppe_offen = hv_gruppe_offen(session, vorgang)

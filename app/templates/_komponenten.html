@@ -31,7 +31,7 @@
    (erster Buchstabe des ersten und des letzten Wortes), Farbe deterministisch aus der
    Benutzer-ID über die Token-Palette --avatar-1 … --avatar-8 (style.css). Genutzt in
    Boards (Lead-Management/Projektierung) und der Benutzerverwaltung; ohne Namen „?“. #}
-{% macro avatar(name, id, klasse='') -%}
+{% macro avatar(name, id, klasse='', bild='') -%}
 {%- set teile = (name or '').strip().split() -%}
 {%- if teile -%}
 {%- set initialen = (teile[0][:1] ~ (teile[-1][:1] if teile | length > 1 else teile[0][1:2])) | upper -%}
@@ -39,7 +39,14 @@
 {%- set initialen = '?' -%}
 {%- endif -%}
 {%- set nr = ((id or 0) | int) % 8 + 1 -%}
+{#- v35 (PLAN_LEAD_V6 Phase 185): Profilbild statt Initialen, wenn der Benutzer eines hat
+    (Jinja-Global profilbild_url → /einstellungen/profil/bild/<id>; `bild` erzwingt eine URL) -#}
+{%- set bild_url = bild or (profilbild_url(id) if (profilbild_url is defined and id) else '') -%}
+{%- if bild_url -%}
+<span class="avatar avatar-{{ nr }} avatar-bild{{ ' ' ~ klasse if klasse }}" title="{{ name or '' }}" aria-label="{{ name or '' }}"><img src="{{ bild_url }}" alt="" width="26" height="26"></span>
+{%- else -%}
 <span class="avatar avatar-{{ nr }}{{ ' ' ~ klasse if klasse }}" title="{{ name or '' }}" aria-label="{{ name or '' }}">{{ initialen }}</span>
+{%- endif -%}
 {%- endmacro %}
 
 {# Status-Schrittleiste (Mini-Pipeline) eines Angebots:
@@ -132,8 +139,11 @@
    Automatik-Palette der Boards, lead_anrufliste.kanal_farbe) → gefüllter Badge
    in der Kanalfarbe über --f wie das Kanal-Label der Board-Tabelle; ohne
    zweiten Parameter rendert das Makro exakt wie v21 (violett). #}
+{# v35 (PLAN_LEAD_V6 Phase 184): ohne zweiten Parameter kommt die Farbe aus den Kanal-Stammdaten
+   (Jinja-Global lm_kanal_farbe = lead_kanaele.farbe_schnell, Prozess-Cache); Kanal „?“ trägt
+   die Klasse lm-kanal-unklar und den Hinweis „Vertriebskanal klären“. #}
 {% macro kanal_badge(kanal, farbe='') -%}
-{%- if kanal and kanal | lower != 'standard' -%}<span class="lm-kanal{{ ' mit-farbe' if farbe }}"{% if farbe %} style="--f:{{ farbe }}"{% endif %} title="Vertriebskanal – steuert das Angebotsprofil">{{ kanal }}</span>{%- endif -%}
+{%- if kanal and kanal | lower != 'standard' -%}{%- set farbe = farbe or (lm_kanal_farbe(kanal) if lm_kanal_farbe is defined else '') -%}<span class="lm-kanal{{ ' mit-farbe' if farbe }}{{ ' lm-kanal-unklar' if kanal == '?' }}"{% if farbe %} style="--f:{{ farbe }}"{% endif %} title="{{ 'Vertriebskanal unklar – bitte klären (sperrt Terminierung und TAIFUN-Übergabe)' if kanal == '?' else 'Vertriebskanal – steuert das Angebotsprofil' }}">{{ kanal }}</span>{%- endif -%}
 {%- endmacro %}
 
 {# v23 Phase 107 (C1-c): 5 Punkte = die (letzten) fünf Anrufversuche. Mit

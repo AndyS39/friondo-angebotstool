@@ -323,8 +323,11 @@ def termin_assistent(request: Request, vorgang_id: int,
     nur_ad_id = int(nur_ad) if nur_ad.isdigit() else None
     ohne_ad_id = _int_oder_none(q.get("ohne_ad_id", ""))   # v31 (Phase 158): ohne den Kranken
     hv_id = lead_termin.hv_nur_eigene(session, benutzer)
-    if hv_id:
-        nur_ad_id = hv_id
+    # v35 (PLAN_LEAD_V6 Phase 185): Handelsvertreter rechnen mit den Kalendern der Gruppe –
+    # ein ?ad_id= außerhalb der Gruppe wird verworfen (kandidaten filtert die Gruppe selbst)
+    hv_gruppe = lead_termin.hv_gruppe_ids(session, benutzer)
+    if hv_gruppe is not None:
+        nur_ad_id = nur_ad_id if nur_ad_id in hv_gruppe else (hv_id if len(hv_gruppe) == 1 else None)
     ergebnis = lead_termin.vorschlaege(session, vorgang, nur_ad_id=nur_ad_id,
                                        benutzer=benutzer, objekt=objekt, ohne_ad_id=ohne_ad_id)
     session.commit()   # Routing-/Geocode-Cache behalten
@@ -424,9 +427,9 @@ def termin_buchen(request: Request, vorgang_id: int,
     if beginn is None or not ad_id:
         return RedirectResponse(_assistent_url(vorgang.id, "Beginn und Außendienstler sind Pflicht."),
                                 status_code=303)
-    hv_id = lead_termin.hv_nur_eigene(session, benutzer)
-    if hv_id and ad_id != hv_id:
-        return RedirectResponse(_assistent_url(vorgang.id, "Handelsvertreter buchen nur den eigenen Kalender."),
+    # v35 (Phase 185): Handelsvertreter buchen die Kalender der eigenen Gruppe
+    if not lead_termin.hv_ad_erlaubt(session, benutzer, ad_id):
+        return RedirectResponse(_assistent_url(vorgang.id, lead_termin.HV_GRUPPE_KALENDER_TEXT),
                                 status_code=303)
     umbuchen = form.get("umbuchen_id") or ""
     umweg = str(form.get("umweg") or "")
@@ -469,9 +472,8 @@ def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
     if typ in lead_termin.VORAB_TYPEN:
         # Kartei-Dialog „Termin manuell“ (Phase 106) schickt die Terminart mit:
         # Telefon/Teams sind Vorab-Gespräche (A-2) – kein VOT, keine Phase
-        hv_id = lead_termin.hv_nur_eigene(session, benutzer)
-        if hv_id and ad_id != hv_id:
-            return RedirectResponse(_kartei(vorgang.id, "Handelsvertreter tragen nur eigene Termine ein."),
+        if not lead_termin.hv_ad_erlaubt(session, benutzer, ad_id):   # v35: Gruppe
+            return RedirectResponse(_kartei(vorgang.id, lead_termin.HV_GRUPPE_KALENDER_TEXT),
                                     status_code=303)
         dauer = str(form.get("dauer") or "")
         termin, meldung = lead_termin.vorab_anlegen(
@@ -592,9 +594,8 @@ def termin_vormerken(request: Request, vorgang_id: int,
         if _json_gewuenscht(request):
             return JSONResponse({"ok": False, "meldung": meldung}, status_code=400)
         return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
-    hv_id = lead_termin.hv_nur_eigene(session, benutzer)
-    if hv_id and ad_id != hv_id:
-        meldung = "Handelsvertreter buchen nur den eigenen Kalender."
+    if not lead_termin.hv_ad_erlaubt(session, benutzer, ad_id):   # v35: Gruppe
+        meldung = lead_termin.HV_GRUPPE_KALENDER_TEXT
         if _json_gewuenscht(request):
             return JSONResponse({"ok": False, "meldung": meldung}, status_code=403)
         return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
@@ -647,7 +648,24 @@ def terminierung(request: Request, vorgang_id: int,
     except Exception:
         daten = dict(anfrage.formular(request))
     ziel = _kartei(vorgang.id) + "?tab=termin"
+    # v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Übergabe VOR der Testphase-Sperre – Pflichtfelder
+    # und vorgemerkter Termin geprüft, Kanal nicht „?“; in der Testphase schreibt der Klick nur die
+    # Datei (keine Buchung, keine Mail), mit taifun_export_aktiv = aus bleibt alles wie in v31
+    # (Aktivität „TAIFUN-Übergabe nicht aktiv“). Datei-I/O und Commits liegen in taifun_export.
+    from app import taifun_export
+    taifun = taifun_export.terminierung_export(session, vorgang, request.state.benutzer)
     if not lead_v5.terminierung_aktiv(session):
+        if taifun.get("exportiert"):
+            meldung = f"{taifun_export.TESTPHASE_EXPORT_HINWEIS} – {taifun.get('meldung', '')}".strip(" –")
+            if _json_gewuenscht(request):
+                return JSONResponse({"ok": bool(taifun.get("ok")), "meldung": meldung, "testphase": True,
+                                     "taifun": {"ok": bool(taifun.get("ok")),
+                                                "datei": getattr(taifun.get("uebergabe"), "datei", "")}},
+                                    status_code=200 if taifun.get("ok") else 422)
+            return RedirectResponse(_mit_meldung(_kartei(vorgang.id), meldung), status_code=303)
+        if taifun.get("uebersprungen") in ("pflicht", "rueckfrage", "kunde"):
+            return _gesperrt_antwort(request, _kartei(vorgang.id),
+                                     f"{lead_v5.TESTPHASE_HINWEIS} – {taifun.get('meldung', '')}")
         return _gesperrt_antwort(request, _kartei(vorgang.id))
     bestaetigung = str(daten.get("bestaetigung") or "auto").strip().lower()
     ergebnis: dict = {}
@@ -663,9 +681,16 @@ def terminierung(request: Request, vorgang_id: int,
     except _Abbruch:
         session.rollback()
     ok, meldung = ergebnis.get("ok", False), ergebnis.get("meldung", "Terminierung nicht möglich.")
+    # v35 (Phase 183, Agent T): Ergebnis der TAIFUN-Übergabe mit in die Meldung (Export und Buchung
+    # sind unabhängig – ein Export-Fehler blockiert die Terminierung nicht [ANNAHME])
+    if taifun.get("exportiert") or taifun.get("uebersprungen") == "rueckfrage":
+        meldung = f"{meldung} · {taifun.get('meldung', '')}".strip(" ·")
     if _json_gewuenscht(request):
         return JSONResponse({"ok": ok, "meldung": meldung,
-                             "objekte_hinweis": lead_termin.objekte_hinweis(session, vorgang)},
+                             "objekte_hinweis": lead_termin.objekte_hinweis(session, vorgang),
+                             "taifun": {"exportiert": bool(taifun.get("exportiert")),
+                                        "ok": bool(taifun.get("ok")),
+                                        "datei": getattr(taifun.get("uebergabe"), "datei", "")}},
                             status_code=200 if ok else 422)
     return RedirectResponse(_mit_meldung(ziel, meldung), status_code=303)
 
@@ -716,8 +741,9 @@ def vorab_formular(request: Request, vorgang_id: int,
     typ = typ if typ in lead_termin.VORAB_TYPEN else "telefon"
     hv_id = lead_termin.hv_nur_eigene(session, request.state.benutzer)
     vertriebler = lead_termin.vorab_personen(session, "telefon")
-    if hv_id:
-        vertriebler = [b for b in vertriebler if b.id == hv_id]
+    hv_gruppe = lead_termin.hv_gruppe_ids(session, request.state.benutzer)   # v35: Gruppe
+    if hv_gruppe is not None:
+        vertriebler = [b for b in vertriebler if b.id in hv_gruppe]
     kollegen = lead_termin.vorab_personen(session, "online")
     testphase = lead_termin.testphase_kontext(session)
     return render(request, "leadmanagement/termin_vorab.html",
@@ -742,11 +768,11 @@ def vorab_anlegen(request: Request, vorgang_id: int,
     person = str(form.get("person_id") or "")
     beginn = _datum_uhrzeit(form)
     dauer = str(form.get("dauer") or "")
-    hv_id = lead_termin.hv_nur_eigene(session, request.state.benutzer)
-    if typ == "telefon" and hv_id and person != str(hv_id):
+    if typ == "telefon" and not lead_termin.hv_ad_erlaubt(session, request.state.benutzer, person):
+        # v35 (Phase 185): Telefontermine nur für Mitglieder der eigenen Gruppe
         return RedirectResponse(
             f"/lead-management/lead/{vorgang.id}/termin/vorab?typ={typ}&meldung="
-            + quote_plus("Handelsvertreter tragen nur eigene Telefontermine ein."),
+            + quote_plus(lead_termin.HV_GRUPPE_KALENDER_TEXT),
             status_code=303)
     termin, meldung = lead_termin.vorab_anlegen(
         session, vorgang, typ, int(person) if person.isdigit() else 0, beginn,
@@ -870,9 +896,8 @@ def termin_verschieben(request: Request, termin_id: int,
     ad_id = int(ad_roh) if ad_roh.isdigit() else 0
     if beginn is None or not ad_id:
         return RedirectResponse(_mit_meldung(ziel, "Neuer Beginn ist Pflicht."), status_code=303)
-    hv_id = lead_termin.hv_nur_eigene(session, request.state.benutzer)
-    if hv_id and ad_id != hv_id:
-        return RedirectResponse(_mit_meldung(ziel, "Handelsvertreter buchen nur den eigenen Kalender."),
+    if not lead_termin.hv_ad_erlaubt(session, request.state.benutzer, ad_id):   # v35: Gruppe
+        return RedirectResponse(_mit_meldung(ziel, lead_termin.HV_GRUPPE_KALENDER_TEXT),
                                 status_code=303)
     if (termin.typ or "vot") == lead_termin.SPERRZEIT_TYP:
         return RedirectResponse(_mit_meldung(ziel, "Sperrzeiten werden in „Meine Termine“ gepflegt."),
@@ -956,11 +981,14 @@ def terminkalender(request: Request, session: Session = Depends(get_session)):
     versatz = int(versatz) if versatz.lstrip("-").isdigit() else 0
     start = datetime.now() + timedelta(weeks=versatz)
     nur_ad = request.query_params.get("ad_id", "")
-    hv_id = lead_termin.hv_nur_eigene(session, benutzer)
+    hv_id = lead_termin.hv_nur_eigene(session, benutzer)   # Kennzeichen „ist Handelsvertreter“ (Template)
+    hv_gruppe = lead_termin.hv_gruppe_ids(session, benutzer)
     alle_ad = lead_termin.ad_basis(session)
-    if hv_id:
-        alle_ad = [b for b in alle_ad if b.id == hv_id]
-        nur_ad = str(hv_id)
+    if hv_gruppe is not None:
+        # v35 (Phase 185): Wochenansicht der Gruppe; ?ad_id= außerhalb der Gruppe verworfen
+        alle_ad = [b for b in alle_ad if b.id in hv_gruppe]
+        if not (nur_ad.isdigit() and int(nur_ad) in hv_gruppe):
+            nur_ad = str(benutzer.id) if len(hv_gruppe) == 1 else ""
     ad_ids = [int(nur_ad)] if nur_ad.isdigit() else [b.id for b in alle_ad]
     woche = lead_termin.kalender_woche(session, ad_ids,
                                        start=start - timedelta(days=start.weekday()))

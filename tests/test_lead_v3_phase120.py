@@ -83,7 +83,8 @@ class Basis(unittest.TestCase):
     # die Terminierung für seine Laufzeit frei
     PARAMETER = ("lead_freigabe_modus", "score_aktiv", "ohne_schritt_tage",
                  "kanal_ad_regel", "routing_anbieter", "kalender_sync", "mail_modus",
-                 "terminierung_aktiv")
+                 "terminierung_aktiv",
+                 "hv_gruppe_simon_mitglieder")   # v35 (Phase 185): Test-HV steht allein
 
     @classmethod
     def setUpClass(cls):
@@ -93,6 +94,10 @@ class Basis(unittest.TestCase):
         cls.client = TestClient(app)
         cls.client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
         cls.gesichert = {n: kern.parameter_holen(cls.s, n, "") for n in cls.PARAMETER}
+        # v35 (PLAN_LEAD_V6 Phase 185): HV-Sicht = Gruppe; ohne Mitgliederliste zöge der v31-Rückfall
+        # („alle HV außer René“) die Dev-DB-Vertreter in die Gruppe des Test-HV – er steht hier allein
+        kern.parameter_setzen(cls.s, "hv_gruppe_simon_mitglieder",
+                              kern.parameter_holen(cls.s, "hv_gruppe_simon", "") or "0")
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", "admin")
         kern.parameter_setzen(cls.s, "score_aktiv", "aus")
         kern.parameter_setzen(cls.s, "ohne_schritt_tage", "2")

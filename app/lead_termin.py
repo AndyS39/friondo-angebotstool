@@ -333,20 +333,27 @@ def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
     kanal = (kunde.vertriebskanal or "").strip() if kunde else ""
     regel = kanal_regel(session)
     kanal_ids = regel.get(kanal.lower()) if kanal else None
-    if benutzer is not None and lead_v2.ist_handelsvertreter(session, benutzer):
-        nur_ad_id = benutzer.id
+    # v35 (PLAN_LEAD_V6 Phase 185): Handelsvertreter rechnen mit den Kalendern ihrer GRUPPE
+    # (René = nur er; Simons Gruppe = alle Mitglieder) statt nur mit dem eigenen; ein
+    # gewünschter nur_ad_id außerhalb der Gruppe wird verworfen
+    gruppe = hv_gruppe_ids(session, benutzer)
+    if gruppe is not None and (nur_ad_id is None or nur_ad_id not in gruppe):
+        nur_ad_id = None if len(gruppe) > 1 else benutzer.id
     profile = {p.benutzer_id: p for p in session.query(AdProfil)}
     namen = {b.id: b.name for b in session.query(Benutzer)}
     benutzer_id = getattr(benutzer, "id", None)
     hv_lead = hv_des_vorgangs(session, vorgang, profile)
-    if hv_lead is not None and hv_lead.id == benutzer_id:
-        hv_lead = None   # der Vertreter selbst: normale Vorschläge (nur eigener Kalender)
+    if hv_lead is not None and (hv_lead.id == benutzer_id
+                                or (gruppe is not None and hv_lead.id in gruppe)):
+        hv_lead = None   # der Vertreter selbst bzw. seine Gruppe: normale Vorschläge
     heute = date.today()
     horizont_bis = horizont_bis or (heute + timedelta(days=_int(parameter(session, "vorschlag_horizont_tage", "14"), 14) + 7))
     ergebnis, ausgeschlossen, abwesend = [], [], {}
     for ad in ad_basis(session, profile):
         if nur_ad_id and ad.id != nur_ad_id:
             continue
+        if gruppe is not None and ad.id not in gruppe:
+            continue   # v35: Handelsvertreter sehen nur die Kalender der eigenen Gruppe
         profil = profile.get(ad.id)
         grund_aus = None
         manuell_erlaubt = False
@@ -358,9 +365,11 @@ def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
             grund_aus = OHNE_AD_GRUND
         elif profil is not None and not profil.aktiv_terminierung:
             grund_aus = "Terminierung nicht aktiv"
-        elif ((profil is not None and profil.terminiert_selbst)
-              or ad.hat_kennzeichen("handelsvertreter")) and ad.id != benutzer_id:
-            # v33 (PLAN_V20 Phase 167): Handelsvertreter auch über das Rollen-Kennzeichen
+        elif (((profil is not None and profil.terminiert_selbst)
+               or ad.hat_kennzeichen("handelsvertreter"))
+              and ad.id != benutzer_id and not (gruppe is not None and ad.id in gruppe)):
+            # v33 (PLAN_V20 Phase 167): Handelsvertreter auch über das Rollen-Kennzeichen;
+            # v35: Mitglieder der eigenen Gruppe sind für den HV-Betrachter Kandidaten
             grund_aus = HV_GRUND
             manuell_erlaubt = True
         elif ganz_abwesend or (heute_abwesend is not None and heute_abwesend.bis is None):
@@ -794,7 +803,9 @@ def vorschlaege_json(session: Session, vorgang: Vorgang, benutzer=None,
                "ohne_ad_id": ohne_ad_id,
                "berechnet_um": jetzt.strftime("%H:%M"), "aus_cache": False}
     hv = hv_des_vorgangs(session, vorgang)
-    if hv is not None and getattr(benutzer, "id", None) != hv.id:
+    # v35 (Phase 185): Mitglieder der Gruppe des zuständigen HV sehen normale Vorschläge
+    gruppe_ich = hv_gruppe_ids(session, benutzer) or ({getattr(benutzer, "id", None)} if benutzer is not None else set())
+    if hv is not None and hv.id not in gruppe_ich:
         antwort.update(status="hv_lead", hinweis=HV_HINWEIS.format(name=hv.name),
                        hv_id=hv.id, hv_name=hv.name)
     else:
@@ -1619,10 +1630,37 @@ def kalender_woche(session: Session, ad_ids: list[int], start=None) -> dict:
 
 
 def hv_nur_eigene(session: Session, benutzer) -> int | None:
-    """Handelsvertreter rechnen/sehen nur den eigenen Kalender (G2)."""
+    """Handelsvertreter rechnen/sehen nur den eigenen Kalender (G2) – v35 (Phase 185):
+    bei Gruppen die Kalender der Gruppe; diese Funktion bleibt als Kennzeichen „ist
+    Handelsvertreter“ (eigene ID) für „Weitere Kalender“ (keine) und Rückfälle;
+    Buchungs-/Sichtprüfungen nutzen hv_gruppe_ids / hv_ad_erlaubt."""
     if benutzer is not None and lead_v2.ist_handelsvertreter(session, benutzer):
         return benutzer.id
     return None
+
+
+def hv_gruppe_ids(session: Session, benutzer) -> set | None:
+    """v35 (PLAN_LEAD_V6 Phase 185): Kalender, die ein Handelsvertreter sehen und buchen
+    darf = seine Gruppe (lead_v2.hv_gruppe_fuer: René → {René}, Simons Gruppe → Simon +
+    Mitglieder); None für Innendienst/Admin/angestellte AD (kein Filter)."""
+    if benutzer is None or not lead_v2.ist_handelsvertreter(session, benutzer):
+        return None
+    return lead_v2.hv_gruppe_fuer(session, benutzer.id) or {benutzer.id}
+
+
+def hv_ad_erlaubt(session: Session, benutzer, ad_id) -> bool:
+    """Darf dieser Benutzer auf den Kalender von ad_id buchen/umbuchen? Nicht-HV immer;
+    Handelsvertreter nur innerhalb der eigenen Gruppe (v35)."""
+    gruppe = hv_gruppe_ids(session, benutzer)
+    if gruppe is None:
+        return True
+    try:
+        return int(ad_id) in gruppe
+    except (TypeError, ValueError):
+        return False
+
+
+HV_GRUPPE_KALENDER_TEXT = "Handelsvertreter buchen nur Kalender der eigenen Gruppe."
 
 
 # --- v29 (PLAN_LEAD_V4 Phase 143): Sperrzeiten der Handelsvertreter [OFFEN 3] -----------

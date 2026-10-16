@@ -1203,11 +1203,15 @@ def akte(request: Request, projekt_id: int,
                                  if any(g.sparte == sp for g in gewerke)}
                   or {"WP": __import__("app.galerie", fromlist=["x"])
                       .uebersicht(session, projekt.vorgang_id or 0, "WP")},
+                  # v35 (PLAN_LEAD_V6 Phase 186, Agent G): + Objekt-Ordner des Vorgangs (Einsortieren)
                   galerie_ordner={sp: __import__("app.galerie", fromlist=["x"])
-                                  .ordner_liste(session, sp)
+                                  .ordner_liste(session, sp, vorgang=projekt.vorgang_id)
                                   for sp in __import__("app.sparten", fromlist=["x"]).SPARTEN},
                   galerie_darf_loeschen=__import__("app.galerie", fromlist=["x"])
                   .darf_loeschen(request.state.benutzer),
+                  # v35 (Phase 186, Agent G): Objektfotos des Gewerk-Objekts – nur Anzeige
+                  objektfotos_gewerke=__import__("app.galerie", fromlist=["x"])
+                  .objektfotos_je_gewerk(session, projekt, gewerke),
                   projekt_subs=projekt_subs, subs_stamm=subs_stamm,
                   vorgang_notizen=vorgang_notizen,
                   kommentar_zaehler=kommentar_zaehler,

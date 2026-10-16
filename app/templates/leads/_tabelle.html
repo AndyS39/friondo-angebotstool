@@ -13,6 +13,7 @@
    (Innendienst/Admin/Leadmanagement) und leads/mein_tag.html (.mt-desktop, Außendienst). #}
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
+{% from "_komponenten.html" import kanal_badge %}{# v35 (Phase 184): Kanal-Label aus den Stammdaten #}
 {% import "_interesse.html" as interesse_ui %}
 {% import "_sparten.html" as sparten_ui %}
 
@@ -135,10 +136,16 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
 {%- elif key == 'kanal' -%}
 <td class="sp-kanal dezent" data-wert="{{ z.kanal }}">
     {% if ad_sicht %}
-        {{ z.kanal or '–' }}
+        {% if z.kanal %}{{ kanal_badge(z.kanal) }}{% else %}–{% endif %}
     {% else %}
     <form method="post" action="/leads/{{ z.lead.id }}/kanal" title="Vertriebskanal manuell setzen (leer = Sync-Automatik)">
-        <input type="text" name="kanal" value="{{ z.kanal }}" size="9" placeholder="–" onchange="this.form.submit()">
+        {#- v35 (PLAN_LEAD_V6 Phase 184): Label aus den Stammdaten + Dropdown nach Häufigkeit (kanal_wahl) statt Freitext #}
+        {% if z.kanal %}{{ kanal_badge(z.kanal) }}{% endif %}
+        <select name="kanal" onchange="this.form.submit()" aria-label="Vertriebskanal">
+            <option value="" {{ 'selected' if not z.kanal }}>–</option>
+            {% for kn in kanal_wahl | default([]) %}<option value="{{ kn }}" {{ 'selected' if z.kanal == kn }}>{{ kn }}</option>{% endfor %}
+            {% if z.kanal and z.kanal not in (kanal_wahl | default([])) %}<option value="{{ z.kanal }}" selected>{{ z.kanal }}{{ ' – Vertriebskanal klären' if z.kanal == '?' else ' (nicht mehr wählbar)' }}</option>{% endif %}
+        </select>
         {% if z.lead.kanal_manuell %}<span title="manuell gesetzt – Sync überschreibt nicht">✎</span>{% endif %}
     </form>
     {% endif %}

@@ -1,0 +1,45 @@
+{# v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos je Objekt – gemeinsame Bausteine.
+   objektfotos_raster(fotos, gruppe, loeschen): Vorschaukacheln (Lightbox v28 über die
+   data-lb-*-Attribute wie in _galerie.html; galerie_fuss() muss auf der Seite eingebunden
+   sein), optional Lösch-Knopf je Foto (Formular – funktioniert ohne JavaScript, mit
+   objektfotos_v35.js per fetch ohne Neuladen). `fotos` = Liste von galerie.foto_daten-Dicts.
+   objektfotos_abschnitt(fotos, titel, gruppe): reine Anzeige (Erfassung, Projektakte).
+   objektfotos_stil(): Stylesheet lm_v35_g.css (nur Tokens). #}
+{% macro objektfotos_stil() -%}
+<link rel="stylesheet" href="/static/lm_v35_g.css?v={{ css_version | default('') }}">
+{%- endmacro %}
+
+{% macro objektfotos_raster(fotos, gruppe, loeschen=False, zurueck='') %}
+<div class="of-raster" data-lb-gruppe="{{ gruppe }}" data-rolle="objektfotos-raster">
+    {% for f in fotos %}
+    <figure class="of-kachel" data-foto="{{ f.id }}">
+        <a href="{{ f.url }}" target="_blank" class="pj-lb-link"
+           data-lb-gruppe="{{ gruppe }}" data-lb-id="{{ f.id }}" data-lb-ordner="{{ f.ordner }}"
+           data-lb-name="{{ f.name }}" data-lb-datum="{{ f.datum }}" data-lb-bemerkung="{{ f.bemerkung }}"
+           onclick="return pjLightbox(event, this)" title="{{ f.name }} · {{ f.datum }}">
+            <img src="{{ f.url }}" alt="{{ f.name }}" loading="lazy"></a>
+        <figcaption><span class="of-datum">{{ f.kurzdatum }}</span>
+            {% if loeschen and f.loeschbar and f.loeschen_url %}
+            <form method="post" action="{{ f.loeschen_url }}" class="of-loeschen-form"
+                  onsubmit="return confirm('Foto löschen?')">
+                <input type="hidden" name="zurueck" value="{{ zurueck }}">
+                <button type="submit" class="of-loeschen" title="Foto löschen" aria-label="Foto {{ f.name }} löschen">✕</button>
+            </form>
+            {% endif %}
+        </figcaption>
+    </figure>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro objektfotos_abschnitt(fotos, titel, gruppe) %}
+{# Nur Anzeige: Erfassung (Sparten-Start, Übersicht) und Projektakte #}
+<section class="of-abschnitt" data-rolle="objektfotos" aria-label="{{ titel }}">
+    <h3 class="of-titel">{{ titel }} <span class="of-zahl">{{ fotos | length }}</span></h3>
+    {% if fotos %}
+        {{ objektfotos_raster(fotos, gruppe) }}
+    {% else %}
+        <p class="dezent">Noch keine Fotos zu diesem Objekt.</p>
+    {% endif %}
+</section>
+{% endmacro %}
