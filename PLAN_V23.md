@@ -374,15 +374,15 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
 
 - [x] **Regressionstest Fotos je Objekt:** entfällt – die Objektfotos sind mit dem Nachtrag 16.10.
       zu PLAN_LEAD_V6 (PLAN_LEAD_V6_1) gestrichen (Vorprüfung der Plan-Kette 16.10.2026, Rückfrage).
-- [ ] **Tests gesamt:** `test_v38_galerie.py`, `test_v38_erfassung.py`,
-      *(Stand 17.10.2026: v38-Tests, Wächter und Nachbarn auf der migrierten Kopie grün – Gesamtsuite und Außendienst-Sichtprüfung einmal am Ende der Plan-Kette v36–v38.)*
+- [x] **Tests gesamt:** `test_v38_galerie.py`, `test_v38_erfassung.py`,
+      *(Stand 17.10.2026: v38-Tests, Wächter und Nachbarn auf der migrierten Kopie grün. Kettenende 17.10.2026: Gesamtsuite 1859 bestanden / 7 übersprungen / 4 Mitternachts- bzw. Umgebungs-Fehler ohne Codefehler, Wiederholung 4/4 grün, Wächter v27/v30 grün; Außendienst-Sichtprüfung über die Tests der Agenten (kein EK/DB, Korrektur nur an eigenen Erfassungen) und die 390-px-Screenshots – `diagnose/v36/gesamtuebersicht.md` §10.)*
       `test_v38_leads_vot.py`, `test_v38_mobil.py`; angepasste Alt-Tests
       (Label „überfällig", Knopfbeschriftung „n Fotos hochladen", untere
       Leiste) mit Begründung; `pytest tests -q` komplett grün, Wächter v27
       und Token-Wächter v30 grün; Außendienst-Sichtprüfung (kein EK/DB,
       Korrektur nur an eigenen Erfassungen).
-- [ ] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
-      *(laut Brief EINE Rollout-Vorbereitung am Kettenende v36–v38 – siehe `diagnose/v36/gesamtuebersicht.md` §10.)*
+- [x] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
+      *(EINE Rollout-Vorbereitung am Kettenende v36–v38, erledigt 16./17.10.2026 – `diagnose/v36/gesamtuebersicht.md` §10: migrate ×2 (2. Lauf ohne Änderung), Rückweg v33-/v37-Code je 24/24, Abnahme 93/93, Voll-Crawl 16 Läufe 0 Abstürze, Smoke 8/8, Lasttest schreibsturm 190/190, normal 0 × 5xx / 0 locked – p95 Listen/Akten 2,3 s, Terminvorschläge 11,7 s und Angebots-PDF 4,2 s über den Zielwerten (Rückfragen 7 und 18 R7).)*
       diagnose\, migrate.py zweimal (zweiter Lauf ohne Änderungen; additiv:
       Status `entwurf` falls neu, `erfassungen.geaendert_am` und
       `erfassungen.geaendert_von` [ANNAHME: Felder für das Badge],

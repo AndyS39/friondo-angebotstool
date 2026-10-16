@@ -1,6 +1,6 @@
 # Nach dem Update auf v38 – Foto-Upload (Pop-up, Offline-Puffer, Mehrfach-Löschen), Erfassung (Zwischenspeichern, Korrektur), Leads VOT / Mobil (Vergangene Termine, Termin nicht stattgefunden) (PLAN_V23, Phasen 201–205)
 
-Stand 17.10.2026 (Plan-Kette v36 → v37 → v38, Rollout erst nach der gemeinsamen Rollout-Prüfung am Kettenende).
+Stand 17.10.2026 (Plan-Kette v36 → v37 → v38, Rollout erst nach der gemeinsamen Rollout-Prüfung am Kettenende – erledigt 17.10.2026, `docs/updates.md` 4g).
 Alle Datenbankänderungen sind additiv – der v37-Code läuft auf der v38-Datenbank weiter (`rollback.bat --nur-code`).
 
 ## Galerie: Hochladen mit Pop-up, wartende Fotos, Mehrfach-Löschen (Phase 201)

@@ -265,15 +265,28 @@ def main():
            s.get(Benutzer, ad.id) is not None and not s.get(Benutzer, ad.id).aktiv and "deaktiviert statt gelöscht" in r.text)
 
     # ---------- 7) Briefanrede im PDF ----------
+    # v36-Nachtrag 16.10.2026: versendete/angenommene/abgelehnte/überholte Angebote behalten ihr Archiv-PDF
+    # (pdf_eingefroren) – die Briefanrede-Prüfung rendert deshalb vorübergehend als Entwurf und stellt den
+    # Status danach wieder her (die Archiv-Regel selbst prüft tests/test_v36_pdf_engine.py).
+    status_vorher = ang.status
+    ang.status = "Entwurf"; s.commit()
     pfad = pdf_export.pdf_fuer_angebot(s, ang)
-    t1 = pypdf.PdfReader(str(pfad)).pages[0].extract_text()
+
+    def _anrede_text(pdf_pfad):
+        # v36 (PLAN_V22 Phase 189): im Layout v3 steht die Briefanrede auf der Seite „Ihr Angebot im Überblick“
+        # (Seite 2), im fpdf2-Rückfall auf Seite 1 – deshalb die ersten drei Seiten lesen
+        seiten = pypdf.PdfReader(str(pdf_pfad)).pages[:3]
+        return "\n".join((pg.extract_text() or "") for pg in seiten)
+
+    t1 = _anrede_text(pfad)
     pruefe("PDF", "Briefanrede „Sehr geehrte Frau Abnahme,“ im Vortext", "Sehr geehrte Frau Abnahme," in t1)
     k = s.get(Kunde, kunde_t.id); k.anrede = "Herr"; s.commit(); s.expire_all()
-    t2 = pypdf.PdfReader(str(pdf_export.pdf_fuer_angebot(s, s.get(Angebot, ang.id)))).pages[0].extract_text()
+    t2 = _anrede_text(pdf_export.pdf_fuer_angebot(s, s.get(Angebot, ang.id)))
     pruefe("PDF", "„Sehr geehrter Herr Abnahme,“ bei Anrede Herr", "Sehr geehrter Herr Abnahme," in t2)
     k = s.get(Kunde, kunde_t.id); k.anrede = "Firma"; s.commit(); s.expire_all()
-    t3 = pypdf.PdfReader(str(pdf_export.pdf_fuer_angebot(s, s.get(Angebot, ang.id)))).pages[0].extract_text()
+    t3 = _anrede_text(pdf_export.pdf_fuer_angebot(s, s.get(Angebot, ang.id)))
     pruefe("PDF", "Fallback „Sehr geehrte Damen und Herren,“", "Sehr geehrte Damen und Herren," in t3)
+    ang = s.get(Angebot, ang.id); ang.status = status_vorher; s.commit(); s.expire_all()
     alle_seiten = "\n".join(pg.extract_text() or "" for pg in pypdf.PdfReader(str(pfad)).pages)
     pruefe("PDF", "Summenblock Netto/USt/Gesamt/−Rabatt/=Endbetrag + Eigenanteil",
            all(w in alle_seiten for w in ("Netto-Summe", "Rabatt", "Endbetrag", "Eigenanteil")))

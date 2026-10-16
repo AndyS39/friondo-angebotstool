@@ -1,6 +1,6 @@
 # Nach dem Update auf v36 – Angebotslayout v3 (HTML-Vorlagen + Browser-Druck) und Cloover-Finanzierung (PLAN_V22, Phasen 188–195)
 
-Stand 16.10.2026. Rollout nur im Wartungsfenster Dienstag 22:30–23:30: Wartungsbanner setzen, `update.bat`, danach
+Stand 16.10.2026; Rollout-Prüfung der Plan-Kette v36–v38 am 17.10.2026 bestanden (`docs/updates.md` 4g). Rollout nur im Wartungsfenster Dienstag 22:30–23:30: Wartungsbanner setzen, `update.bat`, danach
 `scripts\smoke.bat`. Rückweg `rollback.bat --nur-code` (alle Datenbankänderungen sind additiv, der v35-Code läuft auf
 der v36-Datenbank – Rückweg-Probe im Durchlauf). **Teil A** (dieser Abschnitt, Agent A3) beschreibt das Angebots-PDF;
 **Teil B** (Cloover-Finanzierung) ergänzt der Orchestrator unten.

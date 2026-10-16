@@ -1,6 +1,6 @@
 # Nach dem Update auf v37 – Lead-Management V7: Design v3, Kartei-Review, Termine anpassen, Routing in Kilometern (PLAN_LEAD_V7, Phasen 196–200)
 
-Stand 16.10.2026 (Plan-Kette v36 → v37 → v38, Rollout erst nach der gemeinsamen Rollout-Prüfung am Kettenende).
+Stand 16.10.2026 (Plan-Kette v36 → v37 → v38, Rollout erst nach der gemeinsamen Rollout-Prüfung am Kettenende – erledigt 17.10.2026, `docs/updates.md` 4g).
 Alle Datenbankänderungen sind additiv – der v36-Code läuft auf der v37-Datenbank weiter (`rollback.bat --nur-code`).
 
 ## Für den Admin (Reihenfolge nach dem Update)

@@ -237,8 +237,8 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
 
 ## Phase 200: Tests, Doku, Übergabe
 
-- [ ] Tests `tests/test_lead_v7.py`: (a) Kartei ohne monday-Badge und ohne
-      *(Stand 16.10.2026: Tests je Agent `tests/test_lead_v7_design.py`, `test_lead_v7_termine_routing.py`, `test_lead_v7_kanaele_interessen.py` statt einer Datei; v37-Tests, Wächter und Lead-Nachbarn auf der migrierten Kopie grün – Gesamtsuite einmal am Ende der Plan-Kette v36–v38.)*
+- [x] Tests `tests/test_lead_v7.py`: (a) Kartei ohne monday-Badge und ohne
+      *(Stand 16.10.2026: Tests je Agent `tests/test_lead_v7_design.py`, `test_lead_v7_termine_routing.py`, `test_lead_v7_kanaele_interessen.py` statt einer Datei; v37-Tests, Wächter und Lead-Nachbarn auf der migrierten Kopie grün. Kettenende 17.10.2026: Gesamtsuite 1859 bestanden / 7 übersprungen / 4 Mitternachts- bzw. Umgebungs-Fehler ohne Codefehler, Wiederholung 4/4 grün, `test_v27_sitzungen.py` und `test_v30_design.py` grün – `diagnose/v36/gesamtuebersicht.md` §10.)*
       SLA-Chip, Notizblock-Markup mit Buttons rechts; (b) Token-Wächter: keine
       festen Farben in Lead-Templates, v3-Tokens vorhanden, Dunkelmodus-
       Werte definiert; (c) Termin anpassen (Datum/AD) mit Aktivität,
@@ -254,8 +254,8 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       Erfassung starten. Bestehende Lead-Tests anpassen (Badge, Spalten,
       Buttons), jede Anpassung begründen. Gesamtlauf grün,
       `tests/test_v27_sitzungen.py` und `tests/test_v30_design.py` grün.
-- [ ] Rollout-Vorbereitung nach Grundregel: Server-DB-Kopie nach
-      *(laut Brief EINE Rollout-Vorbereitung am Kettenende v36–v38 – siehe `diagnose/v36/gesamtuebersicht.md` §10; Screenshots gegen die fehlende Design-Vorlage entfallen.)*
+- [x] Rollout-Vorbereitung nach Grundregel: Server-DB-Kopie nach
+      *(EINE Rollout-Vorbereitung am Kettenende v36–v38, erledigt 16./17.10.2026 – `diagnose/v36/gesamtuebersicht.md` §10: migrate ×2 (2. Lauf ohne Änderung), Rückweg v33-/v37-Code je 24/24, Abnahme 93/93, Voll-Crawl 16 Läufe 0 Abstürze, Smoke 8/8, Lasttest schreibsturm 190/190, normal 0 × 5xx / 0 locked – p95 Listen/Akten 2,3 s, Terminvorschläge 11,7 s und Angebots-PDF 4,2 s über den Zielwerten (Rückfragen 7 und 18 R7). Screenshots gegen die fehlende Design-Vorlage entfallen.)*
       diagnose\, migrate.py zweimal (additiv: Kanäle inaktiv, Interesse
       PVV, `objekte_zu`, Parameter), Rückweg-Probe v36-Code auf v37-DB,
       Voll-Crawl aller Rollen hell und dunkel, Abnahmeskript, Smoke,

@@ -336,6 +336,12 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
   Auswählen zum Löschen, „Später fortsetzen“, „Antworten korrigieren“, Reiter „Vergangene Termine“, Dialog „Termin
   nicht stattgefunden“; Leadmanagement: To-Do „Neuen Termin vereinbaren“; Innendienst: Kanal-Pfeil, Gruppe
   „Vergangene Termine“, Badge „nachträglich geändert“).
+- **Rollout-Prüfung der Plan-Kette v36–v38 (16./17.10.2026, Entwicklungsrechner, Server-Kopie vom 03.10.2026):**
+  `migrate.py` ×2 (2. Lauf ohne Änderungen), Rückweg-Probe v33-/v37-Code je 24/24, Gesamtsuite 1859 bestanden (4 Fehler durch
+  Mitternacht/Umgebung, Wiederholung grün), Abnahme 93/93, Voll-Crawl 16 Läufe ohne Absturz, Smoke 8/8, Lasttest
+  schreibsturm 190/190, normal 0 Fehler / 0 Sperren (p95 Listen/Akten 2,3 s, Terminvorschläge 11,7 s, Angebots-PDF 4,2 s
+  über den Zielwerten – nach dem Rollout auf dem Server nachmessen, Parametrierung → Betrieb). Details
+  `docs/lasttest-v27.md` 4.11; Protokolle lokal `diagnose/test_v38_final/`.
 
 ## 5. Versionsstand prüfen
 

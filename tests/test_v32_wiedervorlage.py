@@ -514,6 +514,7 @@ class WiedervorlageTests(unittest.TestCase):
 
         from app.db import Base
         ziel = PROJEKT / "diagnose" / "v31" / f"tmp_vot_abgleich_{PRAEFIX}.db"
+        ziel.parent.mkdir(parents=True, exist_ok=True)   # Kettenende 17.10.2026: Ordner darf fehlen (Diagnose-Umzug)
         for alt in (ziel, Path(str(ziel) + "-wal"), Path(str(ziel) + "-shm")):
             alt.unlink(missing_ok=True)
         engine = create_engine(f"sqlite:///{ziel}")

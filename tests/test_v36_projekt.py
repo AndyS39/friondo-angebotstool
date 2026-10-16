@@ -553,16 +553,19 @@ class StatusLauf(Basis):
 
 class Anzeige(Basis):
     def test_badges_akte_editor_liste_statistik(self):
-        a = _mit_projekt(self, primary_signed_contract=True, vertrag_am="16.10.2026", status="signed")
+        # Kettenende 17.10.2026: Vertragsdatum = heute statt des festen Schreibdatums 16.10.2026 – die
+        # Statistik unten zählt im Fenster jetzt ± 1 Tag, ein festes Datum fiel nach Mitternacht heraus
+        heute = datetime.date.today().strftime("%d.%m.%Y")
+        a = _mit_projekt(self, primary_signed_contract=True, vertrag_am=heute, status="signed")
         with self.mocks()[0]:
             akte = self.client.get(f"/vorgaenge/{self.vorgang.id}")
             editor = self.client.get(f"/angebote/{a.id}")
             liste = self.client.get("/angebote")
             statistik = self.client.get("/statistik?zeitraum=monat")
         self.assertEqual(akte.status_code, 200)
-        self.assertIn("Cloover: Vertrag unterschrieben (16.10.2026)", akte.text)
+        self.assertIn(f"Cloover: Vertrag unterschrieben ({heute})", akte.text)
         self.assertEqual(editor.status_code, 200)
-        self.assertIn("Cloover: Vertrag unterschrieben (16.10.2026)", editor.text)
+        self.assertIn(f"Cloover: Vertrag unterschrieben ({heute})", editor.text)
         self.assertIn("Angebot auf Angenommen setzen?", editor.text)
         self.assertIn("Status jetzt abrufen", editor.text)
         self.assertIn("Link kopieren", editor.text)

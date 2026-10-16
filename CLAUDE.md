@@ -94,6 +94,7 @@ Nummern vergeben.
 | v36 | PLAN_V22.md | 188–195 |
 | v37 | PLAN_LEAD_V7.md | 196–200 |
 | v38 | PLAN_V23.md | 201–205 |
+| v38-Nachtrag | Rollout-Prüfung der Kette (ohne Plan, `diagnose/v36/gesamtuebersicht.md` §10) | – |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -4403,7 +4404,7 @@ Cloover-Tests sind gemockt.)
   Gesamtsuite `pytest tests -q`, Rollout-Vorbereitung (Server-Kopie, Rückweg-Probe v35-Code, Voll-Crawl, Abnahme, Smoke,
   Lasttest mit PDF-Erzeugung und `cloover-status` im Modell), Screenshots Editor-Karte/Parametrierung hell/dunkel und
   der **Cloover-Echtlauf** gegen die Test-Umgebung (kein Key auf dem Dev-PC) – laut Brief einmal am Ende der Plan-Kette
-  v36 → v37 → v38 (`diagnose/v36/gesamtuebersicht.md` §10). Doku: dieser Abschnitt, Leitplanken ab v36, Zuordnungstabelle,
+  v36 → v37 → v38 (`diagnose/v36/gesamtuebersicht.md` §10) *(erledigt 16./17.10.2026 – siehe „Rollout-Prüfung der Plan-Kette v36 → v37 → v38“ am Ende von „Neu in v38“)*. Doku: dieser Abschnitt, Leitplanken ab v36, Zuordnungstabelle,
   Titelzeile, Zentrale Dateien, Fachliche Regeln (Angebots-PDF aus HTML-Vorlagen, Cloover nur Profil Standard),
   überholt-Marker in „Unverändert aus v2“, v9, v18/v26/v33 (13 Go-live-Punkte), v22, v24; `ANGEBOTSTEXTE.md` Abschnitte
   5/9.2/10/11, `docs/angebots-pdf.md` (neu), `docs/cloover-api.md` (neu), `docs/graph-einrichtung.md` Abschnitt 8,
@@ -4539,7 +4540,7 @@ Zwischenstand-Commit „v37“ ohne Push; Rückfragen gebündelt am Ende der Ket
   Kopie (zweiter Lauf ohne Änderungen). **Nicht in diesem Zwischenstand:** Gesamtsuite, Rollout-Vorbereitung
   (Server-Kopie, Rückweg-Probe v36-Code, Voll-Crawl hell/dunkel, Abnahme, Smoke, Lasttest), Screenshots gegen die
   fehlende Design-Vorlage und der Routing-Echtlauf (kein ORS-Key) – einmal am Ende der Plan-Kette v36 → v37 → v38
-  (`diagnose/v36/gesamtuebersicht.md` §10). Doku: dieser Abschnitt, Leitplanken ab v37, Zuordnungstabelle, Titelzeile,
+  (`diagnose/v36/gesamtuebersicht.md` §10) *(erledigt 16./17.10.2026 – siehe „Rollout-Prüfung der Plan-Kette v36 → v37 → v38“ am Ende von „Neu in v38“)*. Doku: dieser Abschnitt, Leitplanken ab v37, Zuordnungstabelle, Titelzeile,
   überholt-Marker in v12 (Luftlinie-Rückfall, monday-Badge), v23 (Deals-Spalte), v29 (Routenplaner-Kachel), v30 (Design v2
   im Lead-Modul), v31 (Merkmal PVV), v35 (Kanalliste, Inline-Interessen); `docs/design-system.md` („Design v3
   (Lead-Modul)“), `docs/nach-dem-update-v37.md`, `docs/updates.md` (4f), `docs/betrieb.md` („Ergänzungen v37“);
@@ -4702,9 +4703,35 @@ Geräts (kein Hintergrund-Upload, kein Service Worker ohne HTTPS).
   auf einer frischen Kopie (zweiter Lauf ohne Änderungen). **Nicht in diesem Zwischenstand:** Gesamtsuite und
   Rollout-Vorbereitung (Server-Kopie, Rückweg-Probe v37-Code, Voll-Crawl aller Rollen hell/dunkel, Abnahme, Smoke,
   Lasttest `normal` mit Mehrfach-Löschen, `/leads/vergangene` und dem Dialog im AD-Profil) – einmal am Ende der
-  Plan-Kette v36 → v37 → v38 (`diagnose/v36/gesamtuebersicht.md` §10). Doku: dieser Abschnitt, Zuordnungstabelle,
+  Plan-Kette v36 → v37 → v38 (`diagnose/v36/gesamtuebersicht.md` §10) *(erledigt 16./17.10.2026 – siehe „Rollout-Prüfung der Plan-Kette v36 → v37 → v38“ am Ende von „Neu in v38“)*. Doku: dieser Abschnitt, Zuordnungstabelle,
   Titelzeile, Fachliche Regeln („Korrektur nach Senden mit Änderungsnotiz“), überholt-Marker in v32/v33 („überfällig“,
   Reiter „Kunden“) und v34 (Upload-Knopf); `docs/nach-dem-update-v38.md`, `docs/betrieb.md` („Ergänzungen v38“:
   IndexedDB-Puffer je Gerät, Mehrfach-Löschen), `docs/updates.md` (4g); `config.VERSION = "v38"`. Zwischenstand-Commit
   „v38: Foto-Upload Pop-up/Offline/Mehrfach-Löschen, Erfassung Entwurf/Korrektur, Leads VOT Kanal-Pfeil/Vergangene
   Termine, Mobil (PLAN_V23, Phasen 201-205)“ ohne Push.
+- **Rollout-Prüfung der Plan-Kette v36 → v37 → v38 (16./17.10.2026, Orchestrator; Commit „v38-Nachtrag“ ohne Push):**
+  EINE Rollout-Vorbereitung für v35-Nachtrag 3 + v36 + v37 + v38 laut Brief – Server-DB-Kopie vom 03.10.2026 (eine frischere
+  lag nicht vor), Skripte `diagnose/v36/abschluss_tests.sh` / `abschluss_rest.sh` / `abschluss_lasttest.sh`, Protokolle
+  `diagnose/test_v38_final/` (lokal). **`migrate.py` zweimal** (Lauf 1 zieht die Kopie in einem Lauf von v16 auf v38 – u. a.
+  Angebots-PDF Browser-Test ok msedge 155 → Engine html, Vortexte PV/KL/WB mit Historie „(bis v35)“, Nachtext Standard
+  `[CLOOVER]`, Kanäle v35 + WELOVEX/DAA inaktiv v37, Routing-Parameter, neue Spalten v37/v38; Lauf 2 ohne Änderung),
+  Testbenutzer je Basisrolle + Varianten, VOT-Abgleich ohne Abweichungen, **Rückweg-Probe v33-Code (2ab17a6 = Server-Stand)
+  und v37-Code (72724a6) je 24/24 Seiten** auf der v38-Datenbank, **Gesamtsuite 1859 bestanden / 7 übersprungen** (Lauf 1
+  mit einem Reihenfolge-Fehler – Dev-DB erst durch die Abnahme migriert; Lauf 2 über Mitternacht mit 4 Fehlern ohne
+  Codefehler, Wiederholung 4/4 grün: `test_v36_rate` Datum beim Import, `test_v36_projekt` Vertragsdatum jetzt
+  `date.today()`, `test_v32_wiedervorlage` legt `diagnose/v31/` selbst an), Wächter v27/v30/v33 grün, **Abnahme 93/93**
+  (Skript angepasst: Briefanrede im Layout v3 auf Seite 2 „Ihr Angebot im Überblick“, Archiv-Regel → Anrede-Prüfung rendert
+  als Entwurf), **Voll-Crawl 16 Läufe** (6 Basisrollen + 3 Varianten je hell/dunkel, 2 × 111.396 + 6 × 18.566 Aufrufe,
+  **0 Abstürze**, ein Aufruf > 3 s = erster Browser-Druck 4,0 s), **Smoke 8/8** (Angebots-PDF 1,8 MB Layout v3),
+  **Lasttest** `schreibsturm` 190/190 Positionen, 0 locked, Schreibsperre ≤ 25 ms; `normal` (50 Nutzer, 20 min, 6.402
+  Anfragen) 0 × 5xx, 0 locked, Pool-Spitze 43 %, p95 Editor 174 ms / Protokoll-PDF 761 ms / Kundensuche 214 ms / TAIFUN-PDF
+  158 ms erfüllt, **nicht erfüllt** p95 Listen/Akten 2.295 ms (v35 3.993), Terminvorschläge 11,7 s (v35 20,1) und neu
+  Angebots-PDF 4.192 ms (Ziel 4.000 – Browser-Druck unter Last mit Semaphore 2; Rückfrage 7) – `docs/lasttest-v27.md` 4.11.
+  **Befund Plattenplatz:** nicht C:, sondern das FSLogix-Profil-Volume (29 GB) lief am 16.10. voll (Agenten-/INT-Kopien,
+  alte Diagnose-Ordner) – Crawl dunkel, Smoke und Lasttests des ersten Laufs brachen ab; bereinigt, alte Diagnose-Ordner
+  `diagnose/v31|v33|v34|v35` und die Prüfkopie liegen unter `C:\Users\Public\Angebotstool-diagnose-alt-a.scheelen\`.
+  Regel: Agenten-Kopien künftig auf dem Host-Laufwerk, nur Protokolle im Profil (`lasttest.py` verlangt `--data` unter
+  `diagnose/`). **Nicht geprüft:** Cloover-Echtlauf (kein Key), Routing-Echtlauf (kein ORS-Key), Browser-Druck unter SYSTEM
+  (nur auf dem Server, `scripts\pdf-browser-pruefen.bat`), Außendienst-Sichtprüfung am echten Handy (Tests + 390-px-
+  Screenshots der Agenten). Rückfragen 1–18, [ANNAHME]-Listen und Server-To-dos: `diagnose/v36/gesamtuebersicht.md`
+  §8–§11 (lokal); Pläne PLAN_V22/PLAN_LEAD_V7/PLAN_V23 vollständig abgehakt.

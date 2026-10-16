@@ -636,9 +636,10 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
 
 ## Phase 195 – Tests, Rollout-Vorbereitung, Doku, CLAUDE.md v36 (Teil A + B)
 
-- [ ] **Tests gesamt:** `test_v36_pdf_engine.py`, `test_v36_layout.py`,
-      *(Stand 16.10.2026: v36-Tests und Nachbarn auf der migrierten Kopie grün – Gesamtsuite,
-      Cloover-Echtlauf (kein Key auf dem Dev-PC) und Wächter-Gesamtlauf einmal am Ende der Plan-Kette v36–v38.)*
+- [x] **Tests gesamt:** `test_v36_pdf_engine.py`, `test_v36_layout.py`,
+      *(Stand 16.10.2026: v36-Tests und Nachbarn auf der migrierten Kopie grün. Kettenende 17.10.2026: Gesamtsuite
+      1859 bestanden / 7 übersprungen / 4 Mitternachts- bzw. Umgebungs-Fehler ohne Codefehler, Wiederholung 4/4 grün, Wächter v27/v30/v33 grün – `diagnose/v36/gesamtuebersicht.md` §10; Cloover-Echtlauf
+      offen, kein Key auf dem Dev-PC (§9 Nr. 11).)*
       `test_v36_einbindung.py`, `test_v36_cloover_api.py`, `test_v36_rate.py`,
       `test_v36_projekt.py`; angepasste Alt-Tests (PDF-Textprüfungen der
       Regressionstests auf die neue Engine umgestellt – Summen und Pflicht-
@@ -653,9 +654,9 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Demo-Kunde mit Friondo-Testadresse und -Telefon): Rate, Projektanlage,
       QR-Scan öffnet den Checkout, Statusabruf; Ergebnis in die
       Gesamtübersicht (Projekt-ID, ohne Link).
-- [ ] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
-      *(laut Brief EINE Rollout-Vorbereitung am Ende der Plan-Kette v36–v38 – siehe
-      `diagnose/v36/gesamtuebersicht.md` §10.)*
+- [x] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
+      *(EINE Rollout-Vorbereitung am Ende der Plan-Kette v36–v38, erledigt 16./17.10.2026 – Ergebnis in
+      `diagnose/v36/gesamtuebersicht.md` §10: migrate ×2 (2. Lauf ohne Änderung), Rückweg v33-/v37-Code je 24/24, Abnahme 93/93, Voll-Crawl 16 Läufe 0 Abstürze, Smoke 8/8, Lasttest schreibsturm 190/190, normal 0 × 5xx / 0 locked – p95 Listen/Akten 2,3 s, Terminvorschläge 11,7 s und Angebots-PDF 4,2 s über den Zielwerten (Rückfragen 7 und 18 R7).)*
       diagnose\, migrate.py zweimal (additiv: Parameter `pdf_engine`,
       Textblock-Fassungen v36, `angebote.cloover_json`,
       `benutzer.cloover_email`, Cloover-Parameter, Textbausteine,
