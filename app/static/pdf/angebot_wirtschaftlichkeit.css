@@ -1,0 +1,209 @@
+/* v36 (PLAN_V22 Phase 189, Agent A2): die drei Wirtschaftlichkeitsseiten PV des Angebots-PDFs (Präfix .wi-),
+   Aufbau nach docs/wirtschaftlichkeit-mockup/seite1–3.html (794 × 1123 px = A4; Maße hier in mm, Karten mit
+   festen Höhen wie in app/wirtschaftlichkeit_pdf.py, damit jede der drei Seiten genau eine A4-Seite füllt).
+   Farben: Mockup → nächstes PDF-Token (Navy → --pdf-dunkel, Blau → --pdf-blau, Linie → --pdf-linie,
+   Grau-Text → --pdf-grau, Tint → --pdf-flaeche, Tint 2 → --pdf-hell); die übrigen Mockup-Farben stehen als
+   eigene Variablen nur in diesem Stylesheet (nie im Template). */
+
+:root {
+  --wi-sonne: #f0a500;          /* Mockup: Direktverbrauch „von der Sonne“, Break-even-Chip */
+  --wi-sonne-dunkel: #9a6700;   /* Mockup: Delta-Beschriftung der Treppe, SpotDynamic-Hinweis */
+  --wi-blau-dunkel: #326ea5;    /* Mockup: Eyebrow, Kachel „mit Friondo“, dritte Treppenstufe */
+  --wi-dunkel-hell: #24366e;    /* Mockup: Kacheln in der Hero-Karte */
+  --wi-hero-eyebrow: #9fb8dc;   /* Mockup: Eyebrow in der Hero-Karte */
+  --wi-hero-hell: #c9d6ea;      /* Mockup: heller Text auf Navy */
+  --wi-grau-flaeche: #d5dbe5;   /* Mockup: Netz-Segment der gestapelten Balken */
+  --wi-karte: #f6f8fb;          /* Mockup: Kachelfläche hell */
+}
+
+.wi-seite {
+  display: flex;
+  flex-direction: column;
+  gap: 4mm;
+  font-size: 9pt;
+  line-height: 1.45;
+  color: var(--pdf-text);
+}
+
+/* Seitenkopf: Eyebrow + Meta-Zeile, Titel, Subline */
+.wi-kopf { display: flex; flex-direction: column; gap: 1mm; }
+.wi-eyebrow { font-size: 8pt; font-weight: 700; letter-spacing: 0.14em; color: var(--wi-blau-dunkel); }
+.wi-meta { font-size: 8.5pt; color: var(--pdf-grau); }
+.wi-titel { margin: 1mm 0 0; font-size: 21pt; font-weight: 800; line-height: 1.15; color: var(--pdf-dunkel); letter-spacing: -0.01em; }
+.wi-subline { margin: 0; font-size: 9.5pt; line-height: 1.45; color: var(--pdf-grau); max-height: 14.6mm; overflow: hidden; } /* höchstens drei Zeilen – feste Seitenhöhe */
+
+/* Farbklassen der Balken/Punkte */
+.wi-f-sonne { background: var(--wi-sonne); color: var(--pdf-dunkel); }
+.wi-f-blau { background: var(--pdf-blau); color: var(--pdf-weiss); }
+.wi-f-grau { background: var(--wi-grau-flaeche); color: var(--pdf-dunkel); }
+.wi-f-hell { background: var(--pdf-hell); color: var(--pdf-dunkel); }
+.wi-f-blau-dunkel { background: var(--wi-blau-dunkel); color: var(--pdf-weiss); }
+.wi-f-dunkel { background: var(--pdf-dunkel); color: var(--pdf-weiss); }
+
+/* Karten */
+.wi-karte {
+  border: 0.3mm solid var(--pdf-linie);
+  border-radius: 3mm;
+  padding: 5mm 5mm;
+  display: flex;
+  flex-direction: column;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  overflow: hidden;
+}
+.wi-kartentitel { display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; margin-bottom: 2mm; }
+.wi-kartentitel-text { font-size: 12pt; font-weight: 700; color: var(--pdf-dunkel); line-height: 1.25; }
+.wi-kartentitel-meta { font-size: 8.5pt; color: var(--pdf-grau); text-align: right; white-space: nowrap; }
+.wi-kartentitel-sub { font-size: 8.5pt; color: var(--pdf-grau); margin: -1.5mm 0 1.5mm; }
+.wi-satz { margin-top: auto; font-size: 9pt; line-height: 1.35; color: var(--pdf-grau); }
+.wi-satz b { color: var(--pdf-dunkel); font-weight: 700; }
+.wi-satz-gross { font-size: 10pt; color: var(--pdf-text); }
+
+/* Kacheln */
+.wi-kacheln-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4mm; margin-top: 3mm; }
+.wi-kacheln-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; margin: 2.5mm 0; }
+.wi-kachel { display: flex; flex-direction: column; gap: 0.5mm; padding: 2.5mm 3.5mm; border-radius: 2.5mm; }
+.wi-kachel-wert { font-size: 14pt; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--pdf-dunkel); }
+.wi-kachel-label { font-size: 8pt; line-height: 1.3; color: var(--pdf-grau); }
+.wi-kachel-karte { background: var(--wi-karte); }
+.wi-kachel-tint { background: var(--pdf-flaeche); }
+.wi-kachel-tint .wi-kachel-wert, .wi-kachel-tint .wi-kachel-label { color: var(--wi-blau-dunkel); }
+.wi-kachel-dunkel { background: var(--pdf-dunkel); }
+.wi-kachel-dunkel .wi-kachel-wert { color: var(--pdf-weiss); }
+.wi-kachel-dunkel .wi-kachel-label { color: var(--wi-hero-hell); }
+.wi-kacheln-2 .wi-kachel-wert { font-size: 13pt; }
+.wi-kacheln-2 .wi-kachel-label { font-size: 7.5pt; }
+
+/* Legenden, Punkte, gestapelte Balken */
+.wi-legende { display: flex; gap: 6mm; align-items: center; flex-wrap: wrap; font-size: 8.5pt; color: var(--pdf-grau); }
+.wi-legende-eintrag { display: inline-flex; align-items: center; gap: 2mm; }
+.wi-punkt { display: inline-block; width: 3.2mm; height: 3.2mm; border-radius: 1mm; }
+.wi-stapel { flex: 1 1 0; display: flex; border-radius: 1.5mm; overflow: hidden; gap: 0.5mm; min-width: 0; background: var(--wi-grau-flaeche); }
+.wi-stapel-seg { height: 8mm; display: flex; align-items: center; justify-content: center; font-size: 9pt; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.wi-stapel-gross { flex: none; }
+
+/* ---------------------------------------------------------------- Seite 1 */
+.wi-hero {
+  height: 58mm;
+  background: var(--pdf-dunkel);
+  border-radius: 3mm;
+  padding: 7mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--pdf-weiss);
+  break-inside: avoid;
+}
+.wi-hero-oben { display: flex; justify-content: space-between; align-items: center; gap: 8mm; }
+.wi-hero-links { display: flex; flex-direction: column; gap: 1.5mm; }
+.wi-hero-eyebrow { font-size: 8pt; font-weight: 700; letter-spacing: 0.14em; color: var(--wi-hero-eyebrow); }
+.wi-hero-betrag { font-size: 40pt; font-weight: 700; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wi-hero-text { width: 78mm; font-size: 9.5pt; line-height: 1.45; color: var(--wi-hero-hell); }
+.wi-hero-kacheln { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4mm; }
+.wi-hero-kachel { background: var(--wi-dunkel-hell); border-radius: 2.5mm; padding: 2.5mm 3.5mm; height: 20mm; display: flex; flex-direction: column; gap: 0.5mm; }
+.wi-hero-kachel .wi-kachel-wert { font-size: 18pt; color: var(--pdf-weiss); }
+.wi-hero-kachel .wi-kachel-label { color: var(--wi-hero-hell); }
+
+.wi-karte-amort { height: 70mm; }
+.wi-kum { position: relative; display: flex; flex-direction: column; }
+.wi-kum-pos { position: relative; display: flex; gap: 1.2mm; align-items: flex-end; }
+.wi-kum-slot { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; position: relative; height: 100%; min-width: 0; }
+.wi-kum-bar { width: 100%; background: var(--pdf-blau); border-radius: 0.8mm 0.8mm 0 0; }
+.wi-kum-null { height: 0.3mm; background: var(--pdf-dunkel); }
+.wi-kum-neg { display: flex; gap: 1.2mm; align-items: flex-start; }
+.wi-kum-slot-neg { justify-content: flex-start; }
+.wi-kum-bar-neg { width: 100%; background: var(--pdf-hell); border-radius: 0 0 0.8mm 0.8mm; }
+.wi-kum-start { position: absolute; left: 0; top: 0; font-size: 8pt; color: var(--pdf-grau); white-space: nowrap; }
+.wi-kum-end { position: absolute; right: 0; font-size: 9pt; font-weight: 700; color: var(--pdf-dunkel); white-space: nowrap; }
+.wi-chip {
+  position: absolute;
+  padding: 0 3mm;
+  height: 6.5mm;
+  line-height: 6.5mm;
+  background: var(--wi-sonne);
+  color: var(--pdf-dunkel);
+  font-size: 9pt;
+  font-weight: 700;
+  border-radius: 3.25mm;
+  white-space: nowrap;
+}
+.wi-achse { display: flex; gap: 1.2mm; margin-top: 1.2mm; }
+.wi-achse-label { flex: 1 1 0; text-align: center; font-size: 8pt; color: var(--pdf-grau); white-space: nowrap; min-width: 0; }
+
+.wi-karte-strom { height: 56mm; }
+.wi-strom-zeile { display: flex; align-items: center; gap: 4mm; margin-bottom: 2.5mm; }
+.wi-strom-label { width: 46mm; flex: none; font-size: 9pt; line-height: 1.3; }
+.wi-karte-strom .wi-legende { margin-top: 1mm; }
+
+/* ---------------------------------------------------------------- Seite 2 */
+.wi-karte-kosten { height: 76mm; }
+.wi-karte-kosten .wi-legende { margin-bottom: 2mm; }
+.wi-kosten { display: flex; gap: 1.5mm; align-items: flex-end; }
+.wi-kosten-slot { flex: 1 1 0; display: flex; gap: 0.5mm; align-items: flex-end; height: 100%; min-width: 0; }
+.wi-kosten-bar { flex: 1 1 0; border-radius: 0.7mm 0.7mm 0 0; }
+.wi-karte-kosten .wi-achse { gap: 1.5mm; margin-top: 1mm; }
+.wi-karte-kosten .wi-kacheln-3 { margin-top: auto; }
+.wi-karte-kosten .wi-kachel { height: 16mm; }
+
+.wi-zweispaltig { display: grid; grid-template-columns: 87mm minmax(0, 1fr); gap: 4mm; align-items: stretch; }
+.wi-karte-vorteil, .wi-karte-rechts { height: 62mm; }
+.wi-vorteil { display: flex; flex-direction: column; }
+.wi-vorteil-zeile { display: flex; align-items: baseline; gap: 1.5mm; padding: 1.1mm 0; border-bottom: 0.25mm solid var(--pdf-linie); }
+.wi-vorteil-name { width: 36mm; flex: none; font-size: 8.5pt; white-space: nowrap; }
+.wi-vorteil-rechnung { width: 24mm; flex: none; font-size: 8pt; color: var(--pdf-grau); white-space: nowrap; }
+.wi-vorteil-betrag { flex: 1 1 0; text-align: right; font-size: 9pt; font-weight: 700; color: var(--pdf-dunkel); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wi-vorteil-summe { border-bottom: 0; }
+.wi-vorteil-summe .wi-vorteil-name { font-weight: 700; color: var(--pdf-dunkel); }
+.wi-vorteil-summe .wi-vorteil-betrag { font-size: 10.5pt; }
+.wi-rechts-intro { font-size: 8.5pt; color: var(--pdf-grau); margin: -1mm 0 1.5mm; }
+.wi-rechts-intro b { color: var(--pdf-text); }
+.wi-rechts-satz { font-size: 8pt; line-height: 1.3; color: var(--pdf-grau); margin-top: auto; }
+
+.wi-karte-treppe { height: 50mm; }
+.wi-treppe { display: grid; gap: 5mm; align-items: end; }
+.wi-stufe { display: flex; flex-direction: column; min-width: 0; }
+.wi-stufe-oben { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.wi-stufe-delta { font-size: 8pt; font-weight: 700; color: var(--wi-sonne-dunkel); text-align: center; padding-bottom: 1mm; }
+.wi-stufe-basis { font-weight: 400; color: var(--pdf-grau); }
+.wi-stufe-bar { width: 100%; display: flex; align-items: center; justify-content: center; font-size: 10pt; font-weight: 700; border-radius: 1.5mm 1.5mm 0 0; }
+.wi-stufe-unten { border-top: 0.3mm solid var(--pdf-linie); padding-top: 1.2mm; }
+.wi-stufe-name { font-size: 9pt; font-weight: 700; color: var(--pdf-dunkel); line-height: 1.25; }
+.wi-stufe-detail { font-size: 8pt; line-height: 1.3; color: var(--pdf-grau); }
+.wi-stufe-hinweisbox { width: 100%; background: var(--wi-karte); border-radius: 1.5mm; padding: 1.5mm 2.5mm; font-size: 8pt; line-height: 1.3; color: var(--wi-sonne-dunkel); display: flex; align-items: center; }
+.wi-sonne-text { color: var(--wi-sonne-dunkel); }
+.wi-stufe-hinweis .wi-stufe-unten { border-top-color: var(--pdf-linie); }
+
+/* ---------------------------------------------------------------- Seite 3 */
+.wi-karte-szenarien { height: 70mm; }
+.wi-szenarien { display: flex; gap: 8mm; }
+.wi-szenario { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; }
+.wi-szenario-oben { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; margin-top: 1mm; }
+.wi-szenario-summe { font-size: 10pt; font-weight: 700; color: var(--pdf-dunkel); white-space: nowrap; margin-bottom: 1mm; }
+.wi-szenario-bar { width: 100%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 1.5mm; font-size: 9pt; font-weight: 700; border-radius: 1.5mm 1.5mm 0 0; }
+.wi-szenario-unten { border-top: 0.3mm solid var(--pdf-linie); padding-top: 1.5mm; }
+.wi-szenario-label { font-size: 10pt; font-weight: 700; color: var(--pdf-dunkel); white-space: nowrap; }
+.wi-szenario-note { font-size: 9pt; color: var(--pdf-grau); }
+.wi-szenarien-text { margin-top: auto; font-size: 9.5pt; line-height: 1.4; color: var(--pdf-text); }
+
+.wi-karte-klima { height: 34mm; }
+.wi-klima { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4mm; }
+.wi-klima-kachel { background: var(--wi-karte); border-radius: 2.5mm; padding: 2.5mm 3.5mm; display: flex; flex-direction: column; gap: 1mm; height: 17mm; }
+.wi-klima-oben { display: flex; align-items: center; gap: 2mm; }
+.wi-klima-icon { display: inline-flex; color: var(--wi-blau-dunkel); }
+.wi-klima-icon svg { width: 6.5mm; height: 6.5mm; }
+.wi-klima-wert { font-size: 13pt; font-weight: 700; color: var(--pdf-dunkel); line-height: 1.1; white-space: nowrap; }
+.wi-klima-label { font-size: 8pt; color: var(--pdf-grau); white-space: nowrap; }
+
+.wi-karte-annahmen { height: 84mm; }
+.wi-annahmen { display: flex; gap: 6mm; }
+.wi-annahmen-spalte { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; }
+.wi-annahme { display: flex; gap: 2mm; font-size: 8.5pt; line-height: 1.3; padding: 1.3mm 0; border-bottom: 0.25mm solid var(--pdf-linie); }
+.wi-annahme-name { width: 26mm; flex: none; color: var(--pdf-grau); }
+.wi-annahme-wert { color: var(--pdf-text); }
+.wi-annahmen-hinweis { margin-top: 2.5mm; font-size: 8pt; line-height: 1.4; color: var(--pdf-grau); }
+.wi-weiter { margin-top: auto; padding-top: 2.5mm; border-top: 0.25mm solid var(--pdf-linie); display: flex; flex-direction: column; gap: 2.5mm; }
+.wi-weiter-eyebrow { font-size: 8pt; font-weight: 700; letter-spacing: 0.14em; color: var(--wi-blau-dunkel); }
+.wi-schritte { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3mm; }
+.wi-schritt { display: flex; align-items: center; gap: 2mm; }
+.wi-schritt-nr { flex: none; width: 6mm; height: 6mm; border-radius: 50%; background: var(--pdf-blau); color: var(--pdf-weiss); font-size: 8pt; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.wi-schritt-text { font-size: 8.5pt; font-weight: 700; color: var(--pdf-dunkel); line-height: 1.25; }

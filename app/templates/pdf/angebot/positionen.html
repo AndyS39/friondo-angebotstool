@@ -1,0 +1,75 @@
+{#- v36 (PLAN_V22 Phase 189): Festpreisangebot – Tabelle POS. · MENGE · EINH. · BEZEICHNUNG · E-PREIS · G-PREIS,
+    Gruppenüberschriften als fette Zwischenzeile, Artikeltext erste Zeile fett, Aufzählungspunkte, Kennzeichen
+    (EP „EP.“, bauseits, Alternativ mit Hinweiskasten + „im PV-Angebot“ + hellgrauer Zeile), Positionsrabatt,
+    Vermerke als Absatz „Hinweise“, Summenblock rechts mit dunkler Box. Der Spaltenkopf (thead) wird vom
+    Browser auf jeder Folgeseite wiederholt; die Überschrift „Festpreisangebot (Fortsetzung)“ der Vorlage
+    entfällt (Abweichung, siehe Bericht) – die Randzone trägt Angebot-Nr. und Seitenzahl. -#}
+<div class="pdf-seite pdf-positionen">
+  <div class="pdf-pos-kopf">
+    <h2>Festpreisangebot</h2>
+    <div class="pdf-pos-netto">Alle Preise in EUR, netto</div>
+  </div>
+  <table class="pdf-tabelle pdf-pos-tabelle">
+    <colgroup>
+      <col class="pdf-col-nr"><col class="pdf-col-menge"><col class="pdf-col-einheit"><col class="pdf-col-text">
+      <col class="pdf-col-epreis"><col class="pdf-col-gpreis">
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="pdf-col-nr">Pos.</th>
+        <th class="pdf-col-menge pdf-rechts">Menge</th>
+        <th class="pdf-col-einheit">Einh.</th>
+        <th class="pdf-col-text">Bezeichnung</th>
+        <th class="pdf-col-epreis pdf-rechts">E-Preis</th>
+        <th class="pdf-col-gpreis pdf-rechts">G-Preis</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for gruppe in kontext.gruppen %}
+      {%- if gruppe.titel %}
+      <tr class="pdf-pos-gruppe"><td colspan="6">{{ gruppe.titel }}</td></tr>
+      {%- endif %}
+      {%- for p in gruppe.positionen %}
+      {%- if p.hinweiskasten %}
+      <tr class="pdf-pos-kastenzeile"><td colspan="6"><div class="pdf-hinweiskasten">{{ p.hinweiskasten }}</div></td></tr>
+      {%- endif %}
+      <tr class="pdf-pos-zeile{% if p.kennzeichen == 'alternativ' %} pdf-pos-alternativ{% endif %}{% if p.kennzeichen == 'ep' %} pdf-pos-ep{% endif %}{% if p.kennzeichen == 'bauseits' %} pdf-pos-bauseits{% endif %}">
+        <td class="pdf-col-nr pdf-pos-nr">{{ p.nr }}</td>
+        <td class="pdf-col-menge pdf-rechts pdf-zahl">{{ p.menge }}</td>
+        <td class="pdf-col-einheit">{{ p.einheit }}</td>
+        <td class="pdf-col-text">
+          {%- if p.bezeichnung %}<strong>{{ p.bezeichnung }}</strong>{% endif %}
+          {%- for z in p.zeilen %}
+          {%- if z.punkt %}<div class="pdf-pos-punkt{% if z.ebene == 2 %} pdf-pos-punkt-2{% endif %}">{{ z.text }}</div>
+          {%- else %}<div class="pdf-pos-textzeile{% if z.dezent %} pdf-dezent{% endif %}">{{ z.text }}</div>
+          {%- endif %}
+          {%- endfor %}
+          {%- if p.rabatt_text %}<div class="pdf-pos-rabatt">{{ p.rabatt_text }}</div>{% endif %}
+        </td>
+        <td class="pdf-col-epreis pdf-rechts pdf-zahl">{{ p.einzelpreis }}</td>
+        <td class="pdf-col-gpreis pdf-rechts pdf-zahl pdf-pos-gpreis{% if p.kennzeichen %} pdf-pos-label{% endif %}">{{ p.gesamtpreis }}</td>
+      </tr>
+      {%- endfor %}
+      {%- endfor %}
+    </tbody>
+  </table>
+  {%- if kontext.hinweise %}
+  <div class="pdf-pos-hinweise">
+    <h3>Hinweise</h3>
+    {%- for h in kontext.hinweise %}
+    <p><strong>{{ h.titel }}</strong>{% if h.text %}<br>{{ h.text }}{% endif %}</p>
+    {%- endfor %}
+  </div>
+  {%- endif %}
+  <div class="pdf-summen-anker">
+    <div class="pdf-summen">
+      {%- for z in kontext.summen.zeilen %}
+      {%- if z.linie %}<span class="pdf-summen-linie"></span>{% endif %}
+      <span class="pdf-summen-k{% if z.fett %} pdf-summen-fett{% endif %}{% if z.blau %} pdf-summen-blau{% endif %}">{{ z.text }}</span><span class="pdf-summen-w pdf-zahl{% if z.fett %} pdf-summen-fett{% endif %}{% if z.blau %} pdf-summen-blau{% endif %}">{{ z.betrag }}</span>
+      {%- endfor %}
+      {%- if not kontext.summen.hat_rabatt and not kontext.summen.hat_foerderung %}<span class="pdf-summen-linie"></span>{% endif %}
+      <div class="pdf-summen-box pdf-box-dunkel"><span>{{ kontext.summen.box.titel }}</span><span class="pdf-zahl">{{ kontext.summen.box.betrag }}</span></div>
+      {%- if kontext.summen.box.hinweis %}<span class="pdf-summen-hinweis">{{ kontext.summen.box.hinweis }}</span>{% endif %}
+    </div>
+  </div>
+</div>

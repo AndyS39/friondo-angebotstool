@@ -287,6 +287,9 @@ def seite(request: Request, zeitraum: str = "monat", von: str = "",
         session, start, ende, nur_benutzer_id=nur,
         ad_id=grund_ad, kanal=grund_kanal, sparte=grund_sparte)
     vorgaenge = vorgangs_kennzahlen(session, start, ende, nur_benutzer_id=nur)
+    # v36 (PLAN_V22 Phase 194, B3): Kennzahl „Cloover-Verträge“ (Vertrag im Zeitraum unterschrieben) [ANNAHME]
+    from app import cloover_projekt
+    cloover_vertraege = cloover_projekt.statistik(session, start, ende, nur_benutzer_id=nur)
     auftragseingang = auftragseingang_monate(
         session, ad_id=ae_ad, kanal=ae_kanal, sparte=ae_sparte,
         quelle=ae_quelle, nur_benutzer_id=nur)
@@ -307,6 +310,7 @@ def seite(request: Request, zeitraum: str = "monat", von: str = "",
                   grund_zeilen=grund_zeilen, grund_ad=grund_ad,
                   grund_kanal=grund_kanal, grund_sparte=grund_sparte,
                   einwand_zeilen=einwand_zeilen,   # v33 (Phase 176)
+                  cloover_vertraege=cloover_vertraege,   # v36 (Phase 194, B3)
                   vorgaenge=vorgaenge, auftragseingang=auftragseingang,
                   ae_ad=ae_ad, ae_kanal=ae_kanal, ae_sparte=ae_sparte,
                   ae_quelle=ae_quelle,

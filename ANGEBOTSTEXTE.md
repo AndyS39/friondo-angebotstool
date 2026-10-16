@@ -3,6 +3,12 @@
 Diese Texte sind fester Bestandteil jedes Angebots-PDFs. Reihenfolge und Platzierung
 siehe PLAN.md Phase 7. Formulierungen exakt übernehmen.
 
+> **Hinweis v36 (PLAN_V22 Phase 189):** Die Abschnitte 1–10 beschreiben das Layout v2
+> (fpdf2 – seit v36 nur noch Rückfall-Engine `pdf_engine = fpdf2`) und sind zugleich die
+> **Quelle der Wortlaute** der Textblöcke (Parametrierung → Textblöcke: Vortexte, Nachtexte
+> A–C, Vollmacht). Das neue Layout v3 (HTML-Vorlagen + Browser-Druck) ordnet dieselben
+> Textblöcke neuen Seiten zu – siehe Abschnitt 11.
+
 ## 1. Briefkopf (Seite 1)
 
 - Logo-Leiste oben: Innungs-Fachbetrieb (SHK) · BOSCH Premium Partner / Zertifizierter
@@ -125,6 +131,20 @@ Starten Sie jetzt mit Friondo und Cloover in eine nachhaltige Zukunft.
 
 *Beispielrate auf Basis einer Angebotssumme von 29.000 €, einer Förderung von 56 %,
 gedeckelt auf 28.000 €, und einer Laufzeit von 20 Jahren.
+
+**v36 (PLAN_V22 Phase 193, Platzhalter `[CLOOVER]`):** Im Textblock „Friondo Standard“ (und „Friondo PV
+Standard“) steht statt des Absatzes „Planbare Monatsraten – Zum Beispiel: … Oder ab 250 € pro Monat ohne
+Förderung“ und der Fußnote „*Beispielrate …“ der Platzhalter `[CLOOVER]` (Migration
+`angebotsprofile.migriere_cloover_platzhalter`, Seed-Konstanten `STANDARD_NACHTEXT`/`PV_STANDARD_NACHTEXT`).
+Der fpdf2-Rückfall druckt dort die bei Cloover berechnete Rate des Angebots: Box „Planbare Monatsraten – Ihre
+Rate für dieses Angebot:“ mit „ab … € pro Monat mit Förderung*“ (nur WP mit Förderung) / „ab … € pro Monat
+ohne Förderung“, bei Kombi-Versand „Gesamtrate für alle Angebote dieser Mail: ab … € pro Monat“, Knopf
+„Finanzierung abschließen ›“ + QR-Code + Kurzlink nur mit persönlichem Link (sonst „Ihren persönlichen
+Finanzierungs-Link erhalten Sie von uns per E-Mail.“), Rückmeldungs- und Datenschutzsatz (Textbaustein
+`cloover_datenschutz`), Fußnote aus dem Textbaustein `cloover_fussnote` am Seitenende; ohne Rate „• Monatsrate
+auf Anfrage“. Das Layout v3 rendert den Platzhalter nicht (Karte 2 + Box aus `_cloover.html`, Abschnitt 11).
+Die Beispielwerte oben bleiben nur als Herkunftsnachweis stehen. Wortlaute: `app/cloover.py`,
+`app/cloover_texte.py` (Entwürfe, Rückfragen B1/B7).
 
 ## 6. Nachtext B – „Installationsvoraussetzungen" (eigene Seite)
 
@@ -332,6 +352,11 @@ Zum Beispiel: … Oder ab 250 € pro Monat ohne Förderung" entfällt samt Fuß
 sinken langfristig." bleibt); Kundenstimme „Dank Cloover konnten wir unsere
 **Anlage** einfach, fair und transparent finanzieren."
 
+**v36 (Phase 193):** Im Textblock „Friondo KL Standard“ steht der Platzhalter `[CLOOVER]` unmittelbar vor
+„So bleibt Ihr Budget flexibel …“ (Migration `migriere_cloover_platzhalter`, Seed `_KL_ZAHLUNGSOPTIONEN`) –
+der fpdf2-Rückfall druckt dort die berechnete Rate wie in Abschnitt 5 beschrieben; die Kanalprofile KL
+(Enni/SWD/Sparkasse DU) bleiben ohne Cloover.
+
 **Barkauf oder Finanzierung**
 
 Saubere Energie. Faire Raten. Maximale Freiheit.
@@ -449,7 +474,11 @@ Sparkasse DU" (Nachtexte, Start = Kopie des Standards [ANNAHME]) – Seed-Konsta
 `WB_SEED_BLOECKE`), Migration `seed_wb`, Auswahl `_wb_block` / `ist_wb`, editierbar in der
 Parametrierung → Textblöcke. **Alle WB-Texte sind Entwürfe für das Gegenlesen durch den
 Innendienst.** Kein Nachtext A „Ihre Zahlungsoptionen" (nicht im TAIFUN-Muster AN251131;
-der Cloover-Plan kann ihn später ergänzen), kein KfW-/Förderblock, keine
+der Cloover-Plan kann ihn später ergänzen) *(überholt – seit v36 (PLAN_V22 Phase 193) trägt
+„Friondo WB Standard“ einen Nachtext A „Ihre Zahlungsoptionen bei Friondo“ = Kopie des KL-Textes
+mit „Ihre Wallbox-Lösung“ und dem Platzhalter `[CLOOVER]` (`WB_ZAHLUNGSOPTIONEN`,
+`WB_STANDARD_NACHTEXT_V36`, Migration stellt ihn dem bisherigen Text voran; nur Profil Standard –
+die Kanalprofile WB bleiben ohne) [ANNAHME B2-8, Entwurf fürs Gegenlesen])*, kein KfW-/Förderblock, keine
 Wirtschaftlichkeit, **keine Auslegungs-Position** (Herleitung im Protokoll, Seite
 „Auslegung", und intern im Editor); **Vollmacht (Nachtext D) immer** (Netzanmeldung
 § 14a EnWG, Rückfrage 4).
@@ -572,3 +601,177 @@ Erdarbeiten Nein / Wandmontage / 2 Durchbrüche → 2.235,70 / 424,78 / 2.660,48
   Leitungsverlegung zusätzlich „Leitungslänge über 100 m – bitte prüfen" (Warnung, keine
   Sperre). Derselbe Text steht in `angebote.auslegung_text` (Editor „Auslegung
   (intern)", nur Innendienst/Admin).
+
+## 11. Layout v3 (v36) – HTML-Vorlagen + Browser-Druck
+
+Seit v36 (PLAN_V22 Phase 188/189) entsteht das Angebots-PDF aus Jinja2-Vorlagen unter
+`app/templates/pdf/angebot/` (Basis `basis.html`, Fußzeile `_fuss.html`, Seiten-Bausteine
+`deckblatt.html` · `ueberblick.html` · `positionen.html` · `kfw.html` · `wirtschaftlichkeit.html` ·
+`auftrag.html` (+ `_cloover.html`) · `bedingungen.html` · `vollmacht.html`, Sparten-Vorlagen
+`wp.html` / `pv.html` / `kl.html` / `wb.html`), gedruckt über Edge/Chromium (`app/pdf_html.py`).
+Alle Daten kommen aus EINEM Kontext `app/pdf_kontext.fuer_angebot` (Vertrag im Modul-Docstring);
+die fpdf2-Engine (Abschnitte 1–10) bleibt Rückfall. Design-Vorlagen: `docs/design-v36/vorlage/`.
+Schrift Nunito Sans, Farben Dunkelblau #15153a · Friondo-Blau #4389c8 · Grau #6b6f85 · Linie
+#dfe3ee · Fläche #f1f6fc (nur in `app/static/pdf/angebot.css`, Templates nur `var(--pdf-…)`).
+
+### 11.1 Seitenfolge je Sparte
+
+| Sparte | Seiten |
+|---|---|
+| WP | Deckblatt · Ihr Angebot im Überblick + Teamfoto · Festpreisangebot (n Seiten, Summenblock mit Förderzeilen) · Ihre KfW-Förderung (nur mit Förderblock) · Auftragserteilung · Vertragsbedingungen · Vollmacht (nur bei Pos. 016/017, nicht bei Enni/SWD) |
+| PV | Deckblatt · Überblick + Team · Festpreisangebot (0,00 % USt.) · Wirtschaftlichkeit (3 Seiten, nicht ausgeblendet) · Auftragserteilung · Vertragsbedingungen · Vollmacht (nur bei 017) |
+| KL | Deckblatt · Überblick + Team · Festpreisangebot · Auftragserteilung · Vertragsbedingungen (mit „Hinweis zur Kältetechnik") · Vollmacht nur mit 016/017 |
+| WB | Deckblatt · Überblick + Team · Festpreisangebot · Auftragserteilung · Vertragsbedingungen · Vollmacht (immer, v34) |
+
+Kopfzeile auf jeder Seite (Randzone der Engine): „Angebot-Nr. <Nr> · <Vorname Nachname bzw.
+Firma>" links, „SEITE x VON y" rechts – auch auf dem Deckblatt. Fußzeile fünfspaltig
+(Anschrift · Geschäftsführung · Kontakt · Bankverbindung · Steuerdaten) aus `pdf_export.FUSSZEILE`,
+Bankverbindung je Bank in einer Zeile („Sparkasse Duisburg · IBAN: … · BIC: …").
+
+### 11.2 Deckblatt und Infokasten
+
+Logo links, Award-Badge „German Energy Awards Winner 2026" rechts mit Link
+(`https://www.germanenergyawards.com/interview/friondo-gmbh`, „Mehr dazu im Interview ›"),
+Titelbild je Sparte (`app/static/pdf/bilder/titel-<sparte>.jpg`) mit dunklem Verlauf, Eyebrow/Titel/
+Untertitel wörtlich (`pdf_kontext.SPARTEN`): WP „ANGEBOT · WÄRMEPUMPE" / „Ihr individuelles
+Wärmepumpen-Angebot zum Festpreis" / „Effizienz, Komfort und zukunftssicher"; PV „ANGEBOT ·
+PV-ANLAGE" / „Ihr individuelles PV-Angebot zum Festpreis" / „Eigener Strom, mehr Unabhängigkeit";
+KL „ANGEBOT · KLIMAANLAGE" / „Ihr individuelles Klimaanlagen-Angebot zum Festpreis" / „Kühlen,
+heizen und wohlfühlen"; WB „ANGEBOT · WALLBOX" / „Ihr individuelles Wallbox-Angebot zum
+Festpreis" / „Laden zu Hause – einfach und sicher". Die „## "-Titelzeilen der Vortext-Textblöcke
+werden im Layout v3 NICHT gedruckt (sie bleiben für den fpdf2-Rückfall).
+Absenderzeile „Friondo GmbH · Arnold-Overbeck-Str. 63-65 · 47139 Duisburg", Empfängerblock nach
+v20 (`anschriften.empfaenger`: Rechnungs-Name ersetzt bei Abweichung den Kundennamen, Zusatz als
+eigene Zeile), darunter in 7 pt Grau „Ausführungsort: …" (nur bei abweichender Rechnungsadresse)
+und „Lieferanschrift: …" (nur bei Abweichung vom Ausführungsort). Infokasten rechts: Angebot-Nr. ·
+Datum · Gültig bis (Datum + 30 Tage, `pdf_kontext.BINDEFRIST_TAGE`) · Ihr Ansprechpartner (AD des
+Vorgangs über Erfassung/`vertriebler_id`/`vorgaenge.ad_id`, sonst der vorbereitende Innendienstler;
+ohne Person entfällt die Zeile) · Telefon (aus der Benutzerverwaltung; leer → Zeile entfällt) ·
+„Ersetzt Angebot AN-… vom TT.MM.JJJJ" (Versionen) · „Kopie von AN-…". Leiste „Mitgliedschaften &
+Zertifizierungen" mit SHK Innungsfachbetrieb · E-Handwerk · bdsh · Fachbetrieb Wärmepumpe · Bosch
+Premium Partner.
+
+### 11.3 Zuordnung Textblock → Seite
+
+| Textblock / Quelle | Seite im Layout v3 | Regel (`app/pdf_kontext.py`) |
+|---|---|---|
+| Vortext des Profils/der Sparte (`angebotsprofile.vortext_fuer_angebot`, Override `angebote.vortext_text`) | „Ihr Angebot im Überblick" | `vortext_parsen`: führende „## "-Zeilen entfallen (Deckblatt) · Briefanrede ({briefanrede}) · Absätze vor der ersten Liste → Einleitung · erste Liste („- "/„* ") → Spalte „DARIN ENTHALTEN" (blaue Haken) · „## Warum Friondo?" + zweite Liste → Spalte „WARUM FRIONDO?" (dunkle Haken) · Absätze danach → Schluss („**…**" fett) · „Ihr Friondo-Team"/„Mit herzlichen Grüßen," → Grußzeilen. In beiden Listen wird der Teil vor „ – " fett gesetzt. |
+| Nachtext A „Ihre Zahlungsoptionen bei Friondo" | Karte 2 der Auftragserteilung (nur Enni/SWD/Sparkasse DU) | `nachtext_parsen`: erste „## "-Zeile → Untertitel („Barkauf oder Enni Contracting" …), weitere „## "-Zeilen und Absätze → Kartentext; alles unter „## Finanzierung mit Cloover" (Boxen, Beispielraten, Fußnote) entfällt – der Cloover-Block kommt wörtlich aus der Design-Vorlage (nur Profil Standard), Rate/Fußnote aus Teil B; „### "-Abschnitte der A-Seite (Unsere Leistungen, Installationsvoraussetzungen) → Vertragsbedingungen |
+| Nachtext B „Installationsvoraussetzungen" (Haftungsbegrenzung · Rücktrittsrecht · Zahlung {zahlungsbedingungen} · Hinweis zur KfW-Förderung / Kältetechnik · Netzbetreiber · Heizkörper-Check) | „Vertragsbedingungen" | „# "-Titel (z. B. „Installationsvoraussetzungen") = übergeordnete blaue Zwischenüberschrift, auch ohne eigene Absätze – nur Seitentitel des Layouts v3 (Zahlungsoptionen, Vertragsbedingungen, Auftragserteilung, Vollmacht …) entfallen; jede „### "-Überschrift = blaue Zwischenüberschrift mit ihren Absätzen; „~ "-Zeilen (PV-Nullsteuersatz) → Fußnote in klein; Bindefrist/AGB/Datenschutz → Schlusskasten (Links klickbar) |
+| Nachtext C (Schlussseite) | Schlusskasten der Vertragsbedingungen + Auftragserteilung | „Wir sichern Ihnen …", „Sie haben Fragen …", „Mit freundlichen Grüßen" / „Ihr Friondo-Team" → Schlusskasten; „### Aufschiebende Bedingung" → Auftragserteilung (WP); „Voraussichtliches Datum der Umsetzung …" bzw. „Voraussichtlicher Ausführungszeitraum …" → Linie auf der Auftragsseite; der Satz „Sollte Ihnen das Angebot zusagen, senden Sie uns …" und [UNTERSCHRIFT] entfallen (Auftragsseite trägt Einleitung und Unterschriftszeile des Designs) |
+| Zahlungsbedingung (v30, `zahlungsbedingungen.fuer_angebot`) | Abschnitt „Zahlung" + Kurzsatz in Karte 1 | Kurzsatz = erste Zeile, höchstens die ersten zwei Sätze |
+| Vollmacht (Nachtext D) | „Vollmacht …" | Wortlaut fest in `pdf_kontext.VOLLMACHT_*` (= Design-Vorlage = Abschnitt 8), Verbrauchsstelle vorbelegt |
+| Vermerke (`angebote.vermerke_json`, v9/v10) | Absatz „Hinweise" vor dem Summenblock | erste Zeile = Titel |
+| KfW-Ergebnis (`pdf_export._kfw_ergebnis_fuer`) | Förderzeilen im Summenblock + Seite „Ihre KfW-Förderung" (`pdf_kontext_kfw`) | Quote „(xx %)" = Anteil des Zuschusses an der Angebotssumme (wie der Untertitel der KfW-Seite) |
+| Wirtschaftlichkeit (`pdf_export.wirtschaftlichkeit_fuer`) | drei Seiten (`pdf_kontext_wirtschaftlichkeit`) | der Platzhalter [WIRTSCHAFTLICHKEIT]/[BEISPIELRECHNUNG] im Nachtext wird im Layout v3 nicht gerendert |
+| Cloover (Teil B, `app/cloover.kontext_fuer_pdf`) | Karte 2 + Box „Planbare Monatsraten" + Fußnote | ohne Daten „Monatsrate auf Anfrage", kein Knopf; [CLOOVER] im Nachtext nur fpdf2 |
+
+### 11.4 Festpreisangebot – Kennzeichen-Regeln
+
+- Titel „Festpreisangebot", rechts „Alle Preise in EUR, netto"; Spalten POS. · MENGE · EINH. ·
+  BEZEICHNUNG · E-PREIS · G-PREIS (Spaltenkopf wird auf Folgeseiten wiederholt – ohne die
+  Überschrift „Festpreisangebot (Fortsetzung)" der Vorlage); Beträge in der Tabelle ohne €-Zeichen.
+- Gruppenüberschrift (editierbar, v22) als fette Zwischenzeile; Positionen ohne Gruppe laufen unter
+  der vorigen Überschrift.
+- Artikeltext: erste Zeile (Bezeichnung) fett, weitere Zeilen normal; Zeilen, die mit „-", „•"
+  oder „– " beginnen, werden Aufzählungspunkte „•" (eingerückte „-"-Zeilen als Unterpunkt);
+  editierte Texte und Freitextpositionen wie heute.
+- Eventualposition → G-Preis „EP." (E-Preis bleibt); bauseits → E- und G-Preis „bauseits";
+  Alternativ („in anderem Angebot enthalten") → blauer Hinweiskasten vor der ersten Alternativ-
+  Position des Blocks („Die folgenden Positionen sind bereits in Ihrem Angebot <Nr> (<Sparte>)
+  enthalten und werden dort berechnet."), Zeile hellgrau, G-Preis „im PV-Angebot" (bzw. Sparte,
+  `elektro_pv.pdf_label`), v10-Vermerk unter dem Text; Positionsrabatt → blaue Zeile „− Rabatt
+  <x %> (<Betrag>)" bzw. „− Rabatt <Betrag>" unter dem Text (Minus nur im Label), G-Preis nach
+  Rabatt; Sonderpreis/manuell geändert ohne Kennzeichen; keine Auslegungszeile (v34).
+- Summenblock rechts: „Netto-Summe" · „19,00 % USt." bzw. „0,00 % USt. (§ 12 Abs. 3 UStG)" ·
+  Linie · „Gesamt-Betrag" (fett) · bei Gesamtrabatt „− Rabatt <Bezeichnung>" und „= Endbetrag" ·
+  bei WP mit Förderblock „− voraussichtliche KfW-Förderung (<xx %>)" (blau) – das Minus steht
+  nur im Label, die Beträge ohne Minus („500,00 €", „19.600,00 €") wie die Vorlage – und dunkle Box
+  „= Ihr Eigenanteil" mit „Unverbindliche Beispielrechnung – Details und Ablauf auf der nächsten
+  Seite."; ohne Förderblock steht der Gesamt-Betrag (ohne Rabatt) bzw. „= Endbetrag" (mit Rabatt)
+  in der dunklen Box. Zahlen ausschließlich aus `Angebot.summen()`.
+
+### 11.5 Auftragserteilung (wörtlich aus der Design-Vorlage)
+
+„Sollte Ihnen das Angebot zusagen, beauftragen Sie uns bequem online – oder senden Sie uns das
+unterschriebene Angebot per Post zurück." · Karte 1 „BARKAUF – Online beauftragen" mit Kurzsatz
+der Zahlungsbedingung und Knopf „Jetzt online beauftragen ›" (nur mit `BASIS_URL` aus der .env,
+aktiver Fern-Signatur und gültigem Token am Angebot) bzw. „Per E-Mail beauftragen ›"
+(`mailto:angebot@friondo.de?subject=Auftrag <Nr>`) · Karte 2: Standard „FINANZIERUNG MIT
+CLOOVER – Online beauftragen & finanzieren", „Mit der Ersparnis Ihrer neuen Anlage finanzieren
+Sie die Anlage.", „ab <Rate> € / Monat*", „Laufzeit <n> Jahre · Ihre Finanzierungsanfrage ist
+bereits angelegt – nur noch bestätigen." (zweiter Halbsatz nur mit Link), Knopf „Finanzierung
+abschließen ›" + QR; ohne Rate „Monatsrate auf Anfrage"; Enni „ENNI CONTRACTING", SWD
+„CONTRACTING", Sparkasse DU „FINANZIERUNG MIT SPARKASSE DUISBURG" mit Untertitel/Text aus dem
+Nachtext A (der Cloover-Slogan „Saubere Energie. Faire Raten. Maximale Freiheit." der v9-Seeds wird dort
+herausgefiltert – er gehört nur zum Cloover-Block des Profils Standard; die Textblöcke bleiben unverändert)
+· Block „Finanzierung mit Cloover – Saubere Energie. Faire Raten. Maximale Freiheit."
+mit den Boxen „Sofort starten" (Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale
+Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine
+Banktermine), „Planbare Monatsraten – Ihre Rate für dieses Angebot:" (• ab <Rate> € pro Monat mit
+Förderung* · • ab <Rate> € pro Monat ohne Förderung · So bleibt Ihr Budget flexibel und Ihre
+Energiekosten sinken langfristig.), „Maximale Flexibilität" (Kostenlose Sondertilgungen ·
+Vorzeitige Rückzahlung ohne Strafgebühren · Individuell anpassbare Laufzeiten), „Ihre Vorteile"
+(Sofort investieren · Monatlich entspannt zahlen · Energiekosten senken · Unabhängiger werden ·
+Kundenzufriedenheit: 4,8 von 5 – „Dank Cloover konnten wir unsere <Wärmepumpe|PV-Anlage|
+Klimaanlage|Wallbox> einfach, fair und transparent finanzieren.") und der Fußnote aus Teil B
+(nur Profil Standard) · „Beauftragung per Post": „Senden Sie uns das unterschriebene Angebot an:
+Friondo GmbH, Arnold-Overbeck-Str. 63-65, 47139 Duisburg – oder eingescannt an info@friondo.de."
+· WP: „Aufschiebende Bedingung: …" (Nachtext C) und „Voraussichtliches Datum der Umsetzung:
+____, liegt innerhalb des Bewilligungszeitraum nach Nummer 9.4.1." · KL/WB: „Voraussichtlicher
+Ausführungszeitraum: ____" (aus dem Nachtext C) · Unterschriftszeile „Ort, Datum" /
+„Unterschrift des Auftraggebers" – Vor-Ort-Signatur: Bild auf der Linie, Zeitstempel über
+„Ort, Datum", darunter „<Name> · signiert am TT.MM.JJJJ HH:MM".
+
+### 11.6 Vortexte PV/KL/WB (v36, Migration `angebotsprofile.migration_v36_texte`)
+
+Die Design-Wortlaute (`PV_VORTEXT_V36`, `KL_VORTEXT_V36`, `WB_VORTEXT_V36` in
+`app/angebotsprofile.py`) ersetzen die Vortexte „Friondo PV/KL/WB Standard"; die bisherigen
+Fassungen bleiben als Textblock „<Name> (bis v35)". WP bleibt beim heutigen Text (Abschnitt 3),
+Enni/SWD/Sparkasse DU behalten ihre Vortexte.
+
+- **PV:** „vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine zukunftssichere
+  Entscheidung getroffen – eine eigene Photovoltaikanlage senkt Ihre Stromkosten, macht Sie
+  unabhängiger von steigenden Energiepreisen und steigert den Wert Ihrer Immobilie." · Darin
+  enthalten: Ihre individuelle PV-Anlage – Module, Wechselrichter und Speicher passend zu Dach und
+  Verbrauch · Detaillierte Installationsleistungen – fachgerecht, sauber und termingerecht ·
+  Transparent und Festpreis – klar verständlich und ohne versteckte Kosten · Unser Rundum-Sorglos-
+  Service – von der Planung bis zur Inbetriebnahme · Warum Friondo?: Fachkompetenz & Qualität – Als
+  Meisterbetrieb, Mitglied der Innung und VDI-zertifiziertes Fachunternehmen setzen wir auf höchste
+  Standards. · Mitglied im Bundesverband des Solarhandwerks – Geprüfte Fachkompetenz für Planung,
+  Montage und Netzanschluss Ihrer Solaranlage. · Persönliche Beratung – Wir begleiten Sie von der
+  ersten Idee bis zur perfekten Lösung für Ihr Zuhause. · Effizienz & Nachhaltigkeit – Unsere
+  Systeme senken Ihren Energieverbrauch spürbar und steigern den Wert Ihrer Immobilie. · Alles aus
+  einer Hand – Planung, Installation, Anmeldung und Service aus einem Haus. · Schluss: „Wir sind auf
+  Photovoltaik spezialisiert und gehören in der Region zu den führenden Anbietern. Lassen Sie uns
+  gemeinsam Ihren eigenen Strom erzeugen!" · „Ihr Friondo-Team"
+- **KL:** Einleitung „… Sie haben eine gute Entscheidung getroffen – eine moderne Split-Klimaanlage
+  sorgt im Sommer für angenehme Kühle, heizt in der Übergangszeit effizient und verbessert die
+  Luftqualität in Ihren Räumen." · „Ihre individuelle Klimaanlage – Außen- und Innengeräte passend
+  zu Raumgröße und Nutzung" (+ die drei gemeinsamen Punkte) · Warum: Fachkompetenz & Qualität ·
+  „Bosch-zertifizierter Profi für Split-Klimageräte – Geschulte Kältetechniker mit Sachkundenachweis
+  nach ChemKlimaschutzV." · Persönliche Beratung · Effizienz & Nachhaltigkeit · Alles aus einer Hand
+  · Schluss „Wir sind auf Klimatechnik spezialisiert und gehören in der Region zu den führenden
+  Anbietern. Lassen Sie uns gemeinsam für Ihr Wohlfühlklima sorgen!"
+- **WB:** Einleitung „… Sie haben eine praktische Entscheidung getroffen – mit einer eigenen Wallbox
+  laden Sie Ihr Elektroauto sicher, schnell und günstig zu Hause, auf Wunsch mit Ihrem eigenen
+  Solarstrom." · „Ihre individuelle Wallbox – Ladeleistung und Standort passend zu Fahrzeug und
+  Hausanschluss" (+ drei gemeinsame Punkte) · Warum: Fachkompetenz & Qualität · „Qualifizierter
+  E-Handwerk-Fachbetrieb der Innung – Eingetragener Elektrofachbetrieb mit Netzbetreiber-Zulassung
+  für Ladeinfrastruktur." · Persönliche Beratung · Effizienz & Nachhaltigkeit · Alles aus einer Hand ·
+  Schluss „Wir sind auf Elektromobilität und Ladeinfrastruktur spezialisiert. Lassen Sie uns gemeinsam
+  Ihr Zuhause zur Ladestation machen!"
+
+### 11.7 Abweichungen Layout v3 ↔ Design-Vorlagen (bewusst, siehe PLAN_V22 „Befund Design-Vorlagen")
+
+PV mit 0 % USt. statt 19 % · Vollmacht nur nach Regel (016/017, WB immer) statt in jedem Angebot ·
+Eventualposition „EP." statt „0,00" · Wirtschaftlichkeitsseiten PV ergänzt · Seitenzahl in der
+Randzone (auch Deckblatt) · „Festpreisangebot (Fortsetzung)" entfällt (wiederholter Spaltenkopf) ·
+Empfängerblock mit Anrede („Herr Max Mustermann", v20) statt „Max Mustermann" · WP-Vortext bleibt
+der heutige Text (mit „Anbei erhalten Sie … Darin enthalten sind:" und „VDI 4650" – die Vorlage
+sagt „VDI 4645") · KL-Vertragsbedingungen mit „Hinweis zur Kältetechnik" (v24) und
+„Voraussichtlicher Ausführungszeitraum" (die Vorlage hat beides nicht) · Cloover-Beispielraten
+„ab 129 € / 250 €" durch die berechnete Rate bzw. „Monatsrate auf Anfrage" ersetzt, Fußnote aus
+Teil B · Links `friondo.de/beauftragung` und `app.cloover.com/apply` durch Fern-Signatur/E-Mail bzw.
+`checkout_link` ersetzt · Gruß im Schlusskasten ohne Komma („Mit freundlichen Grüßen") wie die
+Vorlage · Teamfoto 80 mm statt 92 mm hoch (Platz auf Seite 2 mit dem längeren WP-Vortext).

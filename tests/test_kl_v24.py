@@ -340,7 +340,10 @@ class FallA(Basis):
     def test_fall_a_pdf(self):
         angebot = self.angebot_direkt(fall_a())
         text = self.pdf_text(angebot)
-        self.assertIn("Ihr individuelles Klimaanlagen-Angebot zum Festpreis", text)
+        # v36 (PLAN_V22 Phase 190): Deckblatt-Titel bricht im Browser-Druck nach dem Bindestrich um
+        # („Klimaanlagen-\nAngebot“) – Wortlaut unverändert geprüft, nur ohne Zeilenumbruch
+        self.assertIn("Ihr individuelles Klimaanlagen-Angebot zum Festpreis",
+                      " ".join(text.replace("-\n", "-").split()))
         self.assertIn(GRUPPE, text)
         self.assertIn("EP.", text)
         self.assertIn("19,00 % USt.", text)

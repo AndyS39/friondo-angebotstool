@@ -279,9 +279,15 @@ def detail(request: Request, angebot_id: int,
     # v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs
     from app.models import Vorgang
     vorgang = session.get(Vorgang, angebot.vorgang_id) if angebot.vorgang_id else None
+    # v36 (PLAN_V22 Phase 193): Cloover-Rate lesend (ohne Knöpfe, nie EK/DB)
+    try:
+        from app import cloover
+        cloover_karte = cloover.editor_kontext(session, angebot)
+    except Exception:   # noqa: BLE001 – Anzeige darf die Seite nie blockieren
+        cloover_karte = None
     return render(request, "angebote/meine_detail.html", aktiv=None, mobil=True,
                   projektstand=projektstand, zahlungsbedingung_name=zahlungsbedingung_name,
-                  vorgang=vorgang,
+                  vorgang=vorgang, cloover_karte=cloover_karte,
                   benutzer=benutzer, angebot=angebot, kunde=kunde,
                   gruppen=gruppen, summen=angebot.summen(),
                   kfw_ergebnis=kfw_ergebnis,

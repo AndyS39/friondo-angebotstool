@@ -116,12 +116,15 @@ class Textbloecke(Basis):
         namen = {n for _a, n, _t in angebotsprofile.KL_SEED_BLOECKE}
         self.assertEqual(namen, set(KL_NAMEN))                 # vier Blöcke (Namen)
         self.assertEqual(len(angebotsprofile.KL_SEED_BLOECKE), 5)   # Standard: Vor- + Nachtext
-        vorher = self.s.query(Textblock).filter(Textblock.name.like("Friondo KL %")).count()
-        self.assertEqual(vorher, 5)
+        # v36 (PLAN_V22 Phase 189): migration_v36_texte legt den Historienblock „Friondo KL Standard (bis v35)“
+        # an (additive Historie der alten Vortext-Fassung) – er zählt nicht zu den Seed-Blöcken
+        def kl_bloecke():
+            return (self.s.query(Textblock).filter(Textblock.name.like("Friondo KL %"))
+                    .filter(~Textblock.name.like("%" + angebotsprofile.V36_HISTORIE_SUFFIX)).count())
+        self.assertEqual(kl_bloecke(), 5)
         self.assertEqual(angebotsprofile.seed_kl(self.s), [])  # zweiter Lauf: nichts
         self.s.commit()
-        self.assertEqual(self.s.query(Textblock)
-                         .filter(Textblock.name.like("Friondo KL %")).count(), 5)
+        self.assertEqual(kl_bloecke(), 5)
         for name in KL_NAMEN:
             self.assertTrue(block_text(self.s, "nachtext", name).strip(), name)
         self.assertTrue(block_text(self.s, "vortext", "Friondo KL Standard").strip())
@@ -331,7 +334,10 @@ class Pdf(Basis):
         pfad.unlink(missing_ok=True)
         flach = text.replace("\n", " ")
         # Vortext KL, Gruppe, EP-Zeile, Auslegungszeile, 19 % USt
-        self.assertIn("Ihr individuelles Klimaanlagen-Angebot zum Festpreis", text)
+        # v36 (PLAN_V22 Phase 190): Titel ohne Umbruch nach dem Bindestrich prüfen (Browser-Druck
+        # bricht „Klimaanlagen-\nAngebot“ um) – Wortlaut unverändert
+        self.assertIn("Ihr individuelles Klimaanlagen-Angebot zum Festpreis",
+                      " ".join(text.replace("-\n", "-").split()))
         self.assertIn("Klimaanlage Bosch", text)
         self.assertIn("EP.", text)
         self.assertIn("Auslegung der Klimaanlage", text)
@@ -341,7 +347,10 @@ class Pdf(Basis):
         # KL-Nachtexte
         self.assertIn("Hinweis zur Kältetechnik", flach)
         self.assertIn("Voraussichtlicher Ausführungszeitraum", flach)
-        self.assertIn("Ihre Zahlungsoptionen bei Friondo", flach)
+        # v36 (PLAN_V22 Phase 190): der Seitentitel „# Ihre Zahlungsoptionen bei Friondo“ entfällt im Layout v3 –
+        # die Auftragsseite trägt die Karten „BARKAUF – Online beauftragen“ / Cloover (fpdf2 druckt den Titel)
+        self.assertTrue("Ihre Zahlungsoptionen bei Friondo" in flach
+                        or ("BARKAUF" in flach and "Online beauftragen" in flach), "Zahlungsoptionen fehlen")
         self.assertIn("Unterschrift des Auftraggebers", flach)
         # kein Förderblock, keine Wirtschaftlichkeit, keine Vollmacht, kein KfW-Text
         for verboten in ("KfW", "Eigenanteil", "voraussichtliche Förderung", "Vollmacht",

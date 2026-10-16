@@ -49,6 +49,14 @@ def _aufraeumen(s) -> None:
         for tabelle in (Erfassung, VorgangsNotiz, LeadAktivitaet, VorgangEinwand, KommunikationLog):
             s.query(tabelle).filter(tabelle.vorgang_id == v.id).delete(synchronize_session=False)
         s.delete(v)
+    # Integration v36 (16.10.2026): verwaiste Notizen/Mails/Aktivitäten aus abgebrochenen Testläufen (Vorgang bzw.
+    # Angebot existiert nicht mehr) zählten für neu angelegte Vorgänge mit wiederverwendeter ID als „Kontakt“ –
+    # der Inaktiv-Test wurde dadurch datenabhängig (Befund auf der Dev-DB-Kopie); hier bereinigen
+    vorgang_ids = s.query(Vorgang.id)
+    angebot_ids = s.query(Angebot.id)
+    for tabelle in (VorgangsNotiz, LeadAktivitaet, VorgangEinwand, KommunikationLog):
+        s.query(tabelle).filter(~tabelle.vorgang_id.in_(vorgang_ids)).delete(synchronize_session=False)
+    s.query(AngebotsMail).filter(~AngebotsMail.angebot_id.in_(angebot_ids)).delete(synchronize_session=False)
     s.query(Kunde).filter(Kunde.nachname.like(f"{PRAEFIX}%")).delete(synchronize_session=False)
     s.query(Benachrichtigung).filter(Benachrichtigung.text.like(f"%{PRAEFIX}%")).delete(synchronize_session=False)
     s.query(Einwand).filter(Einwand.name.like(f"{PRAEFIX}%")).delete(synchronize_session=False)

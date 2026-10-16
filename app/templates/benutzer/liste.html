@@ -220,6 +220,15 @@
                     <label title="Anrede im Lead-Dashboard („Hallo, Vorname“) und Platzhalter {vertriebler_vorname}">Vorname
                         <input form="f{{ b.id }}" type="text" name="vorname"
                                value="{{ b.vorname or '' }}" size="12" placeholder="optional"></label>
+                    {# v36 (PLAN_V22 Phase 192): Cloover-Konto – Cloover-Projekte des vorbereitenden
+                       Innendienstlers/Admins laufen unter diesem Konto, sonst unter dem Standard-Konto
+                       (Parametrierung → Cloover); nur Innendienst/Admin #}
+                    {% if b.basisrolle in ('innendienst', 'admin') %}
+                    <input form="f{{ b.id }}" type="hidden" name="cloover_dabei" value="1">
+                    <label title="E-Mail des Cloover-Kontos (userEmail der Cloover-Anfragen); leer = Standard-Konto aus Parametrierung → Cloover">Cloover-Konto (E-Mail)
+                        <input form="f{{ b.id }}" type="email" name="cloover_email"
+                               value="{{ b.cloover_email or '' }}" size="24" placeholder="optional"></label>
+                    {% endif %}
                     {# v23 (Phase 108, F12): Buchungslink für Online-Termine (Teams) #}
                     <label title="Outlook-Buchungslink (Book with me) für Online-Termine (Teams), Vorlage online_termin_einladung">Buchungslink
                         <input form="f{{ b.id }}" type="url" name="buchungslink"

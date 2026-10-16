@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="assets/77eda2c1-86a2-4ef9-9c87-e6a70a7471b8.js"></script>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/df3bb669-ccc3-49ca-b870-e7be24676f8d.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/22454e4e-f160-4ef8-87e8-9ddb7d595b86.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/d3fc06d2-2cae-4127-b08d-6537494eefde.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/35589107-1da3-4919-bfde-bd073bb4768c.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/c8ac2d08-9d64-413f-a801-fb5dd23f4cb3.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/df3bb669-ccc3-49ca-b870-e7be24676f8d.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/22454e4e-f160-4ef8-87e8-9ddb7d595b86.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/d3fc06d2-2cae-4127-b08d-6537494eefde.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/35589107-1da3-4919-bfde-bd073bb4768c.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/c8ac2d08-9d64-413f-a801-fb5dd23f4cb3.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/df3bb669-ccc3-49ca-b870-e7be24676f8d.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/22454e4e-f160-4ef8-87e8-9ddb7d595b86.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/d3fc06d2-2cae-4127-b08d-6537494eefde.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/35589107-1da3-4919-bfde-bd073bb4768c.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/c8ac2d08-9d64-413f-a801-fb5dd23f4cb3.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/df3bb669-ccc3-49ca-b870-e7be24676f8d.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/22454e4e-f160-4ef8-87e8-9ddb7d595b86.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/d3fc06d2-2cae-4127-b08d-6537494eefde.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/35589107-1da3-4919-bfde-bd073bb4768c.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/c8ac2d08-9d64-413f-a801-fb5dd23f4cb3.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<script src="assets/356ace47-7fbe-42c1-bbe1-69f3bc72ff75.js"></script>
+<style>
+body{margin:0;font-family:'Nunito Sans',Helvetica,Arial,sans-serif;color:#15153a}
+doc-page:not(:defined){visibility:hidden}
+a{color:#4389c8}a:hover{color:#15153a}
+.avoid{break-inside:avoid}
+tr{break-inside:auto !important}
+tr.grp{break-after:avoid}
+td{orphans:3;widows:3}
+</style>
+</helmet>
+<doc-page margin="0" lang="de" style="font-family:'Nunito Sans',Helvetica,Arial,sans-serif;color:#15153a;font-size:9.5pt;line-height:1.45">
+
+<div slot="header" style="display:flex;justify-content:space-between;align-items:center;padding:5mm 16mm 0 16mm;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;font-family:'Nunito Sans',Helvetica,Arial,sans-serif"><span>Angebot-Nr. AN-C-261103 · Max Mustermann</span></div>
+
+<div slot="footer" style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr 1fr;gap:5mm;padding:3mm 16mm 6mm 16mm;border-top:0.3mm solid #dfe3ee;font-size:6.5pt;line-height:1.4;color:#3c3f55;background:#fff;font-family:'Nunito Sans',Helvetica,Arial,sans-serif">
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Anschrift</div>Friondo GmbH<br>Arnold-Overbeck-Str. 63-65<br>47139 Duisburg</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Geschäftsführung</div>Andreas Scheelen<br>Charoula Scheelen<br>Ioannis Simeonidis</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Kontakt</div>T: 0203 - 3965 710<br>info@friondo.de<br>www.friondo.de</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Bankverbindung</div>Sparkasse Duisburg · IBAN: DE98 3505 0000 0200 4064 03 · BIC: DUISDE33XXX<br>Sparkasse Krefeld · IBAN: DE06 3205 0000 0000 4974 53 · BIC: SPKRDE33</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Steuerdaten</div>Amtsgericht Duisburg<br>HRB 34795<br>USt-IdNr. DE350979869</div>
+</div>
+
+<!-- Deckblatt -->
+<section data-screen-label="Deckblatt" style="break-after:page;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:9mm 16mm 5mm 16mm;position:relative">
+    <div style="position:absolute;right:16mm;top:9mm;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase">Seite 1 von 11</div>
+    <img src="assets/f4563a9e-60a3-4a53-9e57-b99c0dc8c130.jpg" alt="Friondo GmbH" style="height:22mm;width:auto;display:block">
+    <a href="https://www.germanenergyawards.com/interview/friondo-gmbh" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:1mm;text-decoration:none;color:#15153a">
+      <img src="assets/bfae4017-7548-4383-92d7-e17260338ba4.png" alt="German Energy Awards Winner 2026" style="height:19mm;width:auto;display:block">
+      <span style="font-size:6.5pt;font-weight:600;color:#4389c8;letter-spacing:0.02em">Mehr dazu im Interview ›</span>
+    </a>
+  </div>
+  <div style="position:relative;height:134mm;overflow:hidden;background:#15153a">
+    <img src="assets/ea928582-2601-454c-b0a2-cc70ccd5e622.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(21,21,58,0.82) 0%,rgba(21,21,58,0.55) 22%,rgba(21,21,58,0) 48%),linear-gradient(90deg,rgba(21,21,58,0) 40%,rgba(21,21,58,0.45) 100%)"></div>
+    <div style="position:absolute;left:16mm;right:16mm;top:9mm;display:flex;flex-direction:column;align-items:flex-end;text-align:right;gap:2.5mm;color:#fff">
+      <div style="font-size:8.5pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#fff">Angebot · Wärmepumpe</div>
+      <h1 style="margin:0;font-size:24pt;font-weight:800;line-height:1.08;text-wrap:balance;max-width:120mm;color:#fff">Ihr individuelles Wärmepumpen-Angebot zum Festpreis</h1>
+      <div style="font-size:12.5pt;font-weight:600;color:#dbe9f7">Effizienz, Komfort und zukunftssicher</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr auto;gap:10mm;align-items:start;padding:5mm 16mm 0 16mm">
+    <div style="display:flex;flex-direction:column;gap:2.5mm">
+      <div style="font-size:7pt;color:#6b6f85;border-bottom:0.3mm solid #dfe3ee;padding-bottom:1.2mm;width:fit-content">Friondo GmbH · Arnold-Overbeck-Str. 63-65 · 47139 Duisburg</div>
+      <div style="font-size:11pt;line-height:1.45">Max Mustermann<br>Musterstraße 12<br>47139 Duisburg</div>
+    </div>
+    <div style="display:grid;grid-template-columns:auto auto;column-gap:6mm;row-gap:1.2mm;font-size:9.5pt;background:#f1f6fc;border-radius:2mm;padding:4mm 6mm;min-width:56mm">
+      <span style="color:#6b6f85">Angebot-Nr.</span><span style="font-weight:700;text-align:right">AN-C-261103</span>
+      <span style="color:#6b6f85">Datum</span><span style="font-weight:700;text-align:right">21.07.2026</span>
+      <span style="color:#6b6f85">Ihr Ansprechpartner</span><span style="font-weight:700;text-align:right">[Name Außendienst]</span>
+        <span style="color:#6b6f85">Telefon</span><span style="font-weight:700;text-align:right">[Handynummer]</span>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:2.5mm;padding:3mm 16mm 0 16mm;margin-top:4mm;border-top:0.3mm solid #dfe3ee">
+    <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8">Mitgliedschaften &amp; Zertifizierungen</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);align-items:center;justify-items:center;gap:6mm;height:16mm">
+      <img src="assets/0f729242-09ed-473a-a908-f9b60a638ee1.jpg" alt="SHK Innungsfachbetrieb" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/ba565cec-9276-46d5-92d2-a6d2d379ace8.jpg" alt="E-Handwerk – Qualifizierter Fachbetrieb der Innung" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/1d9a6855-c784-482c-b231-5ac11606903d.png" alt="Bundesverband des Solarhandwerks" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/a9c0cb84-50a7-4000-830d-50eb132100fc.jpg" alt="Fachbetrieb Wärmepumpe" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/eab90e54-2574-49b4-80b6-83a729b69788.png" alt="Bosch Premium Partner · Zertifizierter Profi Split-Klimageräte und Wärmepumpen" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block"></div>
+  </div>
+
+</section>
+
+<!-- Anschreiben -->
+<section data-screen-label="Anschreiben" style="padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:5mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -2mm 0">Seite 2 von 11</div>
+  <div style="display:flex;flex-direction:column;gap:3mm;font-size:10pt;line-height:1.55;text-wrap:pretty">
+    <h2 style="margin:0 0 1mm 0;font-size:15pt;font-weight:800;line-height:1.15">Ihr Angebot im Überblick</h2>
+    <p style="margin:0">Sehr geehrter Herr Mustermann,</p>
+    <p style="margin:0">vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine zukunftssichere Entscheidung getroffen – eine moderne Wärmepumpe senkt Ihre Energiekosten, steigert den Wohnkomfort und macht Sie unabhängiger von fossilen Brennstoffen.</p>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10mm">
+      <div style="display:flex;flex-direction:column;gap:2.5mm">
+        <div style="font-size:9pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#4389c8">Darin enthalten</div>
+        <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.4mm;font-size:9pt;line-height:1.35">
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Ihre individuelle Wärmepumpe</strong> – optimal dimensioniert für Ihre Immobilie</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Detaillierte Installationsleistungen</strong> – fachgerecht, sauber und termingerecht</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Transparent und Festpreis</strong> – klar verständlich und ohne versteckte Kosten</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Unser Rundum-Sorglos-Service</strong> – von der Planung bis zur Inbetriebnahme</span></li>
+        </ul>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2.5mm">
+        <div style="font-size:9pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#4389c8">Warum Friondo?</div>
+        <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.4mm;font-size:9pt;line-height:1.35">
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Fachkompetenz &amp; Qualität</strong> – Als Meisterbetrieb, Mitglied der Innung und VDI-zertifiziertes Fachunternehmen setzen wir auf höchste Standards.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Zertifizierte Sachkundige für Wärmepumpensysteme nach VDI 4645</strong> – Fundiertes Fachwissen und tiefgehender Expertise der Wärmepumpentechnik.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Persönliche Beratung</strong> – Wir begleiten Sie von der ersten Idee bis zur perfekten Lösung für Ihr Zuhause.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Effizienz &amp; Nachhaltigkeit</strong> – Unsere Systeme senken Ihren Energieverbrauch spürbar und steigern den Wert Ihrer Immobilie.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Fördermittel-Check &amp; Unterstützung</strong> – Wir helfen Ihnen, maximale staatliche Zuschüsse zu nutzen.</span></li>
+        </ul>
+      </div>
+    </div>
+  <p style="margin:0;font-size:10pt;line-height:1.55">Wir sind auf Wärmepumpen spezialisiert und gehören in der Region zu den führenden Anbieter. Lassen Sie uns gemeinsam Ihre Heizung zukunftsfähig machen!<br><strong>Ihr Friondo-Team</strong></p>
+</section>
+<section data-screen-label="Team" style="display:block;padding:6mm 0 0 0">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6mm;padding:0 16mm 3mm 16mm;break-after:avoid">
+    <div style="font-size:9pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#4389c8">Das Friondo-Team</div>
+  </div>
+  <img src="assets/8b254976-c297-4491-b6a8-152eab921ca4.jpg" alt="Das Friondo-Team" style="width:100%;height:92mm;object-fit:cover;object-position:50% 45%;display:block;break-inside:avoid">
+</section>
+
+<!-- Leistungsverzeichnis -->
+<section data-screen-label="Positionen" style="break-before:page;padding:0 16mm 0 16mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2mm 0">Seite 3 von 11</div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6mm;margin-bottom:4mm">
+    <h2 style="margin:0;font-size:15pt;font-weight:800;line-height:1.15">Festpreisangebot</h2>
+    <div style="font-size:8pt;color:#6b6f85">Alle Preise in EUR, netto</div>
+  </div>
+  <sc-raw-table style="width:100%;border-collapse:collapse;font-size:8.6pt;line-height:1.4">
+    <sc-raw-thead>
+      <sc-raw-tr style="color:#4389c8;font-size:7pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase">
+        <sc-raw-th style="text-align:left;padding:1.5mm 1.5mm 1.5mm 0;border-bottom:0.4mm solid #15153a;width:9mm">Pos.</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:11mm">Menge</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:10mm">Einh.</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a">Bezeichnung</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:20mm">E-Preis</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm 0 1.5mm 1.5mm;border-bottom:0.4mm solid #15153a;width:22mm">G-Preis</sc-raw-th>
+      </sc-raw-tr>
+    </sc-raw-thead>
+    <sc-raw-tbody>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:4mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">Bosch Monoblock Wärmepumpe CS3800i AW Paket mit Inneneinheit, Puffer und Warmwasserbereitung</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">001</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Set</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>BOSCH CS3800i AWM 13 Paket</strong><br>• Luft-Wasser-Wärmepumpe CS3800iAW 13 O-S Außeneinheit<br>• Luft/Wasser-Wärmepumpe CS3800iAW, AWMi Inneneinheit mit integriertem Warmwasserspeicher 180l inklusive Wifi<br>• BOSCH Heizkreispaket BOPA HK HP01 HS25/6<br>• Pufferspeicher BST 50 Ehp, 540x530, Nutzinhalt 50 L<br>• Speicherfühler SF 4<br>• T-Stück mit Fühlertauchhülse</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">12.422,61</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">12.422,61</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">002</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Stück</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Wärmepumpen-Pufferspeicher BST 50 Ehp 540x530</strong></sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">405,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">405,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">003</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Set</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Hydraulik Wärmepumpe Primär Heizung</strong><br>• Magnetit- u. Schlammabscheider mit Isolierung DN25<br>• Luftabscheider mit Isolierung DN25<br>• Schmutzfilter DN25<br>• Zubehör Installationspaket INPA</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">678,17</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">678,17</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">004</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Set</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Warmwasserbereitung</strong><br>• comfort Sicherheitscenter DN20 mit Ausdehnungsgefäß<br>• comfort Zirkulationspumpe Trinkwasser</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">616,06</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">616,06</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:4mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">Leitungen und Heizkreise</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">005</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Set</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">• comfort Membran-Druckausdehnungsgefäß Heizung MAG-H 50 Vordruck 1,5bar weiß<br>• comfort Kappenventil DN20 (3/4") Messing</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">223,40</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">223,40</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">006</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Montagematerial für sämtliche Montage- und Installationsarbeiten</strong><br>Alle Installationsteile, sofern notwendig wie z.B.:<br>• Isolierung sämtlicher neuer, Wasser führender Rohrleitungen bis zum nächsten Schnittstellenpunkt<br>• Heizungsanschluss an der Übergabestelle: Die Übergabestelle ist der Punkt an dem vom Auftragnehmer neu installierte Leitungen mit Leitungen des bestehenden, nicht vom Auftragnehmer installierten Systems verbunden werden<br>• Rohrleitungen hydraulische Anbindung Warmwasser und/oder Puffer-Speicher bzw. und/oder Inneneinheit der Wärmepumpe<br>• Rohrleitungen Heizungsvorlauf und Heizungsrücklauf (inklusive sämtlicher Rohre, Fittinge, Schellen, Kugelhähne, Ventile, Stockschrauben, Dübel)<br>• Rohrleitungen Wärmepumpe Vorlauf und Rücklauf (inklusive sämtlicher Rohre, Fittinge, Schellen, Kugelhähne, Ventile, Stockschrauben, Dübel) zwischen Inneneinheit und Hauseinführung verlegen inkl. 5 m Überlänge</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">2.982,50</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">2.982,50</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">007</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Stück</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Nachfüllstation</strong><br>Grünbeck Füllstrecke thermaliQ:FB2 f.Wasseraufbereitung – Set zur Nachfüllung kleiner Anlagen</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">602,32</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+    </sc-raw-tbody>
+  </sc-raw-table>
+</section>
+<section data-screen-label="Positionen 2" style="break-before:page;padding:0 16mm 0 16mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2mm 0">Seite 4 von 11</div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6mm;margin-bottom:4mm">
+    <h2 style="margin:0;font-size:15pt;font-weight:800;line-height:1.15">Festpreisangebot <span style="font-weight:400;color:#6b6f85;font-size:10pt">(Fortsetzung)</span></h2>
+    <div style="font-size:8pt;color:#6b6f85">Alle Preise in EUR, netto</div>
+  </div>
+  <sc-raw-table style="width:100%;border-collapse:collapse;font-size:8.6pt;line-height:1.4">
+    <sc-raw-thead>
+      <sc-raw-tr style="color:#4389c8;font-size:7pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase">
+        <sc-raw-th style="text-align:left;padding:1.5mm 1.5mm 1.5mm 0;border-bottom:0.4mm solid #15153a;width:9mm">Pos.</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:11mm">Menge</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:10mm">Einh.</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a">Bezeichnung</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:20mm">E-Preis</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm 0 1.5mm 1.5mm;border-bottom:0.4mm solid #15153a;width:22mm">G-Preis</sc-raw-th>
+      </sc-raw-tr>
+    </sc-raw-thead>
+    <sc-raw-tbody>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">008</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Hydraulischer Abgleich für Ihr neues Heizungssystem und das erneuern der Thermostatventile, falls Notwendig bis zu 10 Stück Heizkörper</strong><br>Durchführung hydraulischen Abgleich für Energie optimierten Wasserfluss in Ihrem Heizungssystem<br>• Reduziert Ihre Heizkosten um bis zu 15%.<br>• Der hydraulische Abgleich ist nach allgemein anerkannten Regeln der Technik (a.a.R.d.T.) bei jeder Installation einer neuen Heizungsanlage vorzunehmen<br>• Vorgeschrieben nach EN 14336, VDMA 24199, VDI 2073 Blatt 2, GEG 2020<br>• Hydraulische Abgleich ist Voraussetzung für die Förderprogramme der KfW</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">1.095,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">1.095,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:4mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">Heizkörper</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">009</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">3,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Stück</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Profil-Kompakt Flachheizkörper Typ 33, (H x L), inkl. Ventil und Thermostat Größe M</strong><br><span style="color:#6b6f85">Richtwertpreis</span></sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">585,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">1.755,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">010</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">3,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Heizkörperwechselpauschale pro Heizkörper</strong><br>Folgende Montageleistungen sind enthalten:<br>• Wasser ablassen<br>• Demontage alter Heizkörper und fachgerechte Entsorgung<br>• Anschlüsse wenn notwendig anpassen (inkl. Übergangsmuffen, Verbindungsstücke und Kupferrohr)<br>• Montage und Ausrichtung neuer Heizkörper<br>• Anbindung an den bestehenden Heizungskreis<br>• Heizkörper befüllen und entlüften</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">292,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">876,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:2mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">Demontage Altanlage, Lieferung, Montage und Inbetriebnahme</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">011</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Komplette Installation der neuen Heizungsanlage.</strong> Folgende Montageleistungen sind im Angebot enthalten:<br>• Demontage der alten Heizung sowie Entsorgung<br>• Fachgerechtes und dauerhaftes Verschließen der Abgaseinrichtungen<br>• Montage der neuen Luft/Wasser Wärmepumpe<br>• Montage der neuen Warmwasser bzw. Puffer-Speicher bzw. und/oder Inneneinheit der Wärmepumpe<br>• Montage der hydraulischen Anbindung ab dem Aufstellort der Wärmepumpe bis in den Heizungsraum und der Übergabestellen<br>• Montage &amp; Anschluss des Außentemperaturfühlers<br>• Herstellen der Spannungsversorgung aller elektrischer Verbraucher und Baugruppen innerhalb des Heizungssystems<br>• Montage der Kleinspannungsleitungen für Sensoren und Bedieneinheiten<br>• Befüllung der Anlage mit aufbereiteten Wasser nach VDI 2035<br>• Entlüften der Heizungsanlage<br>• Einstellung der Anlage und Testlauf<br>• Inbetriebnahme &amp; Einweisung</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">4.912,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">4.912,00</sc-raw-td></sc-raw-tr>
+    </sc-raw-tbody>
+  </sc-raw-table>
+</section>
+<section data-screen-label="Positionen 3" style="break-before:page;padding:0 16mm 0 16mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2mm 0">Seite 5 von 11</div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6mm;margin-bottom:4mm">
+    <h2 style="margin:0;font-size:15pt;font-weight:800;line-height:1.15">Festpreisangebot <span style="font-weight:400;color:#6b6f85;font-size:10pt">(Fortsetzung)</span></h2>
+    <div style="font-size:8pt;color:#6b6f85">Alle Preise in EUR, netto</div>
+  </div>
+  <sc-raw-table style="width:100%;border-collapse:collapse;font-size:8.6pt;line-height:1.4">
+    <sc-raw-thead>
+      <sc-raw-tr style="color:#4389c8;font-size:7pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase">
+        <sc-raw-th style="text-align:left;padding:1.5mm 1.5mm 1.5mm 0;border-bottom:0.4mm solid #15153a;width:9mm">Pos.</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:11mm">Menge</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:10mm">Einh.</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a">Bezeichnung</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:20mm">E-Preis</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm 0 1.5mm 1.5mm;border-bottom:0.4mm solid #15153a;width:22mm">G-Preis</sc-raw-th>
+      </sc-raw-tr>
+    </sc-raw-thead>
+    <sc-raw-tbody>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">012</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Öltank-Entsorgung Stahltank bis 9.000 L</strong><br>Demontage und Entsorgung bis 9.000 L Stahltank<br>• An- und Abfahrt<br>• Abpumpen des Restöls<br>• Entsorgung des Ölschlamms<br>• Reinigung der Tanks<br>• Demontage der Tankanlage: Zerschneiden der Tanks, Entfernen aller ölführenden Leitungen, Entfernen des Einfüllstutzens<br>• Abtransport des demontierten Tanks<br>• Ausstellung eines Entsorgungsnachweises</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">2.850,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">2.850,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">013</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Stemmarbeiten inkl. Entsorgung</strong>; Türmaßgroßen Zugang zwecks Entsorgung der Öltanks</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">398,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">398,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:4mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">Aufstellung der Außeneinheit und Hauseinführung</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">014</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Erstellung eines Fundaments für die Wärmepumpe am gewählten Standort inklusive Leerrohre und getrennter Hauseinführungen</strong>, enthält:<br>• Erstellung von einer Kernbohrungen und Verlegung von Leerrohren für den Heizungsvor- und Rücklauf sowie die elektrischen Spannungs- und Steuerleitungen<br>• Fachgerechte Abdichtung der Hauseinführungen<br>• Verlegung der Leerrohre (falls möglich: unterhalb der Frostschutzgrenze) von Hauseinführung bis zum Aufstellort bis max. 3m Erdarbeiten inkl.<br>• Errichtung eines Fundaments mit Kondensatablauf und mit ausgerichteten Tiefborden zur Aufnahme der Wärmepumpe<br>• Fachmännische und schallentkoppelte Aufstellung der Wärmepumpe auf dem Fundament<br>• Wiederherstellung des Umfeldes des Aufstellortes der Wärmepumpe</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">1.690,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">1.690,00</sc-raw-td></sc-raw-tr>
+    </sc-raw-tbody>
+  </sc-raw-table>
+</section>
+<section data-screen-label="Positionen 4" style="break-before:page;padding:0 16mm 0 16mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2mm 0">Seite 6 von 11</div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6mm;margin-bottom:4mm">
+    <h2 style="margin:0;font-size:15pt;font-weight:800;line-height:1.15">Festpreisangebot <span style="font-weight:400;color:#6b6f85;font-size:10pt">(Fortsetzung)</span></h2>
+    <div style="font-size:8pt;color:#6b6f85">Alle Preise in EUR, netto</div>
+  </div>
+  <sc-raw-table style="width:100%;border-collapse:collapse;font-size:8.6pt;line-height:1.4">
+    <sc-raw-thead>
+      <sc-raw-tr style="color:#4389c8;font-size:7pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase">
+        <sc-raw-th style="text-align:left;padding:1.5mm 1.5mm 1.5mm 0;border-bottom:0.4mm solid #15153a;width:9mm">Pos.</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:11mm">Menge</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:10mm">Einh.</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a">Bezeichnung</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:20mm">E-Preis</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm 0 1.5mm 1.5mm;border-bottom:0.4mm solid #15153a;width:22mm">G-Preis</sc-raw-th>
+      </sc-raw-tr>
+    </sc-raw-thead>
+    <sc-raw-tbody>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">015</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Elektroinstallation zur Inbetriebnahme der Wärmepumpe</strong><br>• Verlegen der elektrischen Spannungs- und Steuerleitung zwischen Innen- und Außeneinheit (bis zu 10 m)<br>• Verlegen der benötigten elektrischen Spannungsversorgung von der Zählerverteilung bis zur neuen Wärmepumpe bzw. Inneneinheit inkl. anteilig Kanal, Rohr bzw. Druckschellen bis zu 10 m (Aufputz-Verlegung) und Anschluss an die Hauptverteilung<br>• Die Installation erfolgt nach den entsprechenden technischen Anschlussbedingungen (TAB)<br>• Netzanmeldung beim EVU nach §14a EnWG<br>• Eventuell erforderliche Umbauarbeiten an der Verteilung sind in dieser Position nicht enthalten und müssen bei Bedarf individuell kalkuliert werden<br>• Elektroinstallation enthält sofern benötigt:<br>&nbsp;&nbsp;- FI-Schalter 40A, 4p, 30mA, Typ F PXF-40/4/003-B<br>&nbsp;&nbsp;- Sammelschiene Euro-Vario 63A EVG-3P+ 3N/MODUL<br>&nbsp;&nbsp;- LS-Schalter B 16A, 1p PLI-B16/1<br>&nbsp;&nbsp;- LS-Schalter B 20A, 3p PXL-B20/1<br>&nbsp;&nbsp;- SLS Schalter und o. ÜSS Schalter<br>&nbsp;&nbsp;- APZ-Feld Aufrüstsatz extern<br>&nbsp;&nbsp;- 5x16mm Hauptleitung von HAK bis ZV 10m<br>&nbsp;&nbsp;- V Material-Set u.a Klemmen, Verdrahtung, Aderenthülsen<br>&nbsp;&nbsp;- Klein- und Befestigungs Zubehör z.B. Dübel, Schrauben, Isolierung, Klemmen</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">1.980,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">1.980,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">016</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Zähler-Komplettschrank 2-Feld inkl. Anbindung</strong><br>Zusätzlicher Zählerschrank zur bestehenden Verteilung. inkl. APZ Feld, SLS Schalter 50A, AC Überspannungsschutz, 1x4Pol. FI Schutzschalter, LS Automaten, Klemmstein, Verdrahtungsarbeiten, Hauptzuleitung vom HAK bis zum neuen Zählerschrank und Verbindung zur bestehenden Verteilung.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">2.320,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">2.320,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:4mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">KfW Förderantragsunterstützung</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">017</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">Erstellung der LuL, BzA und BnD für Antrag im KfW Portal auf Förderung von Energieeffizienz und erneuerbaren Energien in Gebäuden durch Einzelmaßnahmen nach den Richtlinien des BMWK zur Bundesförderung für effiziente Gebäude Einzelmaßnahmen (BEG EM) inkl. Hilfestellung bei der Antragstellung.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:4mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">Erweiterung Systemgarantie</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">018</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>BOSCH Systemgarantie – 5 Jahre</strong></sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:4mm 0 1.5mm 0;font-weight:800;font-size:9.5pt">Friondo „fit for future“</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">019</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Friondo „fit for future“</strong><br>Bestehend aus den Positionen 020–022:</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">599,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">599,00</sc-raw-td></sc-raw-tr>
+    </sc-raw-tbody>
+  </sc-raw-table>
+</section>
+<section data-screen-label="Positionen 5" style="break-before:page;padding:0 16mm 0 16mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2mm 0">Seite 7 von 11</div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6mm;margin-bottom:4mm">
+    <h2 style="margin:0;font-size:15pt;font-weight:800;line-height:1.15">Festpreisangebot <span style="font-weight:400;color:#6b6f85;font-size:10pt">(Fortsetzung)</span></h2>
+    <div style="font-size:8pt;color:#6b6f85">Alle Preise in EUR, netto</div>
+  </div>
+  <sc-raw-table style="width:100%;border-collapse:collapse;font-size:8.6pt;line-height:1.4">
+    <sc-raw-thead>
+      <sc-raw-tr style="color:#4389c8;font-size:7pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase">
+        <sc-raw-th style="text-align:left;padding:1.5mm 1.5mm 1.5mm 0;border-bottom:0.4mm solid #15153a;width:9mm">Pos.</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:11mm">Menge</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:10mm">Einh.</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a">Bezeichnung</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:20mm">E-Preis</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm 0 1.5mm 1.5mm;border-bottom:0.4mm solid #15153a;width:22mm">G-Preis</sc-raw-th>
+      </sc-raw-tr>
+    </sc-raw-thead>
+    <sc-raw-tbody>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">020</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Friondo HEMS</strong><br>Smarte Energievernetzung: Deine Wärmepumpe, PV-Anlage und dein dynamischer Tarif arbeiten perfekt zusammen für mehr Effizienz und weniger Stromkosten.<br>Friondo HEMS verbindet Wärmepumpe, PV-Anlage, Wallbox und Stromtarif intelligent. Friondo HEMS spart dir bis zu 1000€/ Jahr zusätzlich! Ihr Stromverbrauch wird automatisch in die günstigsten Zeiten verschoben – vollautomatisch.<br>Friondo HEMS - Connect 2 Gateway (Hutschiene) inkl. Installation, Konfiguration und Inbetriebnahme*<br>Die Integration der Wärmepumpe sowie der PV-Anlage inkl. Wechselrichter ist im Leistungsumfang enthalten. Die Einbindung weiterer Komponenten (z. B. Batteriespeicher, Wallbox, Haushaltsgeräte) erfolgt nach technischer Prüfung und Umsetzbarkeit; hierfür können zusätzliche Kosten anfallen.<br><span style="color:#6b6f85">*Lizenzgebühren: Erfolgt vom Endverbraucher oder Betreiber direkt über Friondo HEMS. Für die Datenspeicherung und regelmäßige Updates berechnen wir: Paket Basic 39,90 €/a</span></sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">021</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Friondo „iMSys“</strong><br>Ihr intelligentes Messsystem (iMSys) - der Schlüssel zur smarten Energieversorgung<br>Neuer Zweiwegezähler (Zählertausch) sofort bei der Elektromontage durch uns, inklusive Smart Meter zur Direktmessung Ihrer Stromverbräuche.<br>Umgehung des Solarspitzengesetz: Der Smart Meter befähigt aus 60% wieder 100%</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:2mm 1.5mm 2mm 0;color:#6b6f85">022</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm"><strong>Friondo „SpotDynamic“ – Ökostromtarif</strong><br>Der dynamische Stromtarif für Chancenbewusste!<br>• 8,99€ SpotmyEnergy Grundgebühr/ Monat<br>• Dynamischer Arbeitspreis + 1 Cent Beschaffungskomponente/ kWh – 100 % Ökostrom<br>• Kosten-Airbag bei 39ct/kWh brutto auf das Monatsmittel<br>• 1 Monat Mindestlaufzeit – Sie bleiben komplett flexibel<br>• Exklusiv durch Friondo erhältlich!</sc-raw-td><sc-raw-td style="padding:2mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:2mm 0 2mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+    </sc-raw-tbody>
+  </sc-raw-table>
+
+  <div class="avoid" style="display:flex;justify-content:flex-end;margin-top:6mm">
+    <div style="min-width:92mm;display:grid;grid-template-columns:1fr auto;row-gap:1.5mm;column-gap:8mm;font-size:9.5pt">
+      <span style="color:#6b6f85">Netto-Summe</span><span style="text-align:right">35.802,74 €</span>
+      <span style="color:#6b6f85">19,00 % USt.</span><span style="text-align:right">6.802,52 €</span>
+      <span style="grid-column:1/-1;border-top:0.4mm solid #15153a;margin-top:1mm"></span>
+      <span style="font-weight:800;font-size:12pt">Gesamt-Betrag</span><span style="text-align:right;font-weight:800;font-size:12pt">42.605,26 €</span>
+      <span style="color:#4389c8;font-weight:700;margin-top:1mm">− voraussichtliche KfW-Förderung (55 %)</span><span style="text-align:right;color:#4389c8;font-weight:700;margin-top:1mm">23.432,90 €</span>
+      <div style="grid-column:1/-1;margin-top:1.5mm;display:flex;justify-content:space-between;align-items:center;gap:8mm;background:#15153a;color:#fff;padding:3mm 4mm;border-radius:1.5mm"><span style="font-weight:800;font-size:12pt">= Ihr Eigenanteil</span><span style="font-weight:800;font-size:14pt;line-height:1">19.172,36 €</span></div>
+      <span style="grid-column:1/-1;font-size:7.5pt;color:#6b6f85;text-align:right">Unverbindliche Beispielrechnung – Details und Ablauf auf der nächsten Seite.</span>
+    </div>
+  </div>
+</section>
+
+<!-- KfW-Förderung -->
+<section data-screen-label="KfW-Förderung" style="break-before:page;padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:4.5mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -2.5mm 0">Seite 8 von 11</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8mm">
+    <div style="display:flex;flex-direction:column;gap:1.5mm">
+      <div style="font-size:8pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#4389c8">Antrag: KfW 458 (Wohngebäude)</div>
+      <h2 style="margin:0;font-size:17pt;font-weight:800;line-height:1.15">Ihre KfW-Förderung</h2>
+      <div style="font-size:10pt;color:#3c3f55">55 % zahlt die KfW – 45 % bleiben für Sie</div>
+    </div>
+    <img src="assets/cf202186-1837-4dcc-b873-af9350ee3042.png" alt="KfW" style="height:11mm;width:auto;display:block;flex:none">
+  </div>
+  <div style="display:flex;flex-direction:column;gap:2.5mm">
+    <div style="display:flex;justify-content:space-between;font-size:8pt;color:#6b6f85"><span>Angebotssumme 42.605,26 € (inkl. 19 % USt.)</span><span>Förderfähig bis 43.000,00 €</span></div>
+    <div style="display:flex;height:16mm;border-radius:2mm;overflow:hidden;color:#fff">
+      <div style="width:30%;background:#4389c8;display:flex;flex-direction:column;justify-content:center;padding:0 3mm;gap:0.5mm"><span style="font-size:7pt;font-weight:700;opacity:0.9">Grund 30 %</span><span style="font-size:9pt;font-weight:800">12.781,58 €</span></div>
+      <div style="width:8%;background:#2f6fa8;display:flex;flex-direction:column;justify-content:center;padding:0 2mm;gap:0.5mm"><span style="font-size:7pt;font-weight:700;opacity:0.9">Klima</span><span style="font-size:8pt;font-weight:800">8 %</span></div>
+      <div style="width:17%;background:#1f5283;display:flex;flex-direction:column;justify-content:center;padding:0 3mm;gap:0.5mm"><span style="font-size:7pt;font-weight:700;opacity:0.9">Einkommen 17 %</span><span style="font-size:9pt;font-weight:800">7.242,90 €</span></div>
+      <div style="width:45%;background:#15153a;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:0 3mm;gap:0.5mm"><span style="font-size:7pt;font-weight:700;color:#8fc6f3">Ihr Eigenanteil 45 %</span><span style="font-size:13pt;font-weight:800;line-height:1">19.172,36 €</span></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6mm;align-items:start">
+    <div style="display:grid;grid-template-columns:auto 1fr auto;column-gap:3mm;row-gap:2.2mm;font-size:9pt;align-items:center">
+      <span style="width:3mm;height:3mm;border-radius:0.8mm;background:#4389c8"></span><span>Grundförderung (30 %)</span><span style="text-align:right;font-weight:700">12.781,58 €</span>
+      <span style="width:3mm;height:3mm;border-radius:0.8mm;background:#2f6fa8"></span><span>Klimageschwindigkeits-Bonus (16 % anteilig WE)</span><span style="text-align:right;font-weight:700">3.408,42 €</span>
+      <span style="width:3mm;height:3mm;border-radius:0.8mm;background:#1f5283"></span><span>Einkommensbonus (34 % anteilig WE)</span><span style="text-align:right;font-weight:700">7.242,90 €</span>
+      <span style="grid-column:1/-1;border-top:0.3mm solid #dfe3ee"></span>
+      <span></span><span style="font-weight:800">KfW-Zuschuss gesamt</span><span style="text-align:right;font-weight:800;color:#4389c8">23.432,90 €</span>
+    </div>
+    <div style="background:#f1f6fc;border-radius:2mm;padding:4mm 5mm;display:grid;grid-template-columns:1fr auto;row-gap:2mm;font-size:9pt;align-content:start">
+      <span style="color:#6b6f85">Angebotssumme</span><span style="text-align:right;font-weight:700">42.605,26 €</span>
+      <span style="color:#6b6f85">− KfW-Zuschuss</span><span style="text-align:right;font-weight:700">23.432,90 €</span>
+      <span style="grid-column:1/-1;border-top:0.4mm solid #15153a"></span>
+      <span style="font-weight:800;font-size:10.5pt">= Eigenanteil</span><span style="text-align:right;font-weight:800;font-size:14pt;line-height:1">19.172,36 €</span>
+    </div>
+  </div>
+  <div style="font-size:7.8pt;color:#6b6f85;line-height:1.5;display:flex;flex-direction:column;gap:1.5mm;text-wrap:pretty">
+    <p style="margin:0">Die Boni ergäben rechnerisch 56 %-Punkte, sind aber auf 50 %-Punkte (Gesamtdeckel 80 %) begrenzt. Boni sind anteilig für die selbst bewohnte Wohneinheit gerechnet (förderfähige Kosten ÷ 2 WE) – Näherung, maßgeblich ist die KfW-Berechnung im Antrag.</p>
+    <p style="margin:0">Unverbindliche Beispielrechnung der Friondo GmbH auf Basis der BEG-Richtlinie, Konditionen ab 21.07.2026. Maßgeblich sind allein die Förderzusage der KfW und die jeweils gültige Richtlinie.</p>
+  </div>
+  <div class="avoid" style="margin-top:2mm;padding-top:4.5mm;border-top:0.3mm solid #dfe3ee;display:flex;flex-direction:column;gap:3.5mm">
+    <h3 style="margin:0;font-size:12pt;font-weight:800">So läuft Ihre Förderung ab</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3mm 5mm;font-size:8.8pt;line-height:1.45">
+      <div style="display:flex;gap:2.5mm"><span style="flex:none;width:6mm;height:6mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8pt;font-weight:800">1</span><div><strong>Angebot annehmen</strong><br><span style="color:#3c3f55">Online oder per Post – der Vertrag gilt unter aufschiebender Bedingung bis zur Förderzusage.</span></div></div>
+      <div style="display:flex;gap:2.5mm"><span style="flex:none;width:6mm;height:6mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8pt;font-weight:800">2</span><div><strong>Friondo erstellt die Unterlagen</strong><br><span style="color:#3c3f55">Leistungs- und Lieferungsbestätigung (LuL) sowie Bestätigung zum Antrag (BzA) – kostenfrei, Pos. 017.</span></div></div>
+      <div style="display:flex;gap:2.5mm"><span style="flex:none;width:6mm;height:6mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8pt;font-weight:800">3</span><div><strong>Antrag im KfW-Portal</strong><br><span style="color:#3c3f55">Sie stellen den Antrag unter „Meine KfW“ mit der BzA-ID – wir unterstützen Sie Schritt für Schritt.</span></div></div>
+      <div style="display:flex;gap:2.5mm"><span style="flex:none;width:6mm;height:6mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8pt;font-weight:800">4</span><div><strong>Förderzusage der KfW</strong><br><span style="color:#3c3f55">Mit der Zusage tritt die aufschiebende Bedingung ein – der Vorhabensbeginn wird ausgelöst.</span></div></div>
+      <div style="display:flex;gap:2.5mm"><span style="flex:none;width:6mm;height:6mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8pt;font-weight:800">5</span><div><strong>Installation durch Friondo</strong><br><span style="color:#3c3f55">Montage, hydraulischer Abgleich und Inbetriebnahme innerhalb des Bewilligungszeitraums.</span></div></div>
+      <div style="display:flex;gap:2.5mm"><span style="flex:none;width:6mm;height:6mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8pt;font-weight:800">6</span><div><strong>Nachweis &amp; Auszahlung</strong><br><span style="color:#3c3f55">Wir erstellen die Bestätigung nach Durchführung (BnD); Sie reichen sie mit der Rechnung ein – die KfW zahlt den Zuschuss aus.</span></div></div>
+    </div>
+  </div>
+  <div class="avoid" style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;font-size:8.8pt;line-height:1.45">
+    <div style="padding:3.5mm 4mm;background:#f1f6fc;border-radius:2mm;display:flex;flex-direction:column;gap:1.5mm">
+      <div style="font-weight:800;color:#4389c8;font-size:8pt;letter-spacing:0.08em;text-transform:uppercase">Gut zu wissen</div>
+      <div>• Gefördert wird über das Programm „Heizungsförderung für Privatpersonen – Wohngebäude“ (KfW 458).<br>• Der hydraulische Abgleich (Pos. 008) ist Fördervoraussetzung und im Angebot enthalten.<br>• Am Installationsort darf kein Anschluss- oder Benutzungszwang an ein Wärmenetz bestehen.<br>• Keine Kombination mit der steuerlichen Förderung nach § 35c EStG.</div>
+    </div>
+    <div style="padding:3.5mm 4mm;border:0.3mm solid #dfe3ee;border-radius:2mm;display:flex;flex-direction:column;gap:1.5mm">
+      <div style="font-weight:800;color:#4389c8;font-size:8pt;letter-spacing:0.08em;text-transform:uppercase">Das brauchen Sie für den Antrag</div>
+      <div>• Zugang zum KfW-Portal „Meine KfW“ (Registrierung mit E-Mail-Adresse)<br>• Die BzA-ID aus der Bestätigung zum Antrag von Friondo<br>• Angaben zum Gebäude und zur selbstgenutzten Wohneinheit<br>• Für den Einkommensbonus: Einkommensteuerbescheide des Haushalts</div>
+    </div>
+  </div>
+</section>
+
+<!-- Auftragserteilung -->
+<section data-screen-label="Auftragserteilung" style="break-before:page;padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:3mm;font-size:9pt;line-height:1.5;text-wrap:pretty">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -1mm 0">Seite 9 von 11</div>
+  <h2 style="margin:0;font-size:17pt;font-weight:800;line-height:1.15">Auftragserteilung</h2>
+  <p style="margin:0">Sollte Ihnen das Angebot zusagen, beauftragen Sie uns bequem online – oder senden Sie uns das unterschriebene Angebot per Post zurück.</p>
+  <div class="avoid" style="display:grid;grid-template-columns:1fr 1fr;gap:4mm">
+    <div style="padding:4mm;border:0.4mm solid #15153a;border-radius:2mm;display:flex;flex-direction:column;gap:2mm">
+      <div style="font-size:7.5pt;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#4389c8">Barkauf</div>
+      <div style="font-size:12pt;font-weight:800;line-height:1.2">Online beauftragen</div>
+      <div style="color:#3c3f55;flex:1">Anzahlung 50 % spätestens 14 Tage vor Arbeitsbeginn, Restzahlung mit der Schlussrechnung.</div>
+      <a href="https://friondo.de/beauftragung?angebot=AN-C-261103" style="display:inline-flex;align-items:center;justify-content:center;gap:2mm;padding:3.2mm 6mm;border-radius:1.5mm;font-size:9.5pt;font-weight:800;text-decoration:none;letter-spacing:0.02em;background:#15153a;color:#fff">Jetzt online beauftragen ›</a>
+    </div>
+    <div style="padding:4mm;background:#15153a;color:#fff;border-radius:2mm;display:flex;flex-direction:column;gap:2mm">
+      <div style="font-size:7.5pt;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#8fc6f3">Finanzierung mit Cloover</div>
+      <div style="font-size:12pt;font-weight:800;line-height:1.2">Online beauftragen &amp; finanzieren</div>
+      <div style="color:#dbe9f7;font-size:8.5pt">Mit der Ersparnis Ihrer neuen Anlage finanzieren Sie die Anlage.</div>
+      <div style="display:flex;align-items:baseline;gap:2mm"><span style="font-size:7.5pt;color:#dbe9f7">ab</span><span style="font-size:22pt;font-weight:800;line-height:1">[Rate] €</span><span style="font-size:8.5pt;color:#dbe9f7">/ Monat*</span></div>
+      <div style="color:#dbe9f7;flex:1;font-size:8.5pt">Laufzeit [Laufzeit] Jahre · Ihre Finanzierungsanfrage ist bereits angelegt – nur noch bestätigen.</div>
+      <a href="https://app.cloover.com/apply?partner=friondo&amp;offer=AN-C-261103" style="display:inline-flex;align-items:center;justify-content:center;gap:2mm;padding:3.2mm 6mm;border-radius:1.5mm;font-size:9.5pt;font-weight:800;text-decoration:none;letter-spacing:0.02em;background:#4389c8;color:#fff">Finanzierung abschließen ›</a>
+    </div>
+  </div>
+  <div class="avoid" style="display:flex;flex-direction:column;gap:3mm">
+    <div style="display:flex;align-items:baseline;gap:3mm;flex-wrap:wrap"><h3 style="margin:0;font-size:12pt;font-weight:800">Finanzierung mit Cloover</h3><span style="font-size:9.5pt;font-weight:600;color:#4389c8">Saubere Energie. Faire Raten. Maximale Freiheit.</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2.5mm">
+      <div style="padding:2.5mm 3mm;border:0.3mm solid #dfe3ee;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Sofort starten</div><div style="font-size:8.2pt;line-height:1.4">Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine Banktermine</div></div>
+      <div style="padding:2.5mm 3mm;border:0.3mm solid #dfe3ee;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Planbare Monatsraten – Zum Beispiel:</div><div style="font-size:8.2pt;line-height:1.4">• Wärmepumpe ab 129 € pro Monat mit Förderung*<br>• Oder ab 250 € pro Monat ohne Förderung<br>So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.</div></div>
+      <div style="padding:2.5mm 3mm;border:0.3mm solid #dfe3ee;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Maximale Flexibilität</div><div style="font-size:8.2pt;line-height:1.4">• Kostenlose Sondertilgungen<br>• Vorzeitige Rückzahlung ohne Strafgebühren<br>• Individuell anpassbare Laufzeiten</div></div>
+      <div style="padding:2.5mm 3mm;background:#f1f6fc;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Ihre Vorteile</div><div style="font-size:8.2pt;line-height:1.4">Sofort investieren · Monatlich entspannt zahlen · Energiekosten senken · Unabhängiger werden<br><strong>Kundenzufriedenheit: 4,8 von 5</strong> – „Dank Cloover konnten wir unsere Wärmepumpe einfach, fair und transparent finanzieren.“</div></div>
+    </div>
+    <p style="margin:0;font-size:7.5pt;color:#6b6f85">*Beispielrate auf Basis einer Angebotssumme von 29.000 €, einer Förderung von 56 %, gedeckelt auf 28.000 €, und einer Laufzeit von 20 Jahren.</p>
+  </div>
+  <div class="avoid" style="margin-top:1mm;padding-top:4mm;border-top:0.3mm solid #dfe3ee;display:flex;flex-direction:column;gap:3mm">
+    <h3 style="margin:0;font-size:12pt;font-weight:800">Beauftragung per Post</h3>
+    <p style="margin:0">Senden Sie uns das unterschriebene Angebot an: Friondo GmbH, Arnold-Overbeck-Str. 63-65, 47139 Duisburg – oder eingescannt an info@friondo.de.</p>
+    <p style="margin:0"><strong>Aufschiebende Bedingung:</strong> Dieser Vertrag tritt hinsichtlich der Liefer- und Leistungspflichten zur Umsetzung, erst und nur insoweit in Kraft, wenn und soweit die KfW den Antrag zur Förderung Heizungstausch BEG EM bewilligt und die Förderung mit einer Zusage gegenüber der antragstellenden Vertragspartei zugesagt hat (aufschiebende Bedingung). Die antragstellende Vertragspartei wird die jeweils andere Vertragspartei über den Eintritt und den Umfang des Eintritts der Bedingung unverzüglich in Kenntnis setzen. Die Förderzusage löst dann direkt den Vorhabensbeginn aus.</p>
+    <p style="margin:0">Voraussichtliches Datum der Umsetzung: <span style="display:inline-block;min-width:40mm;border-bottom:0.3mm solid #15153a"></span>, liegt innerhalb des Bewilligungszeitraum nach Nummer 9.4.1.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12mm;margin-top:7mm">
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Ort, Datum</div>
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Unterschrift des Auftraggebers</div>
+    </div>
+  </div>
+</section>
+
+<!-- Bedingungen -->
+<section data-screen-label="Bedingungen" style="break-before:page;padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:3.5mm;font-size:9pt;line-height:1.5;text-wrap:pretty">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -1.5mm 0">Seite 10 von 11</div>
+  <h2 style="margin:0 0 1mm 0;font-size:15pt;font-weight:800;line-height:1.15">Vertragsbedingungen</h2>
+  <h3 style="margin:0;font-size:10.5pt;font-weight:800;color:#4389c8">Haftungsbegrenzung</h3>
+  <p style="margin:0">Technische und kaufmännische Angaben sind freibleibend. Sie werden erst durch eine nachfolgende Auftragsbestätigung verbindlich.</p>
+  <h3 style="margin:2mm 0 0 0;font-size:10.5pt;font-weight:800;color:#4389c8">Rücktrittsrecht im Zusammenhang mit Technischer Feinplanung</h3>
+  <p style="margin:0">Die in diesem Vertrag vorgesehenen Verpflichtungen und (Liefer-)Leistungen setzen eine eingehende technische Feinplanung voraus, um sicherzustellen, dass das Vorhaben zu den vereinbarten Bedingungen umgesetzt werden kann. Sollte die technische Feinplanung ergeben, dass die Umsetzung des Vorhabens technisch nicht möglich ist oder nur mit erheblichem Mehraufwand erfolgen kann, ist jede Vertragspartei – abweichend der AGB von Friondo – berechtigt, von dem Vertrag zurückzutreten. Ein entsprechender Rücktritt ist innerhalb von sechs (6) Wochen ab Kenntnisnahme in Textform gegenüber der jeweils anderen Vertragspartei zu erklären.</p>
+  <h3 style="margin:2mm 0 0 0;font-size:10.5pt;font-weight:800;color:#4389c8">Zahlung</h3>
+  <p style="margin:0">Eine Anzahlung von 50% des Angebotsbetrags ist spätestens 14 Tage vor Arbeitsbeginn zu zahlen. Die Restzahlung wird mit der Schlussrechnungsstellung fällig. Die Rechnung erhalten Sie im Anschluss zur Installation.</p>
+  <h3 style="margin:2mm 0 0 0;font-size:10.5pt;font-weight:800;color:#4389c8">Hinweis zur KfW-Förderung</h3>
+  <p style="margin:0">Der Wechsel zu einer klimafreundlichen Heizlösung kann unter bestimmten Voraussetzungen durch Förderprogramme der Bundesregierung unterstützt werden. Im Rahmen des Programms „Heizungsförderung für Privatpersonen – Wohngebäude“ (Programmnummer 458) erfolgt die Förderung über die Kreditanstalt für Wiederaufbau (KfW).</p>
+  <p style="margin:0">Bitte beachten Sie, dass weder der Anspruch auf Fördermittel noch deren konkrete Höhe garantiert werden kann. Die abschließende Entscheidung über Bewilligung und Umfang der Förderung liegt ausschließlich bei der KfW.</p>
+  <p style="margin:0">Die Ihnen kommunizierte, voraussichtliche Förderhöhe basiert auf den Angaben, die im Beratungsgespräch erfasst wurden. Für die Richtigkeit und Vollständigkeit dieser Informationen übernimmt Friondo keine Haftung. Zudem wird bestätigt, dass sich die Antragsteller bei mehreren am Vorhaben beteiligten Investoren über die Verteilung der Förderbeträge einvernehmlich verständigt haben.</p>
+  <p style="margin:0">Eine Kombination bzw. Kumulierung der KfW-Förderung mit der steuerlichen Förderung gemäß § 35 EStG ist ausgeschlossen. Antragsteller sind verpflichtet, für dieselbe Maßnahme keinen zusätzlichen Antrag auf steuerliche Förderung zu stellen. Voraussetzung für die Förderung von Wärmepumpen ist außerdem, dass am vorgesehenen Installationsort kein Anschluss- oder Benutzungszwang an ein Wärmenetz besteht. Die Prüfung dieser Voraussetzung obliegt dem Kunden und muss vor Auftragserteilung erfolgen.</p>
+  <div class="avoid" style="margin-top:2mm;padding:4mm 5mm;background:#f1f6fc;border-radius:2mm;display:flex;flex-direction:column;gap:1.5mm">
+    <p style="margin:0">Wir halten uns freibleibend 30 Tage an dieses Angebot gebunden.</p>
+    <p style="margin:0">Es gelten unsere Allgemeinen Geschäftsbedingungen, diese sind zu finden unter: <a href="https://friondo.de/AGB">https://friondo.de/AGB</a><br>Informationen zu unserem Datenschutz finden Sie unter: <a href="https://friondo.de/Datenschutz">https://friondo.de/Datenschutz</a></p>
+    <p style="margin:0">Wir sichern Ihnen eine fach- und zeitgerechte Ausführung aller angebotenen Leistungen zu. Sie haben Fragen oder wünschen weitere Informationen? Rufen Sie uns an - wir sind für Sie da.</p>
+    <p style="margin:2mm 0 0 0">Mit freundlichen Grüßen</p>
+    <p style="margin:0"><strong>Ihr Friondo-Team</strong></p>
+  </div>
+</section>
+
+<!-- Vollmacht + SEPA -->
+<section data-screen-label="Vollmacht" style="break-before:page;padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:3.5mm;font-size:8.8pt;line-height:1.5;text-wrap:pretty">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -1.5mm 0">Seite 11 von 11</div>
+  <h2 style="margin:0;font-size:13.5pt;font-weight:800;line-height:1.2">Vollmacht zur Beauftragung der SpotmyEnergy GmbH sowie zur Anmeldung und Inbetriebsetzung von Anlagen</h2>
+  <p style="margin:0">Ich bevollmächtige als zukünftiger Anlagenbetreiber und Gebäudeeigentümer die Friondo GmbH, in meinem Namen alle erforderlichen Schritte zur Beauftragung der SpotmyEnergy GmbH als Messstellenbetreiber und/oder Stromlieferant einzuleiten und entsprechende Verträge abzuschließen. Dies umfasst auch die Erteilung eines SEPA-Lastschriftmandats für damit verbundene Zahlungen.</p>
+  <p style="margin:0">Die Vollmacht gilt ebenfalls für die Friondo GmbH sowie deren Nachunternehmer zur Anmeldung, Inbetriebnahme, Änderung, Erweiterung oder Abmeldung folgender Anlagen und Verbrauchseinrichtungen beim zuständigen Netzbetreiber oder Energieversorgungsunternehmen: <strong>Photovoltaikanlagen, Wärmepumpen, Ladeeinrichtungen/Wallboxen sowie sonstige steuerbare Verbrauchseinrichtungen gemäß § 14a EnWG (Modul 1, 2 oder 3).</strong></p>
+  <p style="margin:0">Die Vollmacht umfasst insbesondere die An- und Abmeldung von Zählern, die Beantragung neuer Zähler, die Einreichung und Entgegennahme erforderlicher Unterlagen, die Kommunikation mit Netzbetreibern, Messstellenbetreibern und Stromlieferanten, die Kündigung bestehender Verträge, die Durchführung eines Anbieterwechsels sowie die Beauftragung und Betreuung eines intelligenten Messsystems.</p>
+  <p style="margin:0">Die Vollmacht gilt ausschließlich für die genannten Zwecke und erlischt nach Abschluss des beauftragten Vorgangs. Sie kann jederzeit schriftlich widerrufen werden.</p>
+  <div class="avoid" style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:1mm">
+    <div style="padding:4mm;border:0.3mm solid #dfe3ee;border-radius:2mm;display:flex;flex-direction:column;gap:3mm">
+      <div style="font-weight:800;color:#4389c8;font-size:8pt;letter-spacing:0.08em;text-transform:uppercase">Angaben zur Verbrauchsstelle</div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Name:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">Max Mustermann</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Adresse:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">Musterstraße 12, 47139 Duisburg</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Geburtsdatum:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Telefon:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">+49 170 0000000</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">E-Mail:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">max.mustermann@example.de</span></div>
+    </div>
+    <div style="padding:4mm;border:0.3mm solid #dfe3ee;border-radius:2mm;display:flex;flex-direction:column;gap:3mm">
+      <div style="font-weight:800;color:#4389c8;font-size:8pt;letter-spacing:0.08em;text-transform:uppercase">Bitte ankreuzen</div>
+      <div style="display:flex;gap:2.5mm;align-items:center"><span style="width:4mm;height:4mm;border:0.3mm solid #15153a;border-radius:0.8mm;flex:none"></span><span>Messstellenbetreiber</span></div>
+      <div style="display:flex;gap:2.5mm;align-items:center"><span style="width:4mm;height:4mm;border:0.3mm solid #15153a;border-radius:0.8mm;flex:none"></span><span>Stromlieferant</span></div>
+      <div style="display:flex;gap:2.5mm;align-items:center"><span style="width:4mm;height:4mm;border:0.3mm solid #15153a;border-radius:0.8mm;flex:none"></span><span>Anmeldung/Inbetriebnahme/Änderung/Erweiterung/Abmeldung</span></div>
+    </div>
+  </div>
+  <div class="avoid" style="margin-top:4mm;display:flex;flex-direction:column;gap:3mm">
+    <h2 style="margin:0;font-size:13.5pt;font-weight:800;line-height:1.2">SEPA-Lastschriftmandat</h2>
+    <p style="margin:0">Ich ermächtige den Zahlungsempfänger, fällige Zahlungen mittels Lastschrift von folgendem Konto einzuziehen.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3mm 8mm">
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">Kontoinhaber:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">Adresse:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">IBAN:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">Kreditinstitut:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;margin-top:12mm">
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Ort, Datum</div>
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Unterschrift Vollmachtgeber</div>
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Unterschrift Kontoinhaber, sofern abweichend</div>
+    </div>
+  </div>
+</section>
+
+</doc-page>
+</x-dc>
+
+
+</body></html>

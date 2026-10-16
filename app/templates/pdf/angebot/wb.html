@@ -1,0 +1,12 @@
+{#- v36 (PLAN_V22 Phase 189): Wallbox (19 % USt) – Seitenfolge Deckblatt · Überblick + Team · Festpreisangebot ·
+    Auftragserteilung · Vertragsbedingungen · Vollmacht (immer – Netzanmeldung § 14a EnWG, v34). Ohne KfW, ohne
+    Wirtschaftlichkeit. -#}
+{% extends "pdf/angebot/basis.html" %}
+{% block seiten %}
+{% include "pdf/angebot/deckblatt.html" %}
+{% include "pdf/angebot/ueberblick.html" %}
+{% include "pdf/angebot/positionen.html" %}
+{% include "pdf/angebot/auftrag.html" %}
+{% include "pdf/angebot/bedingungen.html" %}
+{% if kontext.vollmacht %}{% include "pdf/angebot/vollmacht.html" %}{% endif %}
+{% endblock %}

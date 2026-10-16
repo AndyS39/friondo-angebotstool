@@ -1,0 +1,141 @@
+/* v36 (PLAN_V22 Phase 189, Agent A2): Seite „Ihre KfW-Förderung“ des Angebots-PDFs (Präfix .kfw-).
+   Maße und Aufbau aus der Design-Vorlage docs/design-v36/vorlage/entpackt/angebot-waermepumpe.html,
+   Abschnitt „KfW-Förderung“. Farben über die PDF-Tokens aus angebot.css; die drei Balken-/Punktfarben der
+   Vorlage, die kein Token haben, stehen hier als eigene Variablen (nur in diesem Stylesheet, nie im Template). */
+
+:root {
+  --kfw-blau-2: #2f6fa8;        /* Vorlage: Segment/Punkt Klimageschwindigkeits-Bonus */
+  --kfw-blau-3: #1f5283;        /* Vorlage: Segment/Punkt Einkommensbonus */
+  --kfw-hell-text: #8fc6f3;     /* Vorlage: Beschriftung „Ihr Eigenanteil“ auf Dunkelblau */
+  --kfw-text-2: #3c3f55;        /* Vorlage: Untertitel und Schritt-Texte (dunkles Grau) */
+}
+
+.kfw-seite {
+  display: flex;
+  flex-direction: column;
+  gap: 4.5mm;
+  font-size: 9pt;
+  line-height: 1.45;
+}
+
+/* Kopf: Eyebrow · Titel · Untertitel, KfW-Wortmarke rechts */
+.kfw-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8mm; }
+.kfw-kopf-text { display: flex; flex-direction: column; gap: 1.5mm; }
+.kfw-eyebrow {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pdf-blau);
+}
+.kfw-titel { margin: 0; font-size: 17pt; font-weight: 800; line-height: 1.15; color: var(--pdf-dunkel); }
+.kfw-untertitel { font-size: 10pt; color: var(--kfw-text-2); }
+.kfw-wortmarke { height: 11mm; width: auto; display: block; flex: none; }
+
+/* Angebotssumme / Förderfähig bis + Balken */
+.kfw-summen { display: flex; flex-direction: column; gap: 2.5mm; }
+.kfw-summen-zeile { display: flex; justify-content: space-between; font-size: 8pt; color: var(--pdf-grau); }
+.kfw-balken {
+  display: flex;
+  height: 16mm;
+  border-radius: 2mm;
+  overflow: hidden;
+  color: var(--pdf-weiss);
+  break-inside: avoid;
+}
+.kfw-segment {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5mm;
+  padding: 0 3mm;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.kfw-segment-kompakt { padding: 0 2mm; }
+.kfw-segment-schmal { padding: 0 1mm; align-items: center; }
+.kfw-segment-name { font-size: 7pt; font-weight: 700; opacity: 0.9; }
+.kfw-segment-wert { font-size: 9pt; font-weight: 800; }
+.kfw-segment-kompakt .kfw-segment-wert { font-size: 8pt; }
+.kfw-segment-grund { background: var(--pdf-blau); }
+.kfw-segment-klima { background: var(--kfw-blau-2); }
+.kfw-segment-einkommen { background: var(--kfw-blau-3); }
+.kfw-segment-zuschuss { background: var(--pdf-blau); }
+.kfw-segment-eigen { background: var(--pdf-dunkel); align-items: flex-end; }
+.kfw-segment-eigen .kfw-segment-name { color: var(--kfw-hell-text); opacity: 1; }
+.kfw-segment-eigen .kfw-segment-wert { font-size: 13pt; line-height: 1; }
+.kfw-segment-eigen.kfw-segment-kompakt .kfw-segment-wert { font-size: 9pt; }
+
+/* Liste der Bausteine + Kasten */
+.kfw-zweispaltig { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; align-items: start; break-inside: avoid; }
+.kfw-liste {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: 3mm;
+  row-gap: 2.2mm;
+  font-size: 9pt;
+  align-items: center;
+}
+.kfw-punkt { width: 3mm; height: 3mm; border-radius: 0.8mm; display: block; }
+.kfw-punkt-grund, .kfw-punkt-zuschuss { background: var(--pdf-blau); }
+.kfw-punkt-klima { background: var(--kfw-blau-2); }
+.kfw-punkt-einkommen { background: var(--kfw-blau-3); }
+.kfw-liste-linie { grid-column: 1 / -1; border-top: 0.3mm solid var(--pdf-linie); }
+.kfw-betrag { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kfw-gesamt { font-weight: 800; }
+.kfw-blau { color: var(--pdf-blau); }
+.kfw-kasten {
+  background: var(--pdf-flaeche);
+  border-radius: 2mm;
+  padding: 4mm 5mm;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 2mm;
+  font-size: 9pt;
+  align-content: start;
+}
+.kfw-dezent { color: var(--pdf-grau); }
+.kfw-kasten-linie { grid-column: 1 / -1; border-top: 0.4mm solid var(--pdf-dunkel); }
+.kfw-eigen-label { font-weight: 800; font-size: 10.5pt; }
+.kfw-eigen-wert { text-align: right; font-weight: 800; font-size: 14pt; line-height: 1; white-space: nowrap; }
+
+/* Hinweistexte */
+.kfw-hinweise { font-size: 7.8pt; color: var(--pdf-grau); line-height: 1.5; display: flex; flex-direction: column; gap: 1.5mm; }
+.kfw-hinweise p { margin: 0; }
+
+/* So läuft Ihre Förderung ab */
+.kfw-ablauf {
+  margin-top: 2mm;
+  padding-top: 4.5mm;
+  border-top: 0.3mm solid var(--pdf-linie);
+  display: flex;
+  flex-direction: column;
+  gap: 3.5mm;
+  break-inside: avoid;
+}
+.kfw-ablauf-titel { margin: 0; font-size: 12pt; font-weight: 800; color: var(--pdf-dunkel); }
+.kfw-schritte { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm 5mm; font-size: 8.8pt; line-height: 1.45; }
+.kfw-schritt { display: flex; gap: 2.5mm; }
+.kfw-schritt-nr {
+  flex: none;
+  width: 6mm;
+  height: 6mm;
+  border-radius: 50%;
+  background: var(--pdf-dunkel);
+  color: var(--pdf-weiss);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8pt;
+  font-weight: 800;
+}
+.kfw-schritt-nr-blau { background: var(--pdf-blau); }
+.kfw-schritt-text { color: var(--kfw-text-2); }
+
+/* Boxen „Gut zu wissen“ / „Das brauchen Sie für den Antrag“ */
+.kfw-boxen { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; font-size: 8.8pt; line-height: 1.45; break-inside: avoid; }
+.kfw-box { padding: 3.5mm 4mm; border-radius: 2mm; display: flex; flex-direction: column; gap: 1.5mm; }
+.kfw-box-flaeche { background: var(--pdf-flaeche); }
+.kfw-box-rahmen { border: 0.3mm solid var(--pdf-linie); }
+.kfw-box-titel { font-weight: 800; color: var(--pdf-blau); font-size: 8pt; letter-spacing: 0.08em; text-transform: uppercase; }

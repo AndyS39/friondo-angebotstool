@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v35)
+# Friondo Angebotstool – Projektkontext (v36)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -40,6 +40,11 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - `docs/taifun/ADRESSEN.xsd` (TAIFUN-Schema der Kundenübergabe, v35 – Rekonstruktion aus dem Plan,
   bis das Original von TAIFUN vorliegt; Beispiel `docs/taifun/beispiel_LM.xml`, Doku
   `docs/taifun-kundenexport.md`).
+- Angebots-PDF (v36): `app/templates/pdf/angebot/` (HTML-Vorlagen Layout v3 – `basis.html`, Seiten-Includes,
+  `wp|pv|kl|wb.html`), `app/static/pdf/` (`angebot.css`/`angebot_kfw.css`/`angebot_wirtschaftlichkeit.css` mit den
+  PDF-Tokens, `bilder/`, `fonts/nunito-sans/`), `docs/design-v36/vorlage/` (Design-Exporte je Sparte, lesbar
+  entpackt unter `entpackt/`), `docs/angebots-pdf.md`; Cloover: `docs/cloover-api.md`, Textbausteine
+  `app/cloover_texte.py` (Key nur in der `.env`).
 - Betrieb (v27): `docs/betrieb.md` (Runbook, Ist-Aufnahme, Inventar),
   `docs/betrieb-it-uebergabe.md`, `docs/lasttest-v27.md`; Skripte
   `scripts/dienst-installieren.bat`, `dienst-neustart.bat`, `dienst-status.bat`,
@@ -86,6 +91,7 @@ Nummern vergeben.
 | v34 | PLAN_V21.md | 178–182 |
 | v35 | PLAN_LEAD_V6.md | 183–187 |
 | v35-Nachtrag 3 | PLAN_LEAD_V6_1.md (Nachtrag 16.10.2026, eingearbeitet in PLAN_LEAD_V6.md) | – |
+| v36 | PLAN_V22.md | 188–195 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -180,6 +186,18 @@ Nummern vergeben.
   Artikel) in das PV-Angebot desselben Vorgangs (dort voll berechnet zu 0 % USt, eigene Gruppe,
   `uebernommen_von_*`), im Ursprung als Alternativ-Positionen; „zurückholen“ solange beide Entwurf/Versand
   vorbereitet sind. Steuerliche Zulässigkeit entscheidet Friondo/Steuerberatung – das Tool setzt nur um.
+- **Angebots-PDF aus HTML-Vorlagen (v36, Phasen 188–190):** das Angebots-PDF entsteht aus den Jinja2-Vorlagen
+  `app/templates/pdf/angebot/` über den Browser-Druck (Playwright + Edge, `app/pdf_html.py`, Engine `pdf_engine =
+  html`); fpdf2 ist nur noch Rückfall (Schalter `fpdf2` oder Druckfehler → gleicher Zielpfad, Fehlerprotokoll „PDF“,
+  Versand-Meldung „PDF im alten Layout erzeugt“). Jeder PDF-Weg läuft über `pdf_export.pdf_fuer_angebot` bzw.
+  `signiertes_pdf_erzeugen`; versendete/angenommene/abgelehnte/überholte Angebote behalten ihre vorhandene Datei
+  (`pdf_eingefroren`). Summen, KfW-Rechnung und Kontrollwerte unverändert (WP 30.245,43 €, KL A 6.518,66 €).
+- **Cloover nur Profil Standard (v36, Phasen 192–194):** Rate (Karte „Finanzierung (Cloover)“, Karte 2 der
+  Auftragserteilung, `[CLOOVER]` im fpdf2-Rückfall) und persönlicher Finanzierungs-Link (Cloover-Projekt + QR beim
+  „Versand vorbereiten“) gibt es nur bei Angebotsprofil Standard, Sparten aus `cloover_sparten` (WP, PV, KL, WB),
+  Privatkunden mit E-Mail, Telefon und vollständigem Ausführungsort und nicht ausgeblendeter Finanzierung;
+  Enni/SWD/Sparkasse DU, TAIFUN-Einträge und Modus `aus` (kein Key) bleiben ohne. Der Angebotsstatus folgt nie
+  automatisch dem Cloover-Status („Angenommen“ setzt der Innendienst, Glocke art `cloover`).
 
 ## Neu in v6 (abgestimmt 21.08.2026)
 - **Lead-Zuordnung:** Personen-Zuordnung wirkt sofort rückwirkend auf bestehende
@@ -263,7 +281,9 @@ Nummern vergeben.
 
 ## Neu in v9 (abgestimmt 29.08.2026)
 - Angebotsprofile (Standard / Enni / SWD / Sparkasse DU) bündeln je
-  Vertriebskanal: Nachtext-Block, Positionsregeln und Versandregeln.
+  Vertriebskanal: Nachtext-Block, Positionsregeln und Versandregeln. *(v36: die Nachtexte werden im Layout v3
+  in Karte 2 der Auftragserteilung und in den Vertragsbedingungen abgebildet; das feste Raten-Beispiel des
+  Nachtexts A ist durch den Platzhalter `[CLOOVER]` bzw. die Cloover-Rate ersetzt – siehe v36)*
   Auto-Auswahl über den Kanal des Leads (Zuordnung Kanalwert → Profil
   in der Parametrierung, Fallback Standard *(v35: Kanalwerte aus der Kanal-Tabelle, nur lesend)*), am Angebot manuell
   umschaltbar mit Konsistenz-Hinweis. Nach- und Vortexte sind
@@ -415,7 +435,8 @@ alle Rückspielungen werden protokolliert.
 Stack (FastAPI/SQLite/fpdf2), TAIFUN-Import mit GUID-Anker und Textregeln,
 Fragebogen mit Seiten + AMPEL, Erfassungsliste, Nummernkreis AN-C-<JJ><NNNN>,
 EP-Regel, Decimal/Cent, 19 % USt, KfW-Modul mit Testfällen gegen den HTML-Rechner,
-PDF nach Referenz AN250096, Vollmacht nur bei iMSys/SpotDynamic, Anhänge-Bibliothek,
+PDF nach Referenz AN250096 *(überholt – seit v36 Layout v3 aus HTML-Vorlagen mit Browser-Druck, fpdf2 nur
+Rückfall)*, Vollmacht nur bei iMSys/SpotDynamic, Anhänge-Bibliothek,
 Graph-Versand über Innendienst, Terminal-Server-Betrieb. *überholt – siehe v33 (Phase 166): Zugriff als Anwendung (Client Credentials), Modus delegiert nur als Rückfall*
 
 ## Neu in v11 – Projektierung V1 (abgestimmt 22.09.2026)
@@ -806,7 +827,7 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   Projektierung-Einstellungen; Hauptrolle Projektierung/Montage sieht das
   Modul immer). Portal-Badge „Demo · Coming soon“ / „Pilot“ / keins. BzA-
   Kundenmail nur im Demo-Modus an `projekt_testadresse`, im Pilot echt.
-  Parametrierung → **Go-live-Checkliste** (`app/golive.py`, 11 Live-Punkte *überholt – v33: 12 Live-Punkte (Punkt 12 „Graph als Anwendung verbunden“)*
+  Parametrierung → **Go-live-Checkliste** (`app/golive.py`, 11 Live-Punkte *überholt – v33: 12 Live-Punkte (Punkt 12 „Graph als Anwendung verbunden“); v36: 13 Punkte (Punkt 13 „Angebots-PDF: Browser-Druck grün“)*
   mit Link: Absender + Testmail ohne Fallback, Kalender-Modus + Outlook-
   Termin, Benutzer je Rolle, Teams mit Mitgliedern, Sub je Typ, Portal-URLs,
   Collin-Kundennummer, Stücklisten ≥ 90 % ohne BEISPIEL-Nummern,
@@ -992,7 +1013,8 @@ v14“ entspricht diesem Abschnitt.)
   + Versatz. Kontrollwerte: `tests/test_wirtschaftlichkeit_v22.py`.
   `pv_auslegung.wirtschaftlichkeit` (additive Quote) bleibt nur als
   Übergang und ist nicht mehr im PDF-Weg.
-- **Drei PDF-Seiten `app/wirtschaftlichkeit_pdf.py`** (Phase 101): feste
+- **Drei PDF-Seiten `app/wirtschaftlichkeit_pdf.py`** (Phase 101) *(überholt – seit v36 als HTML-Seiten
+  `wirtschaftlichkeit.html` mit Nunito Sans über den Browser-Druck; fpdf2/Poppins nur Rückfall)*: feste
   A4-Seiten (Auf einen Blick · Ersparnis im Detail · Sicherheit &
   Transparenz) nach `docs/wirtschaftlichkeit-mockup/seite1–3.html`, mit
   fpdf2-Primitiven, Schrift Poppins (`app/static/pdf/fonts`, OFL; Fallback
@@ -1275,7 +1297,8 @@ Texte/PDF, Integration/Kontrollfälle, adversarialer Prüfer).)
 - **Texte & PDF** (Phase 115): Textblöcke „Friondo KL Standard“ (Vor- +
   Nachtext), „Friondo KL Enni/SWD/Sparkasse DU“ (Nachtexte) per
   `angebotsprofile.seed_kl` (migrate.py), Vortext „Ihr individuelles
-  Klimaanlagen-Angebot zum Festpreis“, Nachtext A ohne Monatsraten-Beispiel,
+  Klimaanlagen-Angebot zum Festpreis“, Nachtext A ohne Monatsraten-Beispiel *(v36: Nachtext A mit
+  `[CLOOVER]` vor „So bleibt Ihr Budget flexibel …“, Vortext im Design-Wortlaut)*,
   Nachtext B mit „Hinweis zur Kältetechnik“ (R32, F-Gase-Verordnung (EU)
   2024/573) statt KfW-Hinweis, Nachtext C mit „Voraussichtlicher
   Ausführungszeitraum: ______“; alle KL-Texte sind Entwürfe für das Gegenlesen
@@ -1655,7 +1678,7 @@ Projektierung weiter im eingestellten `freigabe_modus`.)
   Bereichskarten – Allgemein · Angebotstool · Projektierung · Lead-Management ·
   System & Protokolle. Alle bisherigen Adressen bleiben; jeder Link der alten
   Button-Reihe kommt genau einmal vor, Admin- und Lead-Bedingungen wie zuvor, der
-  Go-live-Eintrag trägt ein Badge „n/11 grün“. Die Inline-Abschnitte der alten *überholt – v33: „n/12 grün“*
+  Go-live-Eintrag trägt ein Badge „n/11 grün“. Die Inline-Abschnitte der alten *überholt – v33: „n/12 grün“, v36: „n/13 grün“*
   Übersicht liegen auf zwei neuen Seiten: `/parametrierung/angebotstool`
   („Angebotstool-Einstellungen“: DB-Ampel inkl. je Sparte, E-Mail-Versand mit
   Versand-Erkennung (#versand), Kombi-Versand, gewerkeübergreifende Artikel,
@@ -3188,7 +3211,7 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   Ergebnis in Einstellung `graph_letzter_test`), Vertrag O `outlook_sync.postfaecher_ohne_zugriff(session)`,
   im Modus delegiert weiter „Mit Microsoft anmelden“/„Abmelden“. `angemeldeter_benutzer()` liefert im Modus
   anwendung `KONTO_ANWENDUNG`; die Versand-Routen (`routers/angebote.py`, `routers/vorgaenge.py`) prüfen
-  `graph_versand.verbunden(session)` und melden `nicht_verbunden_text(session)`. Go-live-Checkliste: 12. Punkt
+  `graph_versand.verbunden(session)` und melden `nicht_verbunden_text(session)`. Go-live-Checkliste *(v36: 13 Punkte)*: 12. Punkt
   „Graph als Anwendung verbunden“ (`golive.graph_punkt`); `/health`: Felder `graph_modus`,
   `graph_geheimnis_tage`, `warn` „Graph-Geheimnis läuft in n Tagen ab“ (≤ 30); Betriebs-Seite Kachel
   „Graph-Modus“. Doku `docs/graph-einrichtung.md` komplett neu (Entra, Exchange, Verbindungstest,
@@ -3461,7 +3484,7 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   mein_tag 15, tabellen 15, lead_nachtrag 6, nachfassen 17, fundament 13); Gesamtsuite `pytest tests -q`
   **1344 bestanden, 5 übersprungen, 0 Fehler** (11:48 min), Wächter-AST v27, Token-Wächter v30 und der neue
   Wächter `UploadRoutenOhneSchreibsperre` grün. Angepasste Alt-Tests (Begründung in der Gesamtübersicht
-  `diagnose/v33/gesamtuebersicht.md`): Lead-Kalender-Umleitung (`?alt=1`), Infotext, Go-live 12 Punkte,
+  `diagnose/v33/gesamtuebersicht.md`): Lead-Kalender-Umleitung (`?alt=1`), Infotext, Go-live 12 Punkte *(v36: 13)*,
   „Simons Gruppe“, Kalender-Rechte AD, Scheduler 16 Läufe / 3 mail-sync-Teilschritte, Outlook-Warteschlange
   statt Direktaufruf, Basisrolle auf der Anmeldeseite, Spaltenkopf mit Werkzeugen, Mein-Tag-Blöcke, zwei Tests
   mit ungesicherter Schreibung über eine Anfrage/einen Lauf hinweg (commit/rollback davor), festes Testdatum →
@@ -4080,3 +4103,282 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   streichen die Objektfotos, PLAN_V23 setzt sie in einem Regressionstest voraus → Streichung gilt, der V23-Test
   entfällt (Rückfrage in der Gesamtübersicht der Kette). Je Plan ein Zwischenstand-Commit ohne Push; Rückfragen
   gebündelt am Ende; eine Rollout-Prüfung für alles.
+
+## Neu in v36 – Angebotslayout v3 (HTML-Vorlagen + Browser-Druck) und Cloover-Finanzierung (abgestimmt 15./16.10.2026)
+
+(Plan: PLAN_V22.md, Phasen 188–195 (Teil A 188–191, Teil B 192–195); Nummern in der Vorprüfung der Plan-Kette am
+16.10.2026 bestätigt (v34 = PLAN_V21, v35 = PLAN_LEAD_V6 – der Plan-Vorspann hatte sie vertauscht genannt). Design-
+Vorlagen: `docs/design-v36/vorlage/angebot-waermepumpe|pv-anlage|klimaanlage|wallbox.html` (anonymisierte Claude-Design-
+Exporte, 4 × 8 MB mit Manifest – entpackt und lesbar unter `docs/design-v36/vorlage/entpackt/`, Skript
+`diagnose/v36/orch/vorlagen_entpacken.py`; die Assets des Entpack-Ordners sind gitignored, die genutzten Bilder/Schriften
+liegen unter `app/static/pdf/`). Umgesetzt am 16.10.2026 in EINEM Durchlauf: Fundament durch den Orchestrator (Engine
+`app/pdf_html.py`, Kontext-Vertrag `app/pdf_kontext.py` + `demo_kontext`, `templates/pdf/angebot/basis.html` + `_fuss.html`,
+`static/pdf/angebot.css` mit den PDF-Tokens, Bilder/Schriften aus den Vorlagen (`diagnose/v36/orch/pdf_assets.py`:
+Titelbilder JPEG ≤ 350 KB, Teamfoto ≤ 400 KB, Nunito Sans als variable woff2 in fünf Unicode-Teilmengen + OFL),
+`requirements.txt` playwright/qrcode, `config.py`/`.env.example` (`PDF_BROWSER_PFAD`, `CLOOVER_API_KEY`, `CLOOVER_BASIS_URL`),
+`app/cloover_api.py`/`app/cloover.py` als Schnittstellen, Spalten `angebote.cloover_json`/`benutzer.cloover_email`), Welle
+Teil A mit vier Agenten A1 (Seiten + Kontext, Phase 189), A2 (KfW/Wirtschaftlichkeit, Phase 189), A3 (Engine-Schalter,
+Einbindung, Parametrierung, Server, Phasen 188/190), A4 (Abnahme, Phase 191), Welle Teil B mit B1 (Client/
+Parametrierung, Phase 192), B2 (Rate, Phase 193), B3 (Ablage/Projekt/Status, Phase 194) auf eigenen DB-Kopien
+`diagnose/v36/data_<X>`; Berichte `diagnose/v36/<X>_ergebnis.md` (lokal), Gesamtübersicht der Kette
+`diagnose/v36/gesamtuebersicht.md`. Zwischenstand-Commit „v36“ ohne Push (Freigabe am Ende der Plan-Kette). Alle
+Datenbankänderungen additiv – v35-Code läuft auf der v36-Datenbank (Rückweg-Probe in der Rollout-Prüfung der Kette).
+**Rückfragen A1–A3 und B1–B8 des Plans** wurden mit den Plan-Vorschlägen umgesetzt (Antworten gebündelt am Ende der Kette);
+**der Cloover-Key liegt nur in der `.env`** – auf dem Dev-PC fehlt er, Teil B läuft deshalb im Modus „aus“, alle
+Cloover-Tests sind gemockt.)
+
+**Leitplanken ab v36 (zusätzlich zu v27/v30/v33/v35):**
+- **Browser-Druck ist Prozess-I/O:** nie mit offener Datenbanksitzung drucken – `pdf_html.angebot_pdf` liest den Kontext,
+  gibt die Verbindung frei (`verbindung_freigeben`, committet!) und druckt danach; der Wächter `tests/test_v27_sitzungen.py`
+  kennt `drucken`/`pdf_aus_kontext`/`angebot_pdf` als `PROZESS_FUNKTIONEN`. Jeder PDF-Weg läuft über
+  `pdf_export.pdf_fuer_angebot(session, angebot, benutzer=None)` bzw. `signiertes_pdf_erzeugen` (Engine-Weiche dort, nie
+  direkt fpdf2 oder Playwright in einer Route).
+- **PDF-Vorlagen (`app/templates/pdf/`) nur mit `var(--pdf-…)`** aus `app/static/pdf/angebot.css` (feste Hex-Werte nur in
+  den PDF-Stylesheets – kein Hell/Dunkel im Druck); keine externen Quellen (Bilder/Schriften als `file://` unter
+  `app/static/pdf/`), kein Script; der Kontext trägt nie EK/DB (auch nicht in der Fassung „intern“).
+- **Cloover:** Key nur aus `config.CLOOVER_API_KEY` (`.env`), nie geloggt, nie angezeigt; ohne Key Modus „aus“; jeder
+  Aufruf über `app/cloover_api.py` ohne offene Sitzung; `angebote.cloover_json` nur über `cloover.json_lesen/json_schreiben`.
+
+- **Engine `app/pdf_html.py` (Phase 188, Orchestrator + A3):** Jinja2-Vorlagen → HTML (eigene Umgebung mit den Web-Filtern
+  `euro`/`menge`/`de_datum`, Global `static` = `file:///…/app/static`) → Temp-Datei `data/tmp/pdf/` → Playwright-Druck im
+  eigenen Drucker-Thread mit asyncio-Schleife (Routen laufen im Threadpool): ein Browser je Dienst (Edge über
+  `channel="msedge"` – auf dem Windows Server vorhanden –, `.env PDF_BROWSER_PFAD` als Vorrang, Rückfall Playwright-
+  Chromium; `--allow-file-access-from-files`), Start beim ersten PDF, Neustart nach Fehler, höchstens 2 parallele Drucke
+  (`PARALLEL`), Timeout 30 s je PDF, `page.pdf(format A4, print_background, prefer_css_page_size, display_header_footer)`;
+  **Kopfzeile** auf allen Seiten über die Browser-Kopfvorlage („Angebot-Nr. <Nr> · <Kunde>“ links, „SEITE x VON y“ rechts,
+  7 pt Grau, Systemschrift) in einer 10-mm-Randzone (`@page { margin: 10mm 0 0 0 }`), in die kein Seiteninhalt reicht –
+  damit überlappt die Seitenzahl auf dem Deckblatt nicht den Award [ANNAHME: Seitenzahl auch auf Seite 1]; **Fußzeile**
+  fünfspaltig als wiederholter Tabellenfuß (`basis.html`: Dokumenttabelle mit `thead`/`tfoot`, `_fuss.html` aus
+  `pdf_export.FUSSZEILE`) [ANNAHME]; Seiten als `.pdf-seite` (16 mm Innenabstand, `break-before: page`). Fehler →
+  `PdfDruckFehler` (Aufrufer fallen auf fpdf2 zurück, Fehlerprotokoll Fehlertyp „PDF“, Versand-Meldung „PDF im alten Layout
+  erzeugt (Browser-Druck fehlgeschlagen: <Grund>)“). Befunde: Nunito Sans wird von Chromium als Type3 eingebettet (PDFs
+  1,4–1,8 MB, Ziel ≤ 2,5 MB), Druck warm 2–3 s je WP-Angebot (Zielwert 3 s), kalt ≈ 5 s (Browser-Start 1,6 s).
+  `status()`/`browser_test()`/`dateien_pruefen()` für Parametrierung und /health.
+- **Engine-Schalter, Parametrierung, Health, Go-live (Phase 188, A3):** Einstellung `pdf_engine` = `html` (Standard) |
+  `fpdf2` (`pdf_html.engine/engine_setzen`); Migration `pdf_html.migration_v36_pdf_engine` (migrate.py) führt den
+  Browser-Test aus – Fehlschlag → `pdf_engine = fpdf2` mit Meldung „Angebots-PDF: Browser-Druck nicht verfügbar (…) – Engine
+  auf fpdf2 gestellt“, Erfolg → html nur anlegen, wenn die Einstellung fehlt (Wahl des Admins bleibt), Ergebnis in
+  `pdf_letzter_test`, idempotent. **Parametrierung → Angebots-PDF** (`/parametrierung/angebots-pdf`, Admin, Router
+  `app/routers/konfiguration_pdf.py`, Karte „Angebotstool“ der Verteilerseite): Schalter, Browser (Kanal/Pfad/Version/
+  Drucke/Fehler/Neustarts), Knopf „Test-PDF erzeugen“ (Demo-Angebot `pdf_kontext.demo_kontext` über die Sparten-Vorlage,
+  Dauer in ms, Download), Prüfung fehlender Bilder/Schriften, Protokoll `pdf_protokoll` (letzte 30). **`GET /health`:**
+  `pdf_engine`, `pdf_browser`, `pdf_letzte_druckdauer_ms`, `pdf_drucke`, `pdf_fehler`, `pdf_letzter_test_ok`, warn bei
+  Engine html + letztem Test rot; Betriebs-Seite Kachel „Angebots-PDF“. **Go-live-Checkliste: 13 Punkte** (13 „Angebots-PDF:
+  Browser-Druck grün“ = Engine html und letzter Browser-Test ok) – „12 Punkte“ in v18/v26/v33 überholt. **Server:**
+  `scripts\pdf-browser-pruefen.bat` (+ `scripts/pdf_browser_pruefen.py`: findet Edge/Chrome bzw. `PDF_BROWSER_PFAD`, druckt
+  ein Test-PDF unter dem aufrufenden Konto – Dienst `FriondoAngebotstool` = SYSTEM per `psexec -s` oder geplanter Aufgabe –,
+  meldet Dauer/Pfad, Exit-Code ≠ 0 bei Fehler); `update.bat` installiert `playwright` über `requirements.txt` und lädt
+  Playwright-Chromium nur ohne Edge/`PDF_BROWSER_PFAD` (braucht Internet). Doku `docs/angebots-pdf.md` (Engine,
+  Vorlagenstruktur, Kontext-Vertrag, Design-Update einspielen, Bilder/Schriften tauschen, Rückfall, Server-Prüfung,
+  Fehlersuche), `docs/nach-dem-update-v36.md`, `docs/betrieb.md` „Ergänzungen v36“ (Browser-Prozess, Temp-Ordner).
+- **Seitenaufbau Layout v3 (Phase 189, A1, `app/pdf_kontext.py`, `app/templates/pdf/angebot/`, `app/static/pdf/angebot.css`):**
+  EIN Kontext `pdf_kontext.fuer_angebot(session, angebot, *, signatur=None, fassung="kunde", benutzer=None)` (Vertrag im
+  Modul-Docstring; liest nur, nie EK/DB) versorgt die Sparten-Vorlagen `wp.html`/`pv.html`/`kl.html`/`wb.html` (erben von
+  `basis.html`, Includes je Seite) und die HTML-Vorschau: **Deckblatt** (Logo, Award-Badge mit Link
+  `germanenergyawards.com/interview/friondo-gmbh`, Titelbild je Sparte mit dunklem Verlauf, Eyebrow „ANGEBOT ·
+  WÄRMEPUMPE | PV-ANLAGE | KLIMAANLAGE | WALLBOX“, Titel/Untertitel wörtlich laut Plan, Absenderzeile, Empfängerblock nach
+  v20 mit „Ausführungsort: …“/„Lieferanschrift: …“ in 7 pt nur bei Abweichung [ANNAHME: unter dem Block], Infokasten
+  Angebot-Nr. · Datum · Gültig bis (Datum + `pdf_kontext.BINDEFRIST_TAGE` = 30 [ANNAHME, Rückfrage A2]) · Ansprechpartner (AD
+  des Vorgangs, sonst der vorbereitende Innendienstler = `benutzer`) · Telefon (aus der Benutzerverwaltung, leer → Zeile
+  entfällt [Rückfrage A1]) · „Ersetzt Angebot AN-… vom …“/„Kopie von AN-…“ [ANNAHME: im Infokasten], Leiste „Mitgliedschaften
+  & Zertifizierungen“ mit fünf Logos) · **„Ihr Angebot im Überblick“ + Teamfoto** (Briefanrede, Einleitung, zwei Haken-
+  Spalten „DARIN ENTHALTEN“/„WARUM FRIONDO?“, Schluss, „Ihr Friondo-Team“, Teamfoto; Quelle bleibt der Vortext-Textblock des
+  Profils/der Sparte – `pdf_kontext.vortext_parsen` bildet die Markdown-Struktur ab [ANNAHME]: Absätze vor der ersten Liste
+  → Einleitung, erste Liste → links, „Warum Friondo?“ + zweite Liste → rechts, Rest → Schluss; Listenpunkte mit fettem
+  Teil vor „ – “) · **Festpreisangebot** (Spalten POS. · MENGE · EINH. · BEZEICHNUNG · E-PREIS · G-PREIS, „Alle Preise in EUR,
+  netto“ – Beträge der Tabelle ohne €, Summen mit €; wiederholter Tabellenkopf statt „(Fortsetzung)“; Gruppenüberschriften
+  als fette Zwischenzeile; erste Textzeile fett, Zeilen mit „-“/„•“/„– “ als Aufzählung [ANNAHME]; Kennzeichen EP „EP.“,
+  bauseits, Alternativ = farbiger Hinweiskasten vor der ersten Alternativ-Position **je Block** + „im PV-Angebot“ und
+  hellgraue Zeile (übernimmt v34 Phase 180), Positionsrabatt als Zeile „− Rabatt …“, Sonderpreis/manuell ohne Kennzeichen;
+  Vermerke v9/v10 als Absatz „Hinweise“; **Summenblock** Netto-Summe · „19,00 % USt.“ bzw. „0,00 % USt. (§ 12 Abs. 3 UStG)“ ·
+  Gesamt-Betrag · bei Rabatt „− Rabatt <Bezeichnung>“ + „= Endbetrag“ · bei WP mit Förderblock „− voraussichtliche
+  KfW-Förderung (<Anteil des Zuschusses an der Angebotssumme> %)“ in Blau + dunkle Box „= Ihr Eigenanteil“ mit Hinweis
+  „Unverbindliche Beispielrechnung – …“; ohne Förderblock steht Gesamt-Betrag bzw. Endbetrag in der dunklen Box [ANNAHME];
+  Minus nur im Label wie die Vorlage) · KfW/Wirtschaftlichkeit (A2-Partials) · **Auftragserteilung** (Einleitung wörtlich;
+  Karte 1 „BARKAUF – Online beauftragen“ mit dem Text der gewählten Zahlungsbedingung [ANNAHME: Kurzsatz = Text der
+  v30-Bedingung] und Knopf „Jetzt online beauftragen ›“ auf den Fern-Signatur-Link nur bei aktiver Fern-Signatur +
+  `BASIS_URL` aus der `.env` + gültigem Token, sonst „Per E-Mail beauftragen ›“ (`mailto:angebot@friondo.de?subject=Auftrag
+  <Nr>`); Karte 2 je Profil – Standard „FINANZIERUNG MIT CLOOVER – Online beauftragen & finanzieren“ (Teil B füllt; ohne
+  Rate „Monatsrate auf Anfrage“ ohne Knopf), Enni „ENNI CONTRACTING“, SWD „CONTRACTING“, Sparkasse DU „FINANZIERUNG MIT
+  SPARKASSE DUISBURG“ mit den Texten der Nachtext-A-Textblöcke (Cloover-Slogan-Zeile wird dort herausgefiltert);
+  Cloover-Block „Saubere Energie. Faire Raten. Maximale Freiheit.“ mit vier Boxen nur bei Standard über `_cloover.html`;
+  „Beauftragung per Post“ wörtlich; WP zusätzlich „Aufschiebende Bedingung“ + „Voraussichtliches Datum der Umsetzung: ____“
+  (Nachtext C); Unterschriftszeile „Ort, Datum“/„Unterschrift des Auftraggebers“ = Platz der Vor-Ort-Signatur) ·
+  **Vertragsbedingungen** (`nachtext_parsen`: „###“-Abschnitte UND „#“-Titel der Nachtexte wie „Installationsvoraussetzungen“
+  als blaue Zwischenüberschriften, Seitentitel des Layouts (Zahlungsoptionen, Auftragserteilung, Vollmacht …) entfallen;
+  Zahlung = `{zahlungsbedingungen}` v30; WP „Hinweis zur KfW-Förderung“, KL „Hinweis zur Kältetechnik“; PV-Fußnote;
+  Schlusskasten mit Bindefrist, klickbaren AGB-/Datenschutz-Links, Zusicherung, Gruß; die Platzhalter
+  `[WIRTSCHAFTLICHKEIT]`/`[BEISPIELRECHNUNG]`/`[CLOOVER]` werden im Layout v3 nicht gerendert) · **Vollmacht** (Regel
+  unverändert: nur bei 016/017, WB immer (v34), Enni/SWD nie; Text wörtlich, Kasten „ANGABEN ZUR VERBRAUCHSSTELLE“ vorbelegt
+  mit Name/Ausführungsort/Telefon/E-Mail, „BITTE ANKREUZEN“ mit drei Kästchen, SEPA-Block, drei Unterschriftslinien).
+  **Migration `angebotsprofile.migration_v36_texte`** (migrate.py): Vortexte PV/KL/WB wörtlich aus den Design-Vorlagen als neue
+  Fassung der Textblöcke „Friondo PV|KL|WB Standard“, die bisherige Fassung bleibt als Textblock „… (bis v35)“ erhalten
+  (es gibt keine Textblock-Versionierung – additive Historie [ANNAHME]); WP bleibt der heutige Text (Vorlage mit „VDI
+  4645“ statt „VDI 4650“ und ohne „Anbei erhalten Sie …“ – Angleichung wäre eine Zeile in der Parametrierung, Rückfrage),
+  Enni/SWD/Sparkasse DU unverändert; der v34-Absatz „Komplettpaket Wallbox inkl. Montage“ steht nicht im v36-WB-Vortext
+  (Rückfrage A11). `ANGEBOTSTEXTE.md` Abschnitt 11 „Layout v3 (v36)“ (Seitenfolge je Sparte WP 7 · PV 9 · KL 5 · WB 6 Seiten
+  beim Demo-Angebot, Kennzeichen-Regeln, Textblock → Seite; Abschnitte 1–10 als Quelle der Wortlaute). Tests
+  `tests/test_v36_layout.py` (28: v20-Empfängerfälle, Kennzeichen, 0 %-Zeile, KfW-Seite nur mit Förderblock, Vollmacht-
+  Regel, Karte 2 je Profil, Knopf ohne `BASIS_URL`, Wirtschaftlichkeit nur PV, Summen-Kontrollwerte, keine externe URL/kein
+  Script, „SEITE 2 VON n“).
+- **„Ihre KfW-Förderung“ (Phase 189, A2, `app/pdf_kontext_kfw.py`, `kfw.html`, `angebot_kfw.css`):** eine Seite nach der
+  Vorlage (Eyebrow „ANTRAG: KFW 458 (WOHNGEBÄUDE)“, Titel, Untertitel „<F> % zahlt die KfW – <100−F> % bleiben für Sie“,
+  KfW-Wortmarke `bilder/kfw.png` – die Vorlage liefert PNG statt des im Plan genannten SVG –, Zeile Angebotssumme (inkl.
+  19 % USt.)/Förderfähig bis, Balken Grund · Klima · Einkommen · Ihr Eigenanteil anteilig an der Angebotssumme, Liste der
+  Bausteine mit MFH-Zusatz „(x % anteilig WE)“, „KfW-Zuschuss gesamt“, Kasten Angebotssumme − Zuschuss = Eigenanteil,
+  Hinweise/Disclaimer mit „Konditionen ab <Angebotsdatum>“ und Deckel-Satz nur bei gedeckelten Boni, sechs Schritte, Boxen
+  „GUT ZU WISSEN“/„DAS BRAUCHEN SIE FÜR DEN ANTRAG“ wörtlich). Werte ausschließlich aus `pdf_export._kfw_ergebnis_fuer`
+  (KfW-Rechnung, v8-Bausteine, v6-Override, v9-MFH); EFH-Beträge = förderfähige Kosten × angewandter Satz (Klima voll,
+  Einkommen Rest) [ANNAHME]; „Pos. 017/008“ der Vorlage → Anzeigenummern der Artikel 012 (ANTRAG BEG EM/BzA) und 008
+  (hydraulischer Abgleich) dieses Angebots, ohne Position entfällt der Klammerzusatz; manuelle Förderung ohne Kennzeichen
+  (nur Flag); Förderblock ausgeblendet/PV/KL/WB → `kfw = None`, Seite entfällt; `kfw["foerderquote"]` (Anteil) speist auch
+  den Summenblock, `kfw["foerdersatz"]` (nominal) nur zur Information. Gewerbe-Fall (KfW 522) ist im Design nicht vorgesehen
+  (Rückfrage).
+- **Wirtschaftlichkeit PV (Phase 189, A2, `app/pdf_kontext_wirtschaftlichkeit.py`, `wirtschaftlichkeit.html`,
+  `angebot_wirtschaftlichkeit.css`):** die drei v22-Seiten („Auf einen Blick“ · „Ersparnis im Detail“ · „Sicherheit &
+  Transparenz“) als HTML nach `docs/wirtschaftlichkeit-mockup/seite1–3.html`, Nunito Sans statt Poppins, Farben über die
+  PDF-Tokens (+ `--wi-*`), Diagramme reines HTML/CSS mit mm-Maßen aus dem Kontext, Klima-Symbole inline-SVG, Meta-Zeile
+  „zu Angebot … · Duisburg, Datum“ ohne innere Seitenzählung (einzige Zählung = Browser-Kopfzeile); Platz nach dem
+  Festpreisangebot, vor der Auftragserteilung; Rechenkern und `pdf_export.wirtschaftlichkeit_fuer` unverändert (Kontrollwerte
+  `test_wirtschaftlichkeit_v22.py` grün – die Klasse `PdfEinbindung` erkennt die Seiten jetzt an den drei Seitentiteln),
+  Varianten wie v22; `wirtschaftlichkeit_pdf.py` bleibt nur für den fpdf2-Rückfall. `demo()` beider A2-Module versorgt
+  `pdf_kontext.demo_kontext`. Tests `tests/test_v36_kfw_wirtschaftlichkeit.py` (20).
+- **Einbindung (Phase 190, A3, `app/pdf_export.py`):** `pdf_fuer_angebot(session, angebot, benutzer=None)` und
+  `signiertes_pdf_erzeugen(…, geraet="")` drucken bei `pdf_engine = html` über `pdf_html.angebot_pdf` an die bisherigen
+  Zielpfade `data/angebote/<Nr>.pdf` bzw. `signiert/<Nr>-signiert.pdf` – alle Aufrufer (Editor, Download, Versand
+  vorbereiten, Kombi-Versand, Projektablage, Nachfass-Mail, Signatur-Anzeige, Meine Angebote) unverändert; Fehler →
+  Fehlerprotokoll „PDF“, fpdf2 an denselben Pfad, Merker `pdf_export.letzter_rueckfall(angebot_id)` für die Versand-/Kombi-
+  Meldung; Schalter `fpdf2` = alter Weg ohne Hinweis. **Archiv:** bei Status Versendet, Angenommen, Abgelehnt, Überholt
+  (und Versendet (extern)) bleibt eine vorhandene Datei unverändert (`pdf_eingefroren`, egal welche Engine) – nur Entwurf
+  und „Versand vorbereitet“ rendern je Aufruf neu, fehlende Altbestands-Dateien entstehen einmal, „Überarbeiten“ liefert die
+  neue Version im neuen Layout. **Benutzer/Token:** „Versand vorbereiten“ (Einzel + Kombi) und die HTML-Vorschau reichen
+  den angemeldeten Benutzer bis `pdf_kontext.fuer_angebot` durch; bei aktiver Fern-Signatur + `BASIS_URL` aus der `.env`
+  stellt „Versand vorbereiten“ den Einmal-Token VOR dem Druck aus (Karte 1 trägt den Link), sonst mailto und Token wie
+  bisher danach; der Kombi-Versand stellt keine Token aus [ANNAHME A3-10]. **Signatur:** Vor-Ort- und Fern-Signatur
+  rendern erneut mit `pdf_export.signatur_dict` = {bild_data_url, name, zeitstempel „TT.MM.JJJJ HH:MM“, geraet} – Bild auf
+  der Unterschriftslinie, darunter „<Name> · signiert am …“; Ablage, Signaturprotokoll und Status „Angenommen“ unverändert,
+  bestehende signierte PDFs bleiben. **HTML-Vorschau** `GET /angebote/{id}/pdf.html` (Innendienst/Admin, sonst 403; Knopf
+  „HTML-Vorschau“ im Editor; `?fassung=intern`, `?signatur=demo`; nie EK/DB). **Alt-Tests engine-unabhängig:** zehn PDF-
+  Textprüfungen (`test_pv_v13`, `test_kl_v24`, `test_kl_v24_texte`, `test_wb_v34`, `test_v34_alternativ`,
+  `test_v34_elektro_pv`, `test_anschriften_v20`, `test_sweep_0930`, `test_v33_rabatt`, `test_v34_kombi`) prüfen Summen/
+  Kontrollwerte/Pflichtsätze weiter exakt, Layoutzeilen per ODER-Prüfung (Tabelle in `diagnose/v36/A3_ergebnis.md` §13.4;
+  fpdf2-Lauf 195/195 grün). Tests `tests/test_v36_pdf_engine.py` (25), `tests/test_v36_einbindung.py` (11).
+- **Abnahme Teil A (Phase 191, A4):** sieben Abnahme-PDFs mit Demo-Daten unter `docs/design-v36/` (`abnahme-wp.pdf` WP-
+  Kontrollszenario + iMSys mit Förderung, Rabatt 500 €, EP-Position, Vollmacht – 11 Seiten; `abnahme-pv.pdf` 0 % USt mit drei
+  Wirtschaftlichkeitsseiten und Vollmacht über 017 – 11; `abnahme-kl.pdf` Fall A ohne Vollmacht – 5; `abnahme-wb.pdf` Fall B
+  – 6; `abnahme-enni.pdf` Karte 2 „ENNI CONTRACTING“ ohne Cloover – 11; `abnahme-alternativ.pdf` Hinweiskasten „im
+  PV-Angebot“ – 10; `abnahme-signiert.pdf` – 11), 1,4–1,8 MB, Druck 1,9–3,1 s, Screenshots der Editor-Vorschau
+  (`editor-vorschau-<sparte>-hell.png`); Kontrollwerte des Plans erfüllt (Seitenfolge, „SEITE 2 VON 11“, Summenblock,
+  „EP.“, dynamische KfW-Nummern, Vollmacht vorbelegt, PV 0 % + Wirtschaftlichkeit vor Auftrag, ≤ 2,5 MB; Summen unverändert
+  WP 30.245,43 €, KL A 6.518,66 €, WB B 5.435,85 € netto / 6.468,66 € brutto – der Plan-Kontrollwert „4.918,09 €“ stammt
+  aus der Zeit vor dem v34-Nachtrag); Sichtvergleich gegen die 33 Abschnitte der Vorlagen (`diagnose/v36/A4_bilder/`):
+  Aufbau/Wortlaut getroffen, Abweichungen nur planmäßig (Seitenzahl in der Randzone, 0 % USt, Vollmacht-Regel, „EP.“,
+  dynamische Nummern, Wirtschaftlichkeit, Links, Cloover-Karte aus Teil B) plus Kleinigkeiten (Karte-1-Text = ganze
+  Zahlungsbedingung, ein Kasten je Alternativ-Block, TAIFUN-Unterzeilen ohne „•“ als einfache Zeilen, Fußzeile auch auf dem
+  Deckblatt, Enni-Bedingungen über zwei Seiten). **Laufzeit** (`tests/test_v36_laufzeit.py`, nur mit Browser): 20 WP-PDFs mit
+  25 Positionen nacheinander Mittel 2,66 s (Ziel ≤ 3 s weich mit Protokoll `data\log\pdf-laufzeit.txt`, harter Fehler > 6 s),
+  vier parallel ohne Fehler mit höchstens zwei gleichzeitig im Browser, Browser-Absturz (`taskkill` während eines Drucks)
+  → `PdfDruckFehler`, `neustarts` + 1, nächster Druck läuft; `docs/lasttest-v27.md` Abschnitt 2: Angebots-PDF = Browser-Druck
+  mit Semaphore 2 (`GET /angebote/{id}/pdf` im Innendienst-Szenario seit v27), Zielwert ≤ 4 s bleibt.
+- **Cloover-Client (Phase 192, `app/cloover_api.py`, Vorbild Heizreport v26):** API-Key nur in der `.env`
+  (`CLOOVER_API_KEY`; leer = Modul aus), Basis-URL `CLOOVER_BASIS_URL` (leer = Test-URL). Parametrierung → **Cloover**
+  (`/parametrierung/cloover`, nur Admin, Karte „Angebotstool“): Key-Stand nur „gesetzt/fehlt“ (nie der Wert),
+  `cloover_modus` aus | test | live (Standard test; live nur mit Live-URL – sonst Fehlermeldung, ohne Key immer aus),
+  `cloover_standard_email` (c.castro@friondo.de), `cloover_laufzeit_jahre` 20, `cloover_anzahlung_eur` 0,
+  `cloover_optionen` (Cash + Financing [ANNAHME B3]), `cloover_laufzeit_min/_max` 1/20 [ANNAHME],
+  `cloover_sparten` (WP, PV, KL, WB), `cloover_kl_typ` („Energetic Renovation“ [ANNAHME B2]), Textbausteine
+  `cloover_fussnote`/`cloover_datenschutz` (`app/cloover_texte.py`, Entwürfe – Rückfragen B1/B7), Verbindungstest,
+  Protokoll `cloover_protokoll` (30). Client: `_roh_anfrage` (urllib, `X-API-Key`, JSON, 20 s; in Tests gemockt),
+  `rate_berechnen` (v2 `price` = Netto nach Gesamtrabatt, Rückfall v1 mit `totalCostOfInstallation` = Endbetrag
+  brutto bei Eingabe-4xx, Rundung kaufmännisch auf Cent), `projekt_anlegen` (HTTP 201 → projekt_id, checkout_link,
+  financial_offer), `projekt_status`, `verbindung_testen` („Verbindung OK · Beispielrate 93,36 €/Monat
+  (Test-Umgebung)“ + v2-Probe je Sparte), `assets_fuer` (ein Asset je Angebot: Typ je Sparte, `price` aus
+  `summen()["netto_nach_rabatt"]`, `vatPercentage` 19|0, `subsidy` Förderbetrag bei WP, `capacity` kW der
+  Leistungsklasse / kWp / Σ Kühllast / 11). Meldungen: 401 „Cloover: API-Key abgelehnt“, 422 „Cloover: Eingabe
+  abgelehnt (…)“, 5xx/Timeout „Cloover nicht erreichbar – später erneut versuchen“; jeder Fehler ins
+  Fehlerprotokoll (Typ „Cloover“, ohne Key, Körper nur als Feldnamen). Modus aus / ohne Key = kein Netzaufruf;
+  kein Netz mit offener Sitzung (Wächter erkennt die Kette). Benutzerverwaltung: Feld „Cloover-Konto (E-Mail)“
+  (`benutzer.cloover_email`, Innendienst/Admin) – Projekte laufen unter diesem Konto, sonst Standard-Konto.
+  Kontrollwerte: WP 42.830,55 € / Förderung 16.500 € → `price` 35992.06, `vatPercentage` 19, `subsidy` 16500;
+  PV 20.000 € (0 %) → 20000 / 0 / 0. Doku `docs/cloover-api.md`; Tests `tests/test_v36_cloover_api.py` (24).
+- **Rate im Angebot (Phase 193, `app/cloover.py`, `app/routers/angebote_cloover.py`):** `cloover.relevant` (Modus aus,
+  Profil Enni/SWD/Sparkasse DU, Sparte außerhalb `cloover_sparten`, ausgeblendet, extern → keine Rate),
+  `cloover.voraussetzungen` (E-Mail/Telefon/Privatkunde/Ausführungsort – rote Hinweise der Karte, dieselben Prüfungen
+  für das Cloover-Projekt). `cloover.rate_aktualisieren(angebot_id, erzwingen=, benutzer_id=)` rechnet **außerhalb der
+  Sitzung** (`db.kurz(schreibend=False)` lesen → zu → `cloover_api.rate_berechnen` → kurze Schreibsitzung) und nur,
+  wenn Endbetrag/Förderung/USt/Laufzeit/Anzahlung von der Basis der letzten Rate abweichen (`rate_laufzeit_jahre`,
+  `rate_anzahlung_cent`); Aufrufer: `pdf_export.pdf_fuer_angebot`/`signiertes_pdf_erzeugen` (vor jedem nicht
+  eingefrorenen PDF, nach `verbindung_freigeben`, Fehler blockieren nie), „Versand vorbereiten“/Kombi (B3), Knopf
+  „Rate neu berechnen“, Speichern von Laufzeit/Anzahlung. Fehler → letzte Rate mit Stand bleibt, `fehler` in der Karte;
+  nie eine Rate → „Monatsrate auf Anfrage“. **Editor-Karte „Finanzierung (Cloover)“** unter der Kopfkarte (Innendienst/
+  Admin): Laufzeit 1–25, Anzahlung €, Rate ohne/mit Förderung (mit nur WP mit Förderbetrag > 0), Stand/Quelle/Basis,
+  Häkchen „Finanzierung im PDF ausblenden“ (`POST /angebote/{id}/cloover`, nur Entwurf/Versand vorbereitet), „Rate neu
+  berechnen“ (`POST /angebote/{id}/cloover/rate`), Block „Cloover-Projekt“ (B3); Außendienst in „Meine Angebote“ lesend
+  ohne Knöpfe; Karte nur bei relevant, sonst Hinweiszeile mit Grund. **PDF:** `cloover.kontext_fuer_pdf` →
+  `auftrag.cloover` (Karte 2 „ab 242,70 € / Monat*“ + „ohne Förderung ab 389,99 €“, Box „Planbare Monatsraten – Ihre
+  Rate für dieses Angebot:“, Fußnote aus Textbaustein `cloover_fussnote`, Knopf + QR (`qrcode`, 22 mm, M) + Kurzlink nur
+  mit `checkout_link`, sonst „Ihren persönlichen Finanzierungs-Link erhalten Sie von uns per E-Mail.“, Datenschutzsatz
+  `cloover_datenschutz` nur mit Link). **fpdf2-Rückfall:** Platzhalter `[CLOOVER]` in den Nachtexten A (Standard/PV
+  statt der festen Beispielraten und der Fußnote „*Beispielrate“, KL/WB vor „So bleibt Ihr Budget flexibel …“; WB
+  Standard mit neuem Nachtext A = KL-Text mit „Ihre Wallbox-Lösung“ [ANNAHME]) – Migration
+  `angebotsprofile.migriere_cloover_platzhalter` (idempotent), Rendering in `pdf_export._nachtext_rendern` (QR aus
+  Rechtecken, Fußnote am Seitenende). **Mail-Platzhalter** `{cloover_rate}` („ab 389,99 € pro Monat“ bzw. leer),
+  `{cloover_link}`, `{cloover_finanzierungsangebot}` in allen Angebots- und Kombi-Vorlagen (Kombi: eine Zeile je
+  Angebot); bestehende Vorlagen unverändert. Überarbeiten/Duplizieren/Kopieren übernehmen nur Laufzeit/Anzahlung/
+  ausgeblendet. Kombi-Versand: Box zusätzlich „Gesamtrate für alle Angebote dieser Mail: ab … pro Monat“ aus
+  `kombi_gesamtrate_cent` (B3) [ANNAHME, B6]. Tests `tests/test_v36_rate.py` (25).
+- **PDF-Ablage (Phase 194, `app/cloover_pdf_ablage.py`):** Cloover braucht eine öffentlich abrufbare PDF-URL
+  (`offerPDF`). Parameter `cloover_pdf_ablage` = `sharepoint` (Standard: Upload über Graph als Anwendung in die
+  Bibliothek `cloover_sharepoint_ordner` der Site `cloover_sharepoint_site`, Berechtigung `Sites.Selected`, anonymer
+  Lese-Link `createLink` view/anonymous mit Ablauf 180 Tage, Download-URL `?download=1`) | `basis_url` (Token-Route
+  `GET|HEAD /oeffentlich/cloover/<token>.pdf` unter `BASIS_URL`, Token 32 Zeichen, Ablauf 180 Tage, Tabelle
+  `cloover_pdf_tokens`, Datei `data/cloover_pdf/`, kein Login – `auth.OFFENE_PFADE`) | `keine` (Rate ja, Projekt nein).
+  Ablage-Dateien heißen `AN-C-<Nr>-<Zufall>.pdf` (nie Kundenname); `pruefen` = HEAD ohne Anmeldung muss
+  `application/pdf` liefern; Parametrierung → Cloover → „PDF-Ablage“ mit „Test-PDF ablegen und prüfen“
+  (`cloover_ablage_letzter_test`). Einrichtung: `docs/graph-einrichtung.md` Abschnitt 8, `docs/cloover-api.md`
+  Abschnitt 8.
+- **Cloover-Projekt beim „Versand vorbereiten“ und Kombi-Versand (`app/cloover_projekt.py`):** Hooks `vor_pdf`
+  (vor dem Druck) und `nach_pdf` (danach) in `routers/angebote.email_entwurf`, `vor_pdf_kombi`/`nach_pdf_kombi` im
+  Kombi-Versand – Netz nur nach `verbindung_freigeben`. (1) Voraussetzungen (relevant nach `cloover.relevant`,
+  Privatperson, Name, E-Mail, Telefon E.164, Ausführungsort, Anlage, Ablage) – fehlt etwas: kein Projekt, Rate bleibt,
+  Meldung „Cloover-Link nicht möglich: <Grund>“, rot im Editor; (2) Rate (B2); (3) Fassung A ohne Link ablegen +
+  prüfen; (4) `POST /api/projects` (`financingDuration` min/max, `financingOption`, `offerPDF`) → `projekt_id`,
+  `checkout_link`, `financial_offer`, `pdf_url`, `pdf_ablage` in `cloover_json`, AngebotsNotiz + Vorgangs-Chat
+  „Cloover-Projekt <id> angelegt“; (5) Versand-PDF = Fassung B (Link + QR) ersetzt die Ablage (gleiche URL). Kein
+  zweites Projekt beim erneuten Versand (nur PDF neu); „Überarbeiten“ = neues Projekt, altes bleibt bei Cloover
+  (`alt_projekte`, Rückfrage B5). Kombi: EIN Projekt je Kombi-Mail mit allen Assets/PDF-URLs, derselbe Link in allen
+  PDFs, Gesamtrate `kombi_gesamtrate_cent` (Rückfrage B6). Editor-Block „Cloover-Projekt“ (`_cloover_projekt.html` in
+  B2s Karte): Stand, „Link kopieren“, „Finanzierungs-Link/-angebot öffnen“, „Projekt anlegen“ (`POST
+  /angebote/{id}/cloover/projekt`), „Status jetzt abrufen“ (`POST …/cloover/status`), rote Voraussetzungen.
+- **Status-Lauf `cloover-status`** (60 min, Start +400 s, aktiv nur mit Key – **18 Läufe, Pool-Invariante 64 + 18 + 5
+  = 87 ≤ 90**): Angebote mit Projekt (Versand vorbereitet/Versendet/Angenommen, < 180 Tage, ≤ 50 je Lauf) →
+  `GET /api/projects/{id}`; Änderungen → `cloover_json`, AngebotsNotiz „Cloover: <status>“; Vertrag unterschrieben →
+  Badge „Cloover: Vertrag unterschrieben (TT.MM.JJJJ)“ (Editor, Angebotsliste Spalte „Cloover“, Vorgangsakte),
+  Vorgangs-Chat „Angebot auf Angenommen setzen?“ (manuell), Glocke art `cloover` (ohne Mail,
+  `MAIL_FREIE_ARTEN`) an vorbereitenden Innendienstler + AD; Barzahlung → Badge „Cloover: Barzahlung gewählt“;
+  Statistik-Kachel „Cloover-Verträge“; unbekannte Status roh (Rückfrage B8). Tests `tests/test_v36_projekt.py` (28).
+- **Tests, Doku, Zwischenstand (Phase 195, Orchestrator, 16.10.2026):** neue Testdateien `tests/test_v36_pdf_engine.py`
+  (25), `test_v36_layout.py` (28), `test_v36_einbindung.py` (11), `test_v36_kfw_wirtschaftlichkeit.py` (20),
+  `test_v36_laufzeit.py` (3, nur mit Browser), `test_v36_cloover_api.py` (24), `test_v36_rate.py` (25),
+  `test_v36_projekt.py` (28) – alle Cloover-Tests gemockt (`cloover_api._roh_anfrage`), der Browser-Druck läuft echt mit
+  Edge. **Integrations-Testlauf** (Orchestrator, migrierte Kopie `diagnose/v36/data_INT`, 36 Testdateien: alle v36-Tests, Wächter v27/v30/v33, Scheduler, Graph, Betrieb, Importe-Nachbarn und die PDF-Alt-Tests – `diagnose/v36/orch/testlauf_int1.txt`): 604 bestanden, 6 übersprungen, 6 Fehler mit drei Ursachen, alle ohne Codefehler – (1) `test_v36_rate::Migration` setzte unmigrierte Nachtexte voraus → jetzt selbsttragend über die Fixture `tests/fixtures/v36/nachtexte_v35.json` (v35-Seed-Texte aus dem Git-Stand); (2) `test_v33_graph::GoLiveUndHealth` erwartete 12 Go-live-Punkte → 13, Graph-Punkt über den Titel; (3) vier Tests `test_v33_nachfassen::Inaktiv` waren datenabhängig: verwaiste Notizen/Mails aus abgebrochenen Testläufen der Dev-DB zählten für neue Vorgänge mit wiederverwendeter ID als „Kontakt“ → `_aufraeumen` entfernt verwaiste Kontaktzeilen; Wiederholungslauf der drei Klassen 8/8 grün. **Angepasste Alt-Tests** (Begründung): zehn PDF-Textprüfungen engine-unabhängig (A3 §13.4:
+  `test_pv_v13`, `test_kl_v24`, `test_kl_v24_texte`, `test_wb_v34`, `test_v34_alternativ`, `test_v34_elektro_pv`,
+  `test_anschriften_v20`, `test_sweep_0930`, `test_v33_rabatt`, `test_v34_kombi` – Summen/Kontrollwerte exakt,
+  Layoutzeilen per ODER-Prüfung); `test_wirtschaftlichkeit_v22::PdfEinbindung` erkennt die drei Seiten an ihren Titeln
+  statt an „Seite x von 3“; `test_projektierung_v3` Go-live 12 → 13 Punkte; `test_v27_scheduler` 18 Läufe;
+  `test_v27_sitzungen` kennt `PROZESS_FUNKTIONEN`; `test_parametrierung_v26` `ADMIN_EINTRAEGE` + `/parametrierung/cloover`;
+  `test_kl_v24_texte::test_seed_kl_idempotent` zählt den Historienblock „Friondo KL Standard (bis v35)“ (Phase 189)
+  nicht mit; `test_wb_v34` verbietet „Zahlungsoptionen“/„Cloover“ im WB-PDF nicht mehr (WB Standard hat seit Phase 193
+  einen Nachtext A mit `[CLOOVER]`). Migration zweimal auf der Kopie `diagnose/v36/data_INT` (zweiter Lauf ohne
+  Änderungen; Meldungen ASCII-sicher für die cp1252-Konsole des Servers). **Nicht in diesem Zwischenstand:** die
+  Gesamtsuite `pytest tests -q`, Rollout-Vorbereitung (Server-Kopie, Rückweg-Probe v35-Code, Voll-Crawl, Abnahme, Smoke,
+  Lasttest mit PDF-Erzeugung und `cloover-status` im Modell), Screenshots Editor-Karte/Parametrierung hell/dunkel und
+  der **Cloover-Echtlauf** gegen die Test-Umgebung (kein Key auf dem Dev-PC) – laut Brief einmal am Ende der Plan-Kette
+  v36 → v37 → v38 (`diagnose/v36/gesamtuebersicht.md` §10). Doku: dieser Abschnitt, Leitplanken ab v36, Zuordnungstabelle,
+  Titelzeile, Zentrale Dateien, Fachliche Regeln (Angebots-PDF aus HTML-Vorlagen, Cloover nur Profil Standard),
+  überholt-Marker in „Unverändert aus v2“, v9, v18/v26/v33 (13 Go-live-Punkte), v22, v24; `ANGEBOTSTEXTE.md` Abschnitte
+  5/9.2/10/11, `docs/angebots-pdf.md` (neu), `docs/cloover-api.md` (neu), `docs/graph-einrichtung.md` Abschnitt 8,
+  `docs/betrieb.md` „Ergänzungen v36“ (Browser-Prozess, Lauf `cloover-status`, Rate, Ablage, Link-Ablauf),
+  `docs/nach-dem-update-v36.md` (Teil A/B), `docs/updates.md` (4e), `docs/lasttest-v27.md` Abschnitt 2;
+  `config.VERSION = "v36"`. Zwischenstand-Commit „v36: Angebotslayout v3 (HTML + Browser-Druck), Cloover-Finanzierung
+  (PLAN_V22, Phasen 188-195)“ ohne Push.

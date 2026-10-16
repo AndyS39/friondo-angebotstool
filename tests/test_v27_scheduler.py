@@ -22,7 +22,7 @@ import pytest
 from datetime import datetime, timedelta
 from unittest import mock
 
-from app import (ablauf_pruefung, benachrichtigungen, betrieb, config, db,
+from app import (ablauf_pruefung, benachrichtigungen, betrieb, cloover_projekt, config, db,
                  geocoding, graph_versand, lead_anrufliste, lead_mail,
                  lead_mail_abruf, lead_parser, lead_todos, leadmanagement, mail_sync,
                  monday_sync, outlook_sync, scheduler, taifun_export)
@@ -44,10 +44,12 @@ ACHT = {"monday-sync", "mail-sync", "ablauf-pruefung", "benachrichtigungen",
         "mail-ausgang",   # v27: Ausgangs-Warteschlange (benachrichtigungen.scheduler_starten)
         "lead-mail-abruf",   # v29: Lauf lead-mail-abruf (lead_mail_abruf.scheduler_starten)
         "outlook-sync", "outlook-ruecklesen",   # v33: Outlook je Mitarbeiter (outlook_sync)
-        "taifun-uebergaben"}   # v35: TAIFUN-Übergabe (taifun_export)
+        "taifun-uebergaben",   # v35: TAIFUN-Übergabe (taifun_export)
+        "cloover-status"}   # v36 (PLAN_V22 Phase 194, B3): Cloover-Projektstatus (cloover_projekt)
 MODULE = (monday_sync, mail_sync, ablauf_pruefung, benachrichtigungen,
           lead_parser, leadmanagement, geocoding, lead_mail, lead_mail_abruf, outlook_sync,
-          taifun_export)   # v35
+          taifun_export,   # v35
+          cloover_projekt)   # v36
 ERWARTET = {   # Name: (Intervall s, Startverzögerung s)
     "monday-sync": (900, 0), "mail-sync": (900, 0), "ablauf-pruefung": (86400, 120),
     "benachrichtigungen": (300, 180), "lead-parser": (120, 240),
@@ -56,6 +58,7 @@ ERWARTET = {   # Name: (Intervall s, Startverzögerung s)
     "lead-mail-abruf": (120, 270),   # v29
     "outlook-sync": (60, 60), "outlook-ruecklesen": (300, 330),   # v33
     "taifun-uebergaben": (900, 240),   # v35
+    "cloover-status": (3600, 400),   # v36 (Phase 194, B3): 60 min, Start +400 s – mit betrieb 18 Läufe
 }
 
 

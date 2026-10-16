@@ -470,6 +470,26 @@ def health() -> dict:
                 gruende.append(f"Outlook-Sync: {outlook['fehler_24h']} Aufträge fehlgeschlagen (24 h)")
         except Exception:   # noqa: BLE001 – /health darf daran nie scheitern
             pass
+    # v36 (PLAN_V22 Phase 188/190): Angebots-PDF – Engine (Einstellung), Browser des Druckers und
+    # letzte Druckdauer (Prozess); warn, wenn die Engine html ist, der letzte Browser-Test aber fehlschlug
+    # (die PDFs fallen dann je Aufruf auf fpdf2 zurück) [ANNAHME A3]
+    pdf_engine = None
+    pdf_test_ok = None
+    pdf_status = {"browser": "", "version": "", "letzte_dauer_ms": 0, "anzahl": 0, "fehler": 0}
+    try:
+        from app import pdf_html
+        pdf_status = pdf_html.status()
+        if db_ok:
+            from app.db import kurz
+            with kurz(schreibend=False) as s:   # nur lesen
+                pdf_engine = pdf_html.engine(s)
+                letzter = pdf_html.letzter_test(s)
+            pdf_test_ok = None if letzter is None else bool(letzter.get("ok"))
+            if pdf_engine == pdf_html.ENGINE_HTML and pdf_test_ok is False:
+                gruende.append("Angebots-PDF: Browser-Druck fehlgeschlagen – Rückfall auf fpdf2 je Aufruf "
+                               f"({(letzter or {}).get('fehler', '')[:80]})")
+    except Exception:   # noqa: BLE001 – /health darf daran nie scheitern
+        pass
     # v33 (PLAN_V20 Phase 166): Geheimnis der App-Registrierung läuft in ≤ 30 Tagen ab → warn
     graph_tage = None
     try:
@@ -497,6 +517,12 @@ def health() -> dict:
         "mail_ausgang": mail_ausgang,
         "graph_modus": graph_modus, "graph_geheimnis_tage": graph_tage,   # v33
         "outlook_sync": {"offen": outlook.get("offen"), "fehler_24h": outlook.get("fehler_24h")},   # v33 Phase 170
+        # v36 (PLAN_V22 Phase 188/190): Angebots-PDF (Engine, Browser des Druckers, letzte Druckdauer)
+        "pdf_engine": pdf_engine,
+        "pdf_browser": ((pdf_status.get("browser") or "") + (" " + pdf_status["version"] if pdf_status.get("version") else "")).strip() or None,
+        "pdf_letzte_druckdauer_ms": pdf_status.get("letzte_dauer_ms") or 0,
+        "pdf_drucke": pdf_status.get("anzahl") or 0, "pdf_fehler": pdf_status.get("fehler") or 0,
+        "pdf_letzter_test_ok": pdf_test_ok,
         "schreibsperre_max_ms": SCHREIBSPERRE["max_ms"],
         "schreibsperre_locked": SCHREIBSPERRE["locked"],
         "transaktionen": dict(getattr(db, "TRANSAKTIONEN", {})),   # v33 (Phase 172): sofort/verzoegert/sofort_wiederholt/sofort_gescheitert

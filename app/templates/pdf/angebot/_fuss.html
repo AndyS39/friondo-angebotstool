@@ -1,0 +1,9 @@
+{#- v36: Fußzeile auf jeder Seite, fünfspaltig wörtlich wie das Design (Anschrift · Geschäftsführung · Kontakt ·
+    Bankverbindung · Steuerdaten); Inhalte aus kontext.firma (pdf_kontext – Firmen-Konstanten aus pdf_export). -#}
+<div class="pdf-fuss">
+  <div class="pdf-fuss-spalten">
+  {%- for spalte in kontext.firma.fuss %}
+    <div><strong>{{ spalte.titel }}</strong>{% for zeile in spalte.zeilen %}{{ zeile }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>
+  {%- endfor %}
+  </div>
+</div>

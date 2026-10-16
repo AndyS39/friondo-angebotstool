@@ -197,7 +197,7 @@ class KastenUndRoute(unittest.TestCase):
 
         erzeugt = []
 
-        def fake_pdf(session, angebot):
+        def fake_pdf(session, angebot, **kw):     # v36: pdf_fuer_angebot(..., benutzer=)
             pfad = config.ANGEBOTE_PDF_ORDNER / f"{angebot.nummer}.pdf"
             pfad.write_bytes(b"%PDF-1.4 " + angebot.nummer.encode())
             erzeugt.append(pfad)

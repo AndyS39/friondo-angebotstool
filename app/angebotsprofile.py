@@ -5,6 +5,8 @@
 # die Konstanten hier sind die Seed-Inhalte der Migration und zugleich der
 # Fallback, solange keine Blöcke in der Datenbank liegen.
 
+import re
+
 from sqlalchemy.orm import Session
 
 from app.models import Angebot, Kunde, Profil, Textblock
@@ -139,9 +141,7 @@ Investieren Sie jetzt in Ihre Energie- oder Wärmelösung – ohne hohe Einmalza
 ### Sofort starten
 • Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine Banktermine
 
-### Planbare Monatsraten – Zum Beispiel:
-• Wärmepumpe ab 129 € pro Monat mit Förderung*
-• Oder ab 250 € pro Monat ohne Förderung
+[CLOOVER]
 
 So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.
 
@@ -157,8 +157,6 @@ So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.
 „Dank Cloover konnten wir unsere Wärmepumpe einfach, fair und transparent finanzieren.“
 
 Starten Sie jetzt mit Friondo und Cloover in eine nachhaltige Zukunft.
-
-~ *Beispielrate auf Basis einer Angebotssumme von 29.000 €, einer Förderung von 56 %, gedeckelt auf 28.000 €, und einer Laufzeit von 20 Jahren.
 ---
 # Installationsvoraussetzungen
 """ + _RECHT_UND_ZAHLUNG + "\n\n" + _KFW_HINWEIS + "\n\n" + _BINDUNG + """
@@ -264,8 +262,7 @@ Investieren Sie jetzt in Ihre Energie- oder Wärmelösung – ohne hohe Einmalza
 ### Sofort starten
 • Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine Banktermine
 
-### Planbare Monatsraten
-• z. B. PV-Anlage ab 119 € pro Monat
+[CLOOVER]
 
 So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.
 
@@ -401,6 +398,8 @@ Investieren Sie jetzt in Ihre Klimalösung – ohne hohe Einmalzahlung und beque
 
 ### Sofort starten
 • Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine Banktermine
+
+[CLOOVER]
 
 So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.
 
@@ -595,10 +594,17 @@ WB_STANDARD_NACHTEXT = """# Installationsvoraussetzungen
 ---
 """ + _WB_ABSCHLUSS
 
+# v36 (PLAN_V22 Phase 193, Agent B2) [ANNAHME]: für den fpdf2-Rückfall erhält WB Standard einen
+# Nachtext A als Kopie des KL-Textes mit „Ihre Wallbox-Lösung“ (v34 hatte für WB bewusst keinen
+# Nachtext A); Enni/SWD/Sparkasse DU bleiben ohne Cloover. Im Layout v3 ist der Block wirkungslos
+# (der Cloover-Block kommt aus der Design-Vorlage, pdf_kontext.nachtext_parsen überliest [CLOOVER]).
+WB_ZAHLUNGSOPTIONEN = _KL_ZAHLUNGSOPTIONEN.replace("Ihre Klimalösung", "Ihre Wallbox-Lösung")
+WB_STANDARD_NACHTEXT_V36 = WB_ZAHLUNGSOPTIONEN + "\n---\n" + WB_STANDARD_NACHTEXT
+
 # Nachtexte der Kanal-Profile: Start = Kopie des Standard-Nachtexts [ANNAHME Plan]
 WB_SEED_BLOECKE = [
     ("vortext", "Friondo WB Standard", WB_VORTEXT),
-    ("nachtext", "Friondo WB Standard", WB_STANDARD_NACHTEXT),
+    ("nachtext", "Friondo WB Standard", WB_STANDARD_NACHTEXT_V36),   # v36: mit Nachtext A ([CLOOVER])
     ("nachtext", "Friondo WB Enni", WB_STANDARD_NACHTEXT),
     ("nachtext", "Friondo WB SWD", WB_STANDARD_NACHTEXT),
     ("nachtext", "Friondo WB Sparkasse DU", WB_STANDARD_NACHTEXT),
@@ -653,12 +659,200 @@ def _wb_block(session: Session, art: str, profil: Profil | None) -> str:
                  .filter(Textblock.art == art, Textblock.name == name).first())
         if block is not None and block.text.strip():
             return block.text
-    return WB_VORTEXT if art == "vortext" else WB_STANDARD_NACHTEXT
+    if art == "vortext":
+        return WB_VORTEXT
+    # v36 (Phase 193): Standard-Profil mit Nachtext A (Cloover), Kanal-Profile ohne
+    standard = profil is None or (profil.regel_kennung or "standard").strip().lower() == "standard"
+    return WB_STANDARD_NACHTEXT_V36 if standard else WB_STANDARD_NACHTEXT
 
 
 def ist_wb(angebot: Angebot) -> bool:
     """v34: Wallbox-Angebot aus dem Wallbox-Konfigurator (konfigurator_typ „WB“)."""
     return (angebot.konfigurator_typ or "WP").upper() == "WB"
+
+
+# --- v36 (PLAN_V22 Phase 189): Vortexte PV/KL/WB wörtlich aus den Design-Vorlagen ---------------------
+# Quelle: docs/design-v36/vorlage/entpackt/angebot-pv-anlage.html, angebot-klimaanlage.html,
+# angebot-wallbox.html (Abschnitt „Anschreiben“ – Einleitung, „Darin enthalten“, „Warum Friondo?“,
+# Schlusssatz, „Ihr Friondo-Team“). Markdown-Konventionen wie bisher (fpdf2-Rückfall rendert die
+# „## “-Titel auf Seite 1, „* “ = Haken-Zeile mit fettem Anfang bis „ – “); das Layout v3
+# (app/pdf_kontext.vortext_parsen) nimmt die Titel vom Deckblatt und baut aus den beiden Listen die zwei
+# Spalten der Seite „Ihr Angebot im Überblick“. WP bleibt beim heutigen Text (STANDARD_VORTEXT – Plan);
+# Enni/SWD/Sparkasse DU behalten ihre Vortexte. Migration: migration_v36_texte (migrate.py).
+_V36_WARUM_FACH = ("* Fachkompetenz & Qualität – Als Meisterbetrieb, Mitglied der Innung und VDI-zertifiziertes "
+                   "Fachunternehmen setzen wir auf höchste Standards.")
+_V36_WARUM_BERATUNG = ("* Persönliche Beratung – Wir begleiten Sie von der ersten Idee bis zur perfekten Lösung "
+                       "für Ihr Zuhause.")
+_V36_WARUM_EFFIZIENZ = ("* Effizienz & Nachhaltigkeit – Unsere Systeme senken Ihren Energieverbrauch spürbar und "
+                        "steigern den Wert Ihrer Immobilie.")
+_V36_WARUM_HAND = "* Alles aus einer Hand – Planung, Installation, Anmeldung und Service aus einem Haus."
+_V36_ENTHALTEN_REST = """* Detaillierte Installationsleistungen – fachgerecht, sauber und termingerecht
+* Transparent und Festpreis – klar verständlich und ohne versteckte Kosten
+* Unser Rundum-Sorglos-Service – von der Planung bis zur Inbetriebnahme"""
+
+PV_VORTEXT_V36 = """## Ihr individuelles PV-Angebot zum Festpreis
+## Eigener Strom, mehr Unabhängigkeit
+
+{briefanrede}
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine zukunftssichere Entscheidung getroffen – eine eigene Photovoltaikanlage senkt Ihre Stromkosten, macht Sie unabhängiger von steigenden Energiepreisen und steigert den Wert Ihrer Immobilie.
+
+* Ihre individuelle PV-Anlage – Module, Wechselrichter und Speicher passend zu Dach und Verbrauch
+""" + _V36_ENTHALTEN_REST + """
+
+## Warum Friondo?
+
+""" + _V36_WARUM_FACH + """
+* Mitglied im Bundesverband des Solarhandwerks – Geprüfte Fachkompetenz für Planung, Montage und Netzanschluss Ihrer Solaranlage.
+""" + _V36_WARUM_BERATUNG + "\n" + _V36_WARUM_EFFIZIENZ + "\n" + _V36_WARUM_HAND + """
+
+Wir sind auf Photovoltaik spezialisiert und gehören in der Region zu den führenden Anbietern. Lassen Sie uns gemeinsam Ihren eigenen Strom erzeugen!
+
+Ihr Friondo-Team"""
+
+KL_VORTEXT_V36 = """## Ihr individuelles Klimaanlagen-Angebot zum Festpreis
+## Kühlen, heizen und wohlfühlen
+
+{briefanrede}
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine gute Entscheidung getroffen – eine moderne Split-Klimaanlage sorgt im Sommer für angenehme Kühle, heizt in der Übergangszeit effizient und verbessert die Luftqualität in Ihren Räumen.
+
+* Ihre individuelle Klimaanlage – Außen- und Innengeräte passend zu Raumgröße und Nutzung
+""" + _V36_ENTHALTEN_REST + """
+
+## Warum Friondo?
+
+""" + _V36_WARUM_FACH + """
+* Bosch-zertifizierter Profi für Split-Klimageräte – Geschulte Kältetechniker mit Sachkundenachweis nach ChemKlimaschutzV.
+""" + _V36_WARUM_BERATUNG + "\n" + _V36_WARUM_EFFIZIENZ + "\n" + _V36_WARUM_HAND + """
+
+Wir sind auf Klimatechnik spezialisiert und gehören in der Region zu den führenden Anbietern. Lassen Sie uns gemeinsam für Ihr Wohlfühlklima sorgen!
+
+Ihr Friondo-Team"""
+
+WB_VORTEXT_V36 = """## Ihr individuelles Wallbox-Angebot zum Festpreis
+## Laden zu Hause – einfach und sicher
+
+{briefanrede}
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine praktische Entscheidung getroffen – mit einer eigenen Wallbox laden Sie Ihr Elektroauto sicher, schnell und günstig zu Hause, auf Wunsch mit Ihrem eigenen Solarstrom.
+
+* Ihre individuelle Wallbox – Ladeleistung und Standort passend zu Fahrzeug und Hausanschluss
+""" + _V36_ENTHALTEN_REST + """
+
+## Warum Friondo?
+
+""" + _V36_WARUM_FACH + """
+* Qualifizierter E-Handwerk-Fachbetrieb der Innung – Eingetragener Elektrofachbetrieb mit Netzbetreiber-Zulassung für Ladeinfrastruktur.
+""" + _V36_WARUM_BERATUNG + "\n" + _V36_WARUM_EFFIZIENZ + "\n" + _V36_WARUM_HAND + """
+
+Wir sind auf Elektromobilität und Ladeinfrastruktur spezialisiert. Lassen Sie uns gemeinsam Ihr Zuhause zur Ladestation machen!
+
+Ihr Friondo-Team"""
+
+V36_VORTEXTE = [("PV", "Friondo PV Standard", PV_VORTEXT_V36),
+                ("KL", "Friondo KL Standard", KL_VORTEXT_V36),
+                ("WB", "Friondo WB Standard", WB_VORTEXT_V36)]
+V36_HISTORIE_SUFFIX = " (bis v35)"
+MARKER_V36_TEXTE = "migration_v36_texte"
+
+
+def migration_v36_texte(session: Session) -> list[str]:
+    """v36 (PLAN_V22 Phase 189): Design-Wortlaute der Vortexte PV/KL/WB als neue Fassung der Textblöcke
+    „Friondo PV/KL/WB Standard“ einspielen. Textblöcke kennen keine Versionierung – die bisherige Fassung
+    bleibt als additive Historie im Textblock „<Name> (bis v35)“ (inaktiv: kein Profil verweist darauf,
+    die Sparten-Auflösung sucht nur „Friondo <Sparte> <Profil>“/„… Standard“). WP bleibt beim heutigen
+    Text (Plan), Enni/SWD/Sparkasse DU behalten ihre Vortexte; der WB-Absatz „Komplettpaket Wallbox inkl.
+    Montage“ (v34, TAIFUN-Textzeile) steht im neuen Wortlaut nicht mehr – er bleibt in der Historie
+    [ANNAHME, Rückfrage]. Idempotent über den Marker migration_v36_texte (zweiter Lauf: keine Meldung);
+    fehlende Blöcke werden mit dem neuen Wortlaut angelegt."""
+    from app.models import einstellung_holen, einstellung_setzen
+    if einstellung_holen(session, MARKER_V36_TEXTE, "") == "erledigt":
+        return []
+    meldungen: list[str] = []
+    vorhanden = {(b.art, b.name): b for b in session.query(Textblock)}
+    for _sparte, name, neu in V36_VORTEXTE:
+        block = vorhanden.get(("vortext", name))
+        if block is None:
+            session.add(Textblock(art="vortext", name=name, text=neu))
+            meldungen.append(f"v36: Vortext „{name}“ mit dem Design-Wortlaut angelegt")
+            continue
+        if (block.text or "").strip() == neu.strip():
+            continue
+        historie = name + V36_HISTORIE_SUFFIX
+        if ("vortext", historie) not in vorhanden:
+            session.add(Textblock(art="vortext", name=historie, text=block.text or ""))
+        block.text = neu
+        meldungen.append(f"v36: Vortext „{name}“ auf den Design-Wortlaut gesetzt – bisherige Fassung "
+                         f"als „{historie}“ erhalten")
+    einstellung_setzen(session, MARKER_V36_TEXTE, "erledigt")
+    if meldungen:
+        meldungen.append("v36: Vortexte WP (Friondo Standard), Enni, SWD und Sparkasse DU unverändert")
+    return meldungen
+
+
+# --- v36 (PLAN_V22 Phase 193, Agent B2): Platzhalter [CLOOVER] für den fpdf2-Rückfall ----------------
+# Die Nachtexte A tragen statt der festen Beispielraten („Wärmepumpe ab 129 € pro Monat mit
+# Förderung* / Oder ab 250 € pro Monat ohne Förderung“ + Fußnote „*Beispielrate …“; PV „z. B. PV-Anlage
+# ab 119 € pro Monat“) den Platzhalter [CLOOVER]; pdf_export._nachtext_rendern druckt dort die
+# berechnete Cloover-Rate (Box „Planbare Monatsraten – Ihre Rate für dieses Angebot:“, Laufzeit, Link/QR)
+# und die Fußnote am Seitenende. KL (seit v24 ohne Raten-Absatz) und WB (neuer Nachtext A) erhalten den
+# Platzhalter vor dem Satz „So bleibt Ihr Budget flexibel …“. Das Layout v3 (Standard-Engine) überliest
+# den Platzhalter – der Cloover-Block kommt dort aus der Design-Vorlage (pdf_kontext).
+PLATZHALTER_CLOOVER = "[CLOOVER]"
+MARKER_V36_CLOOVER = "migration_v36_cloover_platzhalter"
+_CLOOVER_RATEN_ABSATZ = re.compile(r"^### Planbare Monatsraten[^\n]*\n(?:[•\-*] ?[^\n]*\n?)+", re.MULTILINE)
+_CLOOVER_BEISPIELRATE = re.compile(r"\n*^~ \*Beispielrate[^\n]*\n?", re.MULTILINE)
+_CLOOVER_SO_BLEIBT = re.compile(r"^(?=So bleibt Ihr Budget flexibel)", re.MULTILINE)
+_CLOOVER_BLOCK_TITEL = "## Finanzierung mit Cloover"
+
+
+def cloover_platzhalter_einsetzen(text: str) -> tuple[str, list[str]]:
+    """Reine Textumstellung eines Nachtext-Blocks (v36): Raten-Absatz „### Planbare Monatsraten …“ samt
+    Aufzählung → [CLOOVER]; Fußnote „~ *Beispielrate …“ entfällt; trägt der Text den Cloover-Block, aber
+    keinen Raten-Absatz (KL), steht [CLOOVER] vor „So bleibt Ihr Budget flexibel …“. Liefert (neuer Text,
+    Liste der Änderungen); ohne Cloover-Block oder mit vorhandenem Platzhalter unverändert."""
+    text = text or ""
+    aenderungen: list[str] = []
+    if PLATZHALTER_CLOOVER in text:
+        return text, aenderungen
+    neu, anzahl = _CLOOVER_RATEN_ABSATZ.subn(PLATZHALTER_CLOOVER + "\n", text)
+    if anzahl:
+        aenderungen.append("Raten-Absatz -> [CLOOVER]")
+    neu, anzahl = _CLOOVER_BEISPIELRATE.subn("\n", neu)
+    if anzahl:
+        aenderungen.append("Fußnote „*Beispielrate …“ entfernt")
+    if PLATZHALTER_CLOOVER not in neu and _CLOOVER_BLOCK_TITEL in neu:
+        neu, anzahl = _CLOOVER_SO_BLEIBT.subn(PLATZHALTER_CLOOVER + "\n\n", neu, count=1)
+        if anzahl:
+            aenderungen.append("[CLOOVER] vor „So bleibt Ihr Budget flexibel …“ eingefügt")
+    return (neu if aenderungen else text), aenderungen
+
+
+def migriere_cloover_platzhalter(session: Session) -> list[str]:
+    """v36 (PLAN_V22 Phase 193): bestehende Nachtext-Textblöcke auf den Platzhalter [CLOOVER] umstellen
+    (alle Profile/Sparten; Enni/SWD/Sparkasse DU tragen keinen Cloover-Block und bleiben unverändert) und
+    dem Block „Friondo WB Standard“ den Nachtext A (Kopie des KL-Textes mit „Ihre Wallbox-Lösung“)
+    voranstellen [ANNAHME]. Idempotent: Marker migration_v36_cloover_platzhalter (zweiter Lauf → []);
+    die Textumstellung selbst ist zusätzlich inhaltsbasiert (vorhandener Platzhalter = keine Änderung)."""
+    from app.models import einstellung_holen, einstellung_setzen
+    if einstellung_holen(session, MARKER_V36_CLOOVER, "") == "erledigt":
+        return []
+    meldungen: list[str] = []
+    for block in session.query(Textblock).filter(Textblock.art == "nachtext").order_by(Textblock.id):
+        neu, aenderungen = cloover_platzhalter_einsetzen(block.text or "")
+        if aenderungen and neu != (block.text or ""):
+            block.text = neu
+            meldungen.append(f"v36: Nachtext „{block.name}“: {', '.join(aenderungen)}")
+    wb = (session.query(Textblock)
+          .filter(Textblock.art == "nachtext", Textblock.name == "Friondo WB Standard").first())
+    if wb is not None and "# Ihre Zahlungsoptionen" not in (wb.text or "") \
+            and PLATZHALTER_CLOOVER not in (wb.text or ""):
+        wb.text = WB_ZAHLUNGSOPTIONEN + "\n---\n" + (wb.text or "")
+        meldungen.append("v36: Nachtext „Friondo WB Standard“: Nachtext A (Finanzierung mit Cloover, "
+                         "[CLOOVER]) vorangestellt – Kopie des KL-Textes mit „Ihre Wallbox-Lösung“")
+    einstellung_setzen(session, MARKER_V36_CLOOVER, "erledigt")
+    return meldungen
 
 
 SEED_BLOECKE = [

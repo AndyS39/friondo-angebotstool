@@ -1,0 +1,86 @@
+{# v36 (PLAN_V22 Phase 194, Agent B3): Block „Cloover-Projekt“ in der Editor-Karte „Finanzierung (Cloover)“
+   von Agent B2 (angebote/_cloover.html bindet dieses Partial ein). Kontext: `cloover_projekt` aus
+   cloover_projekt.editor_kontext(session, angebot, kunde, benutzer) (Route GET /angebote/{id}).
+   Zeigt Status, „Link kopieren“, „Finanzierungsangebot öffnen“ (financial_offer), „Projekt anlegen“ bei
+   fehlendem Projekt, „Status jetzt abrufen“, Badge „Vertrag unterschrieben (TT.MM.JJJJ)“ / „Barzahlung
+   gewählt“, rote Voraussetzungs-Hinweise. Außendienst (nur_lesen / keine Rechte): nur Anzeige. Nur Tokens. #}
+{% from "_cloover_badge.html" import cloover_badge %}
+{% if cloover_projekt is defined and cloover_projekt and cloover_projekt.aktiv %}
+{% set cp = cloover_projekt %}
+<div class="cloover-projekt" id="cloover">
+    <p style="margin:0.4rem 0 0.2rem"><strong>Cloover-Projekt</strong>
+        {% if cp.projekt_id %}
+            <span class="dezent">#{{ cp.projekt_id }}{% if cp.projekt_am %} · angelegt {{ cp.projekt_am }}{% endif %}{% if cp.projekt_von_name %} von {{ cp.projekt_von_name }}{% endif %}</span>
+            {{ cloover_badge(angebot) }}
+        {% else %}
+            <span class="dezent">– noch nicht angelegt (entsteht beim „Versand vorbereiten“)</span>
+        {% endif %}
+    </p>
+    {% if cp.gruende %}
+    {#- Kundenhinweise (E-Mail/Telefon/Firma/Ausführungsort) zeigt B2s Karte schon rot – hier nur die übrigen #}
+    {% set schon = cloover_karte.hinweise if (cloover_karte is defined and cloover_karte and cloover_karte.hinweise) else [] %}
+    <ul class="cloover-gruende" style="margin:0.2rem 0 0.4rem 1.2rem">
+        {% for g in cp.gruende if g not in schon %}<li class="fehler-text">{{ g }}</li>{% endfor %}
+    </ul>
+    <p class="dezent" style="margin:0">Ohne diese Angaben bekommt das Angebot keinen persönlichen Finanzierungs-Link
+        (die Rate bleibt im PDF). Kundendaten in der Vorgangsakte bzw. Kundenkartei ergänzen, dann „Projekt anlegen“.</p>
+    {% elif cp.projekt_fehler and not cp.projekt_id %}
+    <p class="fehler-text" style="margin:0.2rem 0">{{ cp.projekt_fehler }}{% if cp.daten.projekt_fehler_am %} <span class="dezent">({{ cp.daten.projekt_fehler_am }})</span>{% endif %}</p>
+    {% endif %}
+    {% if cp.projekt_id %}
+    <p style="margin:0.2rem 0">Stand: <strong>{{ cp.status_text }}</strong>
+        {% if cp.status_stand %}<span class="dezent">(abgerufen {{ cp.status_stand }})</span>{% endif %}
+        {% if cp.status_fehler %}<span class="fehler-text">– letzter Abruf: {{ cp.status_fehler }}</span>{% endif %}</p>
+    {% if cp.angenommen_vorschlag %}
+    <p class="meldung" style="margin:0.2rem 0">Cloover meldet den Finanzierungsvertrag als unterschrieben ({{ cp.vertrag_am }}) –
+        {{ 'Angebot auf Angenommen setzen?' }} <span class="dezent">(manuell über den Status unten, keine Automatik)</span></p>
+    {% endif %}
+    {% if cp.kombi_angebote %}
+    <p class="dezent" style="margin:0.2rem 0">Kombi-Versand: ein Projekt für {{ cp.kombi_angebote | join(', ') }}{% if cp.kombi_gesamtrate_text %} · Gesamtrate für alle Angebote dieser Mail: ab {{ cp.kombi_gesamtrate_text }} €/Monat{% endif %}</p>
+    {% endif %}
+    {% if cp.alt_projekte %}
+    <p class="dezent" style="margin:0.2rem 0">Frühere Cloover-Projekte dieses Angebots: {{ cp.alt_projekte | join(', ') }} (bleiben bei Cloover stehen – Rückfrage B5)</p>
+    {% endif %}
+    {% if cp.pdf_ablage_fehler %}<p class="fehler-text" style="margin:0.2rem 0">{{ cp.pdf_ablage_fehler }}</p>{% endif %}
+    <p style="margin:0.3rem 0 0; display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center">
+        {% if cp.checkout_link %}
+        <a class="knopf klein zweitrangig" href="{{ cp.checkout_link }}" target="_blank" rel="noopener">Finanzierungs-Link öffnen</a>
+        <button class="knopf klein zweitrangig" type="button" data-cloover-link="{{ cp.checkout_link }}"
+                onclick="clooverLinkKopieren(this)" title="Persönlichen Abschluss-Link in die Zwischenablage kopieren">Link kopieren</button>
+        {% endif %}
+        {% if cp.financial_offer %}
+            {% if cp.financial_offer_ist_url %}
+            <a class="knopf klein zweitrangig" href="{{ cp.financial_offer }}" target="_blank" rel="noopener">Finanzierungsangebot öffnen</a>
+            {% else %}
+            <span class="dezent" title="financial_offer aus der Cloover-Antwort">Finanzierungsangebot: {{ cp.financial_offer }}</span>
+            {% endif %}
+        {% endif %}
+        {% if cp.kann_status and not nur_lesen %}
+        <form method="post" action="/angebote/{{ angebot.id }}/cloover/status" style="display:inline">
+            <button class="knopf klein" type="submit" title="GET /api/projects/{{ cp.projekt_id }} – Vertrag/Barzahlung abrufen (der Lauf cloover-status prüft stündlich)">Status jetzt abrufen</button>
+        </form>
+        {% endif %}
+        {% if cp.pdf_url %}<span class="dezent" title="Öffentliche PDF-URL für Cloover ({{ cp.ablage_anbieter }}){% if cp.ablage_ablauf %}, Link gültig bis {{ cp.ablage_ablauf }}{% endif %}">PDF-Ablage: {{ cp.ablage_anbieter or '–' }}{% if cp.ablage_ablauf %} bis {{ cp.ablage_ablauf }}{% endif %}</span>{% endif %}
+    </p>
+    {% elif cp.kann_anlegen and not nur_lesen %}
+    <form method="post" action="/angebote/{{ angebot.id }}/cloover/projekt" style="display:inline"
+          onsubmit="return confirm('Cloover-Projekt jetzt anlegen? Name, E-Mail, Telefon, Adresse und das Angebots-PDF gehen an Cloover.');">
+        <button class="knopf klein" type="submit" title="Angebots-PDF ablegen, Cloover-Projekt anlegen, PDF mit Link und QR-Code neu erzeugen">Projekt anlegen</button>
+    </form>
+    {% elif not cp.gruende and not cp.projekt_id and cp.darf and angebot.status not in ('Entwurf', 'Versand vorbereitet', 'Versendet') %}
+    <p class="dezent" style="margin:0.2rem 0">Kein Cloover-Projekt – Status „{{ angebot.status }}“ erlaubt kein neues Projekt.</p>
+    {% endif %}
+</div>
+<script>
+function clooverLinkKopieren(knopf) {
+    var link = knopf.getAttribute('data-cloover-link') || '';
+    if (!link) { return; }
+    var fertig = function () { var alt = knopf.textContent; knopf.textContent = 'Kopiert ✓'; setTimeout(function () { knopf.textContent = alt; }, 2000); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(fertig, function () { window.prompt('Link kopieren:', link); });
+    } else {
+        window.prompt('Link kopieren:', link);
+    }
+}
+</script>
+{% endif %}

@@ -32,7 +32,7 @@ def _schalter(env_name: str) -> bool:
 
 
 # v27 (PLAN_V17): Versionskennung für /health und die Betriebs-Seite
-VERSION = "v35"   # 15.10.2026: Wallbox-Konfigurator, Alternativ/Elektro ins PV, Kombi-Versand, Auslegungszeile, Mail je Sparte, TAIFUN-PDF, Mobil (PLAN_V21, Phasen 178-182); vorher v33 14.10.2026: Outlook je Mitarbeiter, Graph als Anwendung, zentraler Kalender, Rollen-Varianten, Service, Auto-Phase, Rabatt 0 %, Mein Tag mobil, Tabellen-Layout, Nachfassen (PLAN_V20, Phasen 166-177)
+VERSION = "v36"   # 16.10.2026: Angebotslayout v3 (HTML-Vorlagen + Browser-Druck), Cloover-Finanzierung (PLAN_V22, Phasen 188-195); vorher v35 16.10.2026: TAIFUN-Kundenuebergabe, Kanal-Stammdaten, Rechte AD/HV-Gruppen, Profilbild, Inline-Bearbeitung, Filter, Sofortsuche (PLAN_LEAD_V6, Phasen 183-187)
 
 
 # --- Pfade ---------------------------------------------------------------
@@ -126,3 +126,12 @@ GRAPH_CLIENT_SECRET = os.getenv("GRAPH_CLIENT_SECRET", "").strip()
 GRAPH_ZERTIFIKAT_PFAD = os.getenv("GRAPH_ZERTIFIKAT_PFAD", "").strip().strip('"')
 GRAPH_ZERTIFIKAT_THUMBPRINT = os.getenv("GRAPH_ZERTIFIKAT_THUMBPRINT", "").strip()
 GRAPH_GEHEIMNIS_ABLAUF = os.getenv("GRAPH_GEHEIMNIS_ABLAUF", "").strip()
+
+# v36 (PLAN_V22 Phase 188): Angebots-PDF per Browser-Druck (Playwright, Edge) - Pfad zu msedge.exe/chrome.exe
+# nur, wenn Edge nicht ueber den Kanal "msedge" gefunden wird; sonst leer lassen
+PDF_BROWSER_PFAD = os.getenv("PDF_BROWSER_PFAD", "").strip().strip('"')
+# v36 (PLAN_V22 Teil B): Cloover Partners API - der Key steht NUR in der .env (leer = Modul aus);
+# Basis-URL Standard = Test-Umgebung, die Live-URL traegt Andreas nach Zulieferung von Cloover ein
+CLOOVER_TEST_URL = "https://partners-api-530331765008.europe-west3.run.app"
+CLOOVER_API_KEY = os.getenv("CLOOVER_API_KEY", "").strip()
+CLOOVER_BASIS_URL = os.getenv("CLOOVER_BASIS_URL", "").strip().rstrip("/") or CLOOVER_TEST_URL

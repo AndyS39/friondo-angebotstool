@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block titel %}Angebots-PDF – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+{# v36 (PLAN_V22 Phase 188/190, Agent A3): Parametrierung → Angebots-PDF. Abschnitte Engine ·
+   Browser · Test-PDF · Bilder/Schriften · Änderungsprotokoll. Nur Design-Tokens (Hell/Dunkel). #}
+<div class="seitenkopf">
+    <h1>Angebotstool → Angebots-PDF</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+        <a class="knopf zweitrangig" href="/parametrierung/golive">Go-live-Checkliste</a>
+        <a class="knopf zweitrangig" href="/parametrierung/betrieb">Betrieb</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung {{ 'fehler' if meldung.startswith('Test-PDF fehlgeschlagen') }}" id="test">{{ meldung }}</p>{% endif %}
+
+<form method="post" action="/parametrierung/angebots-pdf" class="formular" style="max-width:860px" id="engine">
+    <h2>Engine <small class="dezent">{{ engine_namen[engine] }}</small></h2>
+    <p class="dezent">Das Angebots-PDF (alle Sparten, alle Wege: Vorschau, Download, Versand vorbereiten,
+        Kombi-Versand, Projektablage, Signatur, „Meine Angebote“) wird seit v36 aus HTML-Vorlagen mit einem
+        Browser im Hintergrund gedruckt (Layout v3). Schlägt der Browser-Druck fehl, entsteht das PDF
+        automatisch im bisherigen Layout (fpdf2) – mit Eintrag im Fehlerprotokoll und Hinweis in der
+        Versand-Meldung. Der Schalter „fpdf2“ erzwingt das bisherige Layout ohne Hinweis
+        (Rückfall für eine Version). Lieferschein, Protokoll, BzA-Datenblatt und Montageformulare bleiben fpdf2.</p>
+    <label class="kontrollfeld"><input type="radio" name="pdf_engine" value="html" {{ 'checked' if engine == 'html' }}>
+        HTML-Vorlagen + Browser-Druck (Layout v3, Standard)</label>
+    <label class="kontrollfeld"><input type="radio" name="pdf_engine" value="fpdf2" {{ 'checked' if engine == 'fpdf2' }}>
+        fpdf2 – bisheriges Layout (Rückfall)</label>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+    </div>
+</form>
+
+<section class="karte" style="max-width:860px" id="browser">
+    <h2>Browser {% if status.gestartet %}<small class="dezent">läuft in diesem Dienst</small>{% else %}<small class="dezent">startet beim ersten PDF</small>{% endif %}</h2>
+    <table class="tabelle" style="max-width:860px">
+        <tbody>
+        <tr><th>Gefunden über</th><td>{% if status.browser %}{{ status.browser }}{% if status.browser == 'pfad' %} (<code>PDF_BROWSER_PFAD</code>){% endif %}{% else %}<span class="dezent">noch kein Druck in diesem Prozess</span>{% endif %}</td></tr>
+        <tr><th>Version</th><td>{{ status.version or '–' }}</td></tr>
+        <tr><th>Pfad aus der .env</th><td>{% if browser_pfad_env %}<code>{{ browser_pfad_env }}</code>{% else %}<span class="dezent">leer – Kanal „msedge“ (Edge), sonst Playwright-Chromium</span>{% endif %}</td></tr>
+        <tr><th>Standardpfade</th><td>
+            {% for e in edge_pfade %}<span class="{{ '' if e.vorhanden else 'dezent' }}">{{ e.name }}: <code>{{ e.pfad }}</code> – {{ 'vorhanden' if e.vorhanden else 'fehlt' }}</span><br>{% endfor %}
+        </td></tr>
+        <tr><th>Drucke in diesem Prozess</th><td>{{ status.anzahl }} (letzte Dauer {{ status.letzte_dauer_ms }} ms · Zielwert {{ zielzeit_s }} s) · {{ status.fehler }} Fehler · {{ status.neustarts }} Neustarts
+            {% if status.letzter_fehler %}<br><span class="fehler-text">Letzter Fehler: {{ status.letzter_fehler }}</span>{% endif %}</td></tr>
+        <tr><th>Grenzen</th><td>höchstens {{ parallel }} Drucke gleichzeitig, {{ timeout_s }} s je PDF; Temp-Ordner <code>{{ temp_ordner }}</code></td></tr>
+        </tbody>
+    </table>
+    <p class="dezent">Der Dienst <code>FriondoAngebotstool</code> läuft als SYSTEM – ob Edge dort startet, prüft
+        <code>scripts\pdf-browser-pruefen.bat</code> (unter SYSTEM: <code>psexec -s</code> oder geplante Aufgabe);
+        ohne Edge installiert <code>update.bat</code> Playwright-Chromium (Internet nötig). Details: docs/angebots-pdf.md.</p>
+</section>
+
+<section class="karte" style="max-width:860px" id="testpdf">
+    <h2>Test-PDF</h2>
+    {% if letzter_test %}
+    <p>Letzter Browser-Test: <strong class="{{ 'ampel gruen' if letzter_test.ok else 'fehler-text' }}">{{ 'ok' if letzter_test.ok else 'fehlgeschlagen' }}</strong>
+        am {{ letzter_test.zeit }} – {{ letzter_test.vorlage or 'Probeseite' }}{% if letzter_test.ok %}, {{ letzter_test.seiten }} Seite(n), {{ (letzter_test.bytes or 0) // 1024 }} KB in {{ letzter_test.dauer_ms }} ms ({{ letzter_test.browser }} {{ letzter_test.version }}){% else %}: {{ letzter_test.fehler }}{% endif %}.</p>
+    {% else %}
+    <p class="dezent">Noch kein Browser-Test gespeichert (migrate.py führt ihn beim Update aus).</p>
+    {% endif %}
+    <form method="post" action="/parametrierung/angebots-pdf/test" class="formular-zeile">
+        <label>Sparte
+            <select name="sparte">
+                {% for s, da in vorlagen.items() %}
+                <option value="{{ s }}">{{ s }}{{ '' if da else ' (Vorlage fehlt – Probeseite)' }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button class="knopf" type="submit" title="Demo-Angebot Max Mustermann über die Sparten-Vorlage drucken (keine Kundendaten)">Test-PDF erzeugen</button>
+        {% if test_pdf_vorhanden %}<a class="knopf zweitrangig" href="/parametrierung/angebots-pdf/test.pdf" target="_blank">Letztes Test-PDF öffnen</a>{% endif %}
+    </form>
+    <p class="dezent">Vorlagen vorhanden: {% for s, da in vorlagen.items() %}{{ s }} {{ '✓' if da else '–' }}{% if not loop.last %} · {% endif %}{% endfor %}.
+        Das Test-PDF nutzt den Demo-Kontext (Max Mustermann) – keine Kundendaten.</p>
+</section>
+
+<section class="karte{{ ' betrieb-kachel-warn' if dateien.fehlend }}" style="max-width:860px" id="dateien">
+    <h2>Bilder und Schriften <small class="dezent">{{ dateien.vorhanden }} von {{ dateien.gesamt }} vorhanden</small></h2>
+    {% if dateien.fehlend %}
+    <p class="fehler-text">Es fehlen unter <code>app/static/pdf/</code>: {{ dateien.fehlend | join(', ') }} – das PDF
+        zeigt an diesen Stellen Lücken. Dateien aus dem Design-Export einspielen (docs/angebots-pdf.md, Abschnitt
+        „Bilder/Schriften tauschen“).</p>
+    {% else %}
+    <p class="dezent">Alle Titelbilder (WP/PV/KL/WB), Logo, Award, Teamfoto, Zertifikats-Logos, KfW-Wortmarke und die
+        Schrift Nunito Sans (woff2 + OFL-Lizenz) liegen bereit. Austausch: Datei gleichen Namens unter
+        <code>app/static/pdf/bilder/</code> ersetzen (Titelbilder 1600 px breit, JPEG ≤ 350 KB).</p>
+    {% endif %}
+</section>
+
+{% if protokoll %}
+<h2>Änderungsprotokoll (letzte 30)</h2>
+<pre class="dezent" style="white-space:pre-wrap">{{ protokoll }}</pre>
+{% endif %}
+<p class="dezent">HTML-Vorschau eines Angebots ohne Druck: im Editor „HTML-Vorschau“ bzw. <code>/angebote/&lt;id&gt;/pdf.html</code>
+    (Innendienst/Admin). Engine, Vorlagen, Rückfall und Fehlersuche: docs/angebots-pdf.md.</p>
+{% endblock %}

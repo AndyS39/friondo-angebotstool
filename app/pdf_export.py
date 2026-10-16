@@ -6,8 +6,18 @@
 # Sparten: WP mit KfW-Block und ggf. Vollmacht; PV (v13/v22) ohne Förderblock,
 # mit Wirtschaftlichkeitsseiten; Klima (v24, PLAN_V16 Phase 115) ohne
 # Förderblock, ohne Wirtschaftlichkeit, ohne Vollmacht – Texte „Friondo KL“.
+# v36 (PLAN_V22 Phase 190): die Einstiegspunkte pdf_fuer_angebot/signiertes_pdf_erzeugen
+# drucken bei Engine „html“ über app/pdf_html.py (Layout v3, Browser-Druck) an dieselben
+# Zielpfade; die fpdf2-Erzeugung in dieser Datei bleibt als Rückfall (Schalter pdf_engine =
+# fpdf2 oder Browser-Druck fehlgeschlagen – dann Fehlerprotokoll „PDF“ + Merker für die
+# Versand-Meldung „PDF im alten Layout erzeugt (Browser-Druck fehlgeschlagen: <Grund>)“).
 
+import base64
 import json
+import logging
+import threading
+import traceback
+from datetime import datetime
 from pathlib import Path
 
 from fpdf import FPDF
@@ -15,6 +25,8 @@ from fpdf.enums import XPos, YPos
 
 from app import config, kfw
 from app.models import Angebot, Kunde
+
+log = logging.getLogger("angebotstool.pdf")
 
 ASSETS = Path(__file__).resolve().parent / "static" / "pdf"
 ARIAL = Path(r"C:\Windows\Fonts")
@@ -38,6 +50,11 @@ AUSSTELLUNGSORT = "Duisburg"   # v22: Ort in der Kopfzeile der Wirtschaftlichkei
 # v22 (Phase 101): Platzhalter im PV-Nachtext für die drei gestalteten
 # Wirtschaftlichkeitsseiten; der alte Platzhalter bleibt als Alias gültig
 PLATZHALTER_WIRTSCHAFTLICHKEIT = ("[WIRTSCHAFTLICHKEIT]", "[BEISPIELRECHNUNG]")
+# v36 (PLAN_V22 Phase 193, Agent B2): Platzhalter der Cloover-Rate im Nachtext A (fpdf2-Rückfall) –
+# Box „Planbare Monatsraten – Ihre Rate für dieses Angebot:“, Laufzeit, Link + QR (Rechtecke), Fußnote
+# am Seitenende; Daten aus app.cloover.kontext_fuer_pdf (None → „Monatsrate auf Anfrage“)
+PLATZHALTER_CLOOVER = "[CLOOVER]"
+CLOOVER_QR_MM = 22.0
 
 # Logo-Leiste Seite 1: Positionen/Größen exakt aus dem Referenz-PDF ausgelesen
 # (pdfplumber-Image-BBoxen, Phase 26) – zweizeilige Anordnung wie im Original.
@@ -169,9 +186,13 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 beispielrechnung: dict | None = None,
                 wirtschaftlichkeit: dict | None = None,
                 zahlungsbedingung: str | None = None,
-                ausfuehrungsort: dict | None = None) -> Path:
+                ausfuehrungsort: dict | None = None,
+                cloover: dict | None = None) -> Path:
     """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
     Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort.
+    v36 (PLAN_V22 Phase 193): cloover = Teilbaum aus app.cloover.kontext_fuer_pdf
+    (Rate, Laufzeit, Fußnote, Link/QR) für den Platzhalter [CLOOVER] im Nachtext;
+    None = nicht relevant bzw. „Monatsrate auf Anfrage“.
     v9: Vor- und Nachtext kommen als Textblöcke (Profil/Parametrierung);
     None = Standard-Blöcke aus app.angebotsprofile.
     v22: wirtschaftlichkeit = Daten aus wirtschaftlichkeit_fuer() für die drei
@@ -206,7 +227,8 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
     _nachtext_rendern(pdf, nachtext_text if nachtext_text is not None
                       else angebotsprofile.STANDARD_NACHTEXT, signatur,
-                      wirtschaftlichkeit, zahlungsbedingung=zahlungsbedingung)
+                      wirtschaftlichkeit, zahlungsbedingung=zahlungsbedingung,
+                      cloover=cloover)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
         _nachtext_d(pdf, kunde, angebot, ausfuehrungsort=ort)
@@ -617,10 +639,91 @@ def _absatz(pdf: AngebotsPdf, text: str, fett=False, groesse=9):
     pdf.ln(1.5)
 
 
+def _cloover_qr(pdf: AngebotsPdf, link: str, x: float, y: float, kante: float = CLOOVER_QR_MM) -> None:
+    """v36 (Phase 193/194): QR-Code mit Rechtecken (fpdf2-Rückfall) – Modulmatrix inkl. Ruhezone aus
+    app.cloover.qr_matrix (Fehlerkorrektur M), Kantenlänge 22 mm wie im Layout v3."""
+    from app import cloover as cloover_modul
+    matrix = cloover_modul.qr_matrix(link)
+    if not matrix:
+        return
+    modul = kante / len(matrix)
+    pdf.set_fill_color(255, 255, 255)
+    pdf.rect(x, y, kante, kante, style="F")
+    pdf.set_fill_color(0, 0, 0)
+    for i, zeile in enumerate(matrix):
+        for j, dunkel in enumerate(zeile):
+            if dunkel:
+                pdf.rect(x + j * modul, y + i * modul, modul, modul, style="F")
+    pdf.set_fill_color(255, 255, 255)
+
+
+def _cloover_block(pdf: AngebotsPdf, cloover: dict | None) -> str:
+    """v36 (PLAN_V22 Phase 193, Agent B2): Platzhalter [CLOOVER] im Nachtext A – derselbe Wortlaut wie die
+    Box „Planbare Monatsraten“ und Karte 2 des Layouts v3: Titel, „ab 242,70 € pro Monat mit Förderung*“
+    (nur WP mit Förderung) / „ab 389,99 € pro Monat ohne Förderung“, „Laufzeit n Jahre“ (+ „Ihre
+    Finanzierungsanfrage ist bereits angelegt – nur noch bestätigen.“ mit Link), Link als Text + QR-Code
+    aus Rechtecken bzw. der Satz „Ihren persönlichen Finanzierungs-Link erhalten Sie von uns per E-Mail.“,
+    Rückmeldungs- und Datenschutzsatz (nur mit Link). Ohne Rate: „• Monatsrate auf Anfrage“, kein Knopf,
+    keine Fußnote. Liefert die Fußnote, die der Aufrufer am Seitenende druckt."""
+    from app import cloover as cloover_modul
+    _absatz(pdf, cloover_modul.RATEN_TITEL, fett=True)
+    hat_rate = bool(cloover and (cloover.get("rate_text") or cloover.get("rate_mit_text")))
+    if not hat_rate:
+        _absatz(pdf, "• " + cloover_modul.RATE_AUF_ANFRAGE)
+        return ""
+    zeilen = []
+    if cloover.get("rate_mit_text"):
+        zeilen.append(f"• ab {cloover['rate_mit_text']} pro Monat mit Förderung*")
+    if cloover.get("rate_text"):
+        zeilen.append(f"• ab {cloover['rate_text']} pro Monat ohne Förderung")
+    _absatz(pdf, "\n".join(zeilen), fett=True)
+    if cloover.get("kombi_gesamtrate_text"):   # Kombi-Versand (B3): ein Projekt je Mail [ANNAHME, B6]
+        _absatz(pdf, "• " + cloover_modul.KOMBI_GESAMTRATE.format(betrag=cloover["kombi_gesamtrate_text"]))
+    laufzeit = f"Laufzeit {cloover.get('laufzeit')} Jahre"
+    link = (cloover.get("checkout_link") or "").strip()
+    if not link:
+        _absatz(pdf, laufzeit)
+        _absatz(pdf, cloover.get("hinweis_link") or cloover_modul.HINWEIS_LINK)
+        return cloover.get("fussnote") or ""
+    _absatz(pdf, laufzeit + " · " + cloover_modul.LAUFZEIT_ANGELEGT)
+    # Knopf-Text als Link + Kurzform in 7 pt, rechts daneben der QR-Code (22 × 22 mm)
+    kante = CLOOVER_QR_MM
+    if pdf.get_y() + kante + 4 > pdf.page_break_trigger:
+        pdf.add_page()
+    y0 = pdf.get_y()
+    x_qr = pdf.w - pdf.r_margin - kante
+    breite_text = x_qr - pdf.l_margin - 4
+    pdf.set_font("Arial", "B", 9.5)
+    pdf.set_text_color(*DUNKELBLAU)
+    pdf.cell(breite_text, 5.5, cloover_modul.KNOPF_ABSCHLIESSEN, link=link,
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", "", 7)
+    pdf.multi_cell(breite_text, 3.4, cloover.get("link_kurz") or cloover_modul.link_kurz(link), link=link)
+    pdf.set_font("Arial", "I", 7.5)
+    pdf.multi_cell(breite_text, 3.6, cloover_modul.RUECKMELDUNG)
+    if cloover.get("datenschutz"):
+        pdf.multi_cell(breite_text, 3.6, cloover["datenschutz"])
+    y_text = pdf.get_y()
+    _cloover_qr(pdf, link, x_qr, y0, kante)
+    pdf.set_xy(pdf.l_margin, max(y_text, y0 + kante) + 2)
+    return cloover.get("fussnote") or ""
+
+
+def _cloover_fussnote(pdf: AngebotsPdf, text: str) -> None:
+    """Fußnote zur Cloover-Rate (7,5 pt kursiv wie die „~ “-Zeilen) am Ende der Nachtext-Seite."""
+    if not text:
+        return
+    pdf.set_font("Arial", "I", 7.5)
+    pdf.multi_cell(0, 3.8, text)
+    pdf.ln(1)
+
+
 def _nachtext_rendern(pdf: AngebotsPdf, text: str,
                       signatur: dict | None = None,
                       wirtschaftlichkeit: dict | None = None,
-                      zahlungsbedingung: str | None = None) -> None:
+                      zahlungsbedingung: str | None = None,
+                      cloover: dict | None = None) -> None:
     """v9: Nachtext-Blocktext rendern. Konventionen: "# " Seitenüberschrift ·
     "## " fette Zwischenzeile (10 pt) · "### " fette Absatz-Überschrift ·
     "---" allein = Seitenumbruch · "~ " kleine kursive Fußnote ·
@@ -629,8 +732,10 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
     die drei gestalteten Wirtschaftlichkeitsseiten des PV-Angebots (eigene
     Seiten; ohne Auslegungsdaten entfällt der Block) · "{zahlungsbedingungen}"
     (v30, PLAN_V18 Phase 150) = Text der am Angebot gewählten Zahlungsbedingung
-    (zahlungsbedingung; None = Standardabsatz). Aufeinanderfolgende Zeilen
-    bilden EINEN Absatz."""
+    (zahlungsbedingung; None = Standardabsatz) · "[CLOOVER]" (v36, PLAN_V22
+    Phase 193) = Box „Planbare Monatsraten“ mit der Cloover-Rate, Link/QR und
+    Fußnote am Seitenende (cloover aus app.cloover.kontext_fuer_pdf; None =
+    „Monatsrate auf Anfrage“). Aufeinanderfolgende Zeilen bilden EINEN Absatz."""
     from app import wirtschaftlichkeit_pdf, zahlungsbedingungen
     # v30: Platzhalter wie die übrigen ersetzen – ein mehrzeiliger Text wird im
     # Absatz-Puffer zu EINEM Absatz, wie der bisherige feste Text
@@ -646,6 +751,7 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
                 wirtschaftlichkeit_pdf.seiten_zeichnen(pdf, wirtschaftlichkeit)
             continue
         pdf.add_page()
+        cloover_fussnote = ""   # v36: Fußnote der Rate am Ende dieser Seite
         puffer: list[str] = []
 
         def puffer_leeren():
@@ -662,6 +768,10 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
             if zeile.strip() == "[UNTERSCHRIFT]":
                 puffer_leeren()
                 _unterschrift_block(pdf, signatur)
+            elif zeile.strip() == PLATZHALTER_CLOOVER:
+                # v36 (Phase 193): Rate/Link/QR an Ort und Stelle, Fußnote am Seitenende
+                puffer_leeren()
+                cloover_fussnote = _cloover_block(pdf, cloover) or cloover_fussnote
             elif zeile.strip() in PLATZHALTER_WIRTSCHAFTLICHKEIT:
                 # Platzhalter zwischen anderem Text (frei editierbare Blöcke):
                 # Text davor abschließen, drei Seiten zeichnen, Rest auf einer
@@ -688,6 +798,7 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
             else:
                 puffer.append(zeile)
         puffer_leeren()
+        _cloover_fussnote(pdf, cloover_fussnote)
 
 
 def _zahl(wert: float, stellen: int = 0) -> str:
@@ -954,9 +1065,131 @@ def _mit_vollmacht(session, angebot: Angebot) -> bool:
             and angebotsprofile.vollmacht_erlaubt(session, angebot))
 
 
+# --- v36 (PLAN_V22 Phase 190, Agent A3): Engine-Weiche html | fpdf2 ------------------------
+# Merker je Angebot (prozessweit): Grund des letzten automatischen Rückfalls auf fpdf2 seit dem
+# letzten erfolgreichen Layout-v3-Druck. „Versand vorbereiten“ und der Kombi-Versand hängen den
+# Text an ihre Meldung; ein gelungener Browser-Druck oder der Schalter fpdf2 löschen den Eintrag.
+_RUECKFAELLE: dict[int, dict] = {}
+_rueckfall_sperre = threading.Lock()
+RUECKFALL_TEXT = "PDF im alten Layout erzeugt (Browser-Druck fehlgeschlagen: {grund})"
+
+
+def letzter_rueckfall(angebot_id: int | None) -> str:
+    """Hinweistext für Versand-Meldungen („PDF im alten Layout erzeugt (Browser-Druck
+    fehlgeschlagen: <Grund>)“) oder "" – nur, wenn der letzte Druck dieses Angebots ein
+    automatischer Rückfall war (Schalter fpdf2 = kein Hinweis)."""
+    if angebot_id is None:
+        return ""
+    with _rueckfall_sperre:
+        eintrag = _RUECKFAELLE.get(int(angebot_id))
+    return RUECKFALL_TEXT.format(grund=eintrag["grund"]) if eintrag else ""
+
+
+def rueckfall_details(angebot_id: int | None) -> dict | None:
+    """{grund, zeit} des gemerkten Rückfalls (Betriebs-/Testzwecke) oder None."""
+    if angebot_id is None:
+        return None
+    with _rueckfall_sperre:
+        eintrag = _RUECKFAELLE.get(int(angebot_id))
+        return dict(eintrag) if eintrag else None
+
+
+def _rueckfall_merken(angebot_id: int | None, grund: str) -> None:
+    if angebot_id is None:
+        return
+    with _rueckfall_sperre:
+        _RUECKFAELLE[int(angebot_id)] = {"grund": grund, "zeit": datetime.now()}
+
+
+def _rueckfall_loeschen(angebot_id: int | None) -> None:
+    if angebot_id is None:
+        return
+    with _rueckfall_sperre:
+        _RUECKFAELLE.pop(int(angebot_id), None)
+
+
+def pdf_zielpfad(angebot: Angebot) -> Path:
+    """Ablage des Angebots-PDFs – wie erzeuge_pdf(ziel=None): data/angebote/<Nummer>.pdf."""
+    return config.ANGEBOTE_PDF_ORDNER / f"{angebot.nummer}.pdf"
+
+
+def signiert_zielpfad(angebot: Angebot) -> Path:
+    return config.SIGNIERT_ORDNER / f"{angebot.nummer}-signiert.pdf"
+
+
+def engine_html(session) -> bool:
+    """Schalter pdf_engine (Einstellung, Standard html) – True = Layout v3 über den Browser-Druck."""
+    from app import pdf_html
+    return pdf_html.engine(session) == pdf_html.ENGINE_HTML
+
+
+def signatur_dict(png_bytes: bytes, name: str, zeit, geraet: str = "") -> dict:
+    """Signatur-Dict für den Kontext der HTML-Vorlage (Phase 190): das Bild sitzt auf der Linie
+    „Unterschrift des Auftraggebers“, darunter „<Name> · signiert am TT.MM.JJJJ HH:MM“."""
+    return {"bild_data_url": "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii"),
+            "name": (name or "").strip(), "zeitstempel": zeit.strftime("%d.%m.%Y %H:%M"),
+            "geraet": (geraet or "")[:150]}
+
+
+def _layout_v3_schreiben(session, angebot: Angebot, ziel: Path,
+                         signatur: dict | None = None, benutzer=None) -> Path | None:
+    """Druckt das Angebot über app/pdf_html.py (Layout v3) und schreibt die Bytes nach `ziel`.
+    None = Rückfall auf fpdf2: Browser-Druck fehlgeschlagen (PdfDruckFehler), Kontext noch nicht
+    verfügbar (NotImplementedError, solange Phase 189 fehlt) oder ein Fehler der Vorlage – jeweils
+    Fehlerprotokoll (Fehlertyp „PDF“) und Merker für die Versand-Meldung. [ANNAHME A3] Auch
+    Vorlagen-/Kontextfehler fallen zurück (Traceback im Fehlerprotokoll) – ein Kunde bekommt lieber
+    das alte Layout als einen Internal Server Error."""
+    from app import db, fehlerprotokoll, pdf_html
+    detail = ""
+    try:
+        daten = pdf_html.angebot_pdf(session, angebot, signatur=signatur, benutzer=benutzer)
+    except pdf_html.PdfDruckFehler as fehler:
+        grund = str(fehler)
+    except NotImplementedError as fehler:
+        grund = f"Layout v3 noch nicht verfügbar – {fehler}"
+    except Exception as fehler:   # noqa: BLE001 – Vorlage/Kontext
+        grund = f"Vorlage/Kontext: {type(fehler).__name__}: {str(fehler)[:160]}"
+        detail = traceback.format_exc()
+    else:
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        ziel.write_bytes(daten)
+        _rueckfall_loeschen(angebot.id)
+        return ziel
+    # Rückfall: Sitzung freigeben (das Fehlerprotokoll schreibt in eigener Sitzung und darf nicht
+    # gegen eine von uns gehaltene Schreibsperre laufen; pdf_html.angebot_pdf hätte vor dem Druck
+    # ohnehin committet), protokollieren, merken.
+    db.verbindung_freigeben(session)
+    fehlerprotokoll.eintragen_text(
+        "PDF", f"{angebot.nummer}: Browser-Druck fehlgeschlagen – Rückfall auf fpdf2: {grund}",
+        detail, f"/angebote/{angebot.id}/pdf")
+    _rueckfall_merken(angebot.id, grund)
+    log.warning("Angebots-PDF %s: Rückfall auf fpdf2 (%s)", angebot.nummer, grund)
+    return None
+
+
 def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
-                            name: str, zeit) -> Path:
-    """Erzeugt das signierte PDF unter data/angebote/signiert/ (Phase 23)."""
+                            name: str, zeit, geraet: str = "", benutzer=None) -> Path:
+    """Erzeugt das signierte PDF unter data/angebote/signiert/ (Phase 23).
+    v36 (Phase 190): bei Engine html erneutes Rendern mit dem Signatur-Dict
+    (Bild auf der Unterschriftslinie, „<Name> · signiert am …“); Ablage und
+    Signaturprotokoll unverändert, Rückfall fpdf2 wie bei pdf_fuer_angebot.
+    `benutzer` (Nachtrag): aufrufender Benutzer für den Ansprechpartner-Rückfall."""
+    # v36 (Phase 193): Cloover-Rate auch vor dem signierten PDF nachziehen (rechnet nur bei Änderung)
+    _cloover_rate_vorab(session, angebot, benutzer)
+    if engine_html(session):
+        pfad = _layout_v3_schreiben(session, angebot, signiert_zielpfad(angebot),
+                                    signatur=signatur_dict(png_bytes, name, zeit, geraet),
+                                    benutzer=benutzer)
+        if pfad is not None:
+            return pfad
+    else:
+        _rueckfall_loeschen(angebot.id)
+    return _signiertes_pdf_fpdf2(session, angebot, png_bytes, name, zeit)
+
+
+def _signiertes_pdf_fpdf2(session, angebot: Angebot, png_bytes: bytes,
+                          name: str, zeit) -> Path:
+    """Bisheriger fpdf2-Weg des signierten PDFs (Rückfall-Engine)."""
     import tempfile
 
     kunde = session.get(Kunde, angebot.kunde_id)
@@ -980,7 +1213,9 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
                            zahlungsbedingung=zahlungsbedingungen.fuer_angebot(session, angebot)[1],
                            # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort = Objekt des Angebots
                            ausfuehrungsort=anschriften.ausfuehrungsort_fuer(
-                               session, angebot=angebot, kunde=kunde))
+                               session, angebot=angebot, kunde=kunde),
+                           # v36 (PLAN_V22 Phase 193): Cloover-Rate für den Platzhalter [CLOOVER]
+                           cloover=_cloover_kontext(session, angebot))
     finally:
         Path(png_pfad).unlink(missing_ok=True)
 
@@ -996,9 +1231,87 @@ def _ersetzt_hinweis(session, angebot: Angebot) -> str:
             f"vom {vorgaenger.datum.strftime('%d.%m.%Y')}")
 
 
-def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
-    """Erzeugt das PDF inkl. KfW-Block (falls Konfigurator-Daten vorliegen);
-    Vollmacht-Seite nur bei iMSys/SpotDynamic im Angebot.
+# v36 Nachtrag (Entscheidung Orchestrator 16.10.2026, Plan Phase 190 „Archiv bleibt“): in diesen Status
+# wird ein vorhandenes PDF unter data/angebote/ nicht mehr neu gerendert – egal welche Engine.
+EINGEFRORENE_STATUS = ("Versendet", "Angenommen", "Abgelehnt", "Überholt", "Versendet (extern)")
+
+
+def _cloover_kontext(session, angebot: Angebot) -> dict | None:
+    """v36 (PLAN_V22 Phase 193): Teilbaum der Cloover-Rate für den fpdf2-Rückfall (Platzhalter
+    [CLOOVER]); None, wenn nicht relevant – ein Fehler verhindert nie das PDF."""
+    try:
+        from app import cloover
+        return cloover.kontext_fuer_pdf(session, angebot)
+    except Exception as fehler:   # noqa: BLE001 – Finanzierungsblock ist Zusatz
+        log.warning("Cloover-Teilbaum für das fpdf2-PDF nicht verfügbar: %s", fehler)
+        return None
+
+
+def _cloover_rate_vorab(session, angebot: Angebot, benutzer=None) -> None:
+    """v36 (PLAN_V22 Phase 193, Agent B2): Cloover-Rate VOR jeder PDF-Erzeugung nachziehen (Engine html
+    und fpdf2) – nur wenn das Angebot relevant ist (Modus, Profil, Sparte, nicht ausgeblendet); dann wird
+    die Sitzung freigegeben (Netz-I/O, v27-Regel) und app.cloover.rate_aktualisieren rechnet nur bei
+    geändertem Endbetrag/Förderung/USt/Laufzeit/Anzahlung. Danach wird `cloover_json` am übergebenen
+    ORM-Objekt nachgeladen, damit der PDF-Kontext den neuen Stand liest. Fehler blockieren das PDF nie."""
+    from app import cloover, db
+    try:
+        if not cloover.rate_noetig(session, angebot):
+            return
+        db.verbindung_freigeben(session)
+        neu = cloover.rate_aktualisieren(angebot.id, benutzer_id=getattr(benutzer, "id", None))
+        try:
+            session.refresh(angebot, attribute_names=["cloover_json"])
+        except Exception:   # noqa: BLE001 – abgelöstes Objekt/Fake-Sitzung → Stand direkt übernehmen
+            if isinstance(neu, dict) and neu:
+                angebot.cloover_json = json.dumps(neu, ensure_ascii=False)
+    except Exception as fehler:   # noqa: BLE001 – kein Cloover-Fehler verhindert ein Angebots-PDF
+        log.warning("Cloover-Rate vor dem PDF %s nicht aktualisiert: %s",
+                    getattr(angebot, "nummer", "?"), fehler)
+
+
+def pdf_eingefroren(angebot: Angebot) -> Path | None:
+    """Vorhandenes Archiv-PDF eines versendeten/angenommenen/abgelehnten/überholten Angebots
+    (nicht leer) – oder None, wenn gerendert werden muss (Entwurf, „Versand vorbereitet“ oder
+    Altbestand ohne Datei: dann wird einmal erzeugt)."""
+    if (getattr(angebot, "status", "") or "") not in EINGEFRORENE_STATUS:
+        return None
+    pfad = pdf_zielpfad(angebot)
+    try:
+        if pfad.is_file() and pfad.stat().st_size > 0:
+            return pfad
+    except OSError:
+        pass
+    return None
+
+
+def pdf_fuer_angebot(session, angebot: Angebot, benutzer=None) -> Path:
+    """Angebots-PDF an den bisherigen Zielpfad (data/angebote/<Nummer>.pdf). v36 (Phase 190):
+    Engine html → Layout v3 über app/pdf_html.py (alle Aufrufer: Editor-Vorschau, Download,
+    Versand vorbereiten, Kombi-Versand, Projektablage, Nachfass-Mail, Signatur-Anzeige, Meine
+    Angebote); Rückfall fpdf2 mit Fehlerprotokoll + Merker (letzter_rueckfall). Engine fpdf2 →
+    bisheriger Weg ohne Hinweis. Archiv (Nachtrag 16.10.2026): bei Status Versendet, Angenommen,
+    Abgelehnt, Überholt (und Versendet (extern)) bleibt eine vorhandene Datei unverändert –
+    kein Neu-Rendern; nur Entwurf und „Versand vorbereitet“ rendern je Aufruf neu, fehlende
+    Altbestands-Dateien werden einmal erzeugt. Signierte PDFs (signiert/) sind eigene Dateien;
+    „Überarbeiten“ erzeugt die neue Version als neuen Datensatz im aktuellen Layout."""
+    archiv = pdf_eingefroren(angebot)
+    if archiv is not None:
+        _rueckfall_loeschen(angebot.id)      # kein Render, kein Hinweis
+        return archiv
+    # v36 (Phase 193): Cloover-Rate vor der Erzeugung nachziehen (nie beim eingefrorenen Archiv-PDF)
+    _cloover_rate_vorab(session, angebot, benutzer)
+    if engine_html(session):
+        pfad = _layout_v3_schreiben(session, angebot, pdf_zielpfad(angebot), benutzer=benutzer)
+        if pfad is not None:
+            return pfad
+    else:
+        _rueckfall_loeschen(angebot.id)
+    return _pdf_fpdf2(session, angebot)
+
+
+def _pdf_fpdf2(session, angebot: Angebot) -> Path:
+    """Bisheriger fpdf2-Weg (Rückfall-Engine): PDF inkl. KfW-Block (falls Konfigurator-Daten
+    vorliegen); Vollmacht-Seite nur bei iMSys/SpotDynamic im Angebot.
     v24 (PLAN_V16 Phase 115): Klima-Angebote (konfigurator_typ „KL“) nutzen
     die KL-Textblöcke („Friondo KL <Profil>“), haben keinen KfW-/Förderblock,
     keine Wirtschaftlichkeitsseiten (wirtschaftlichkeit_fuer → None) und keine
@@ -1020,4 +1333,6 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
                        # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort = Objekt des Angebots
                        # (Hauptobjekt = Kundenadresse → Ein-Objekt-Vorgänge unverändert)
                        ausfuehrungsort=anschriften.ausfuehrungsort_fuer(
-                           session, angebot=angebot, kunde=kunde))
+                           session, angebot=angebot, kunde=kunde),
+                       # v36 (PLAN_V22 Phase 193): Cloover-Rate für den Platzhalter [CLOOVER]
+                       cloover=_cloover_kontext(session, angebot))

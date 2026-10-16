@@ -1,0 +1,13 @@
+{#- v36 (PLAN_V22 Phase 189): Wärmepumpe – Seitenfolge Deckblatt · Überblick + Team · Festpreisangebot ·
+    KfW (Partial von Agent A2, nur mit Förderblock) · Auftragserteilung · Vertragsbedingungen · Vollmacht
+    (nur bei 016/017). Titel/Untertitel/Titelbild/Spartenname kommen aus dem Kontext (pdf_kontext.SPARTEN). -#}
+{% extends "pdf/angebot/basis.html" %}
+{% block seiten %}
+{% include "pdf/angebot/deckblatt.html" %}
+{% include "pdf/angebot/ueberblick.html" %}
+{% include "pdf/angebot/positionen.html" %}
+{% if kontext.kfw %}{% include "pdf/angebot/kfw.html" ignore missing %}{% endif %}
+{% include "pdf/angebot/auftrag.html" %}
+{% include "pdf/angebot/bedingungen.html" %}
+{% if kontext.vollmacht %}{% include "pdf/angebot/vollmacht.html" %}{% endif %}
+{% endblock %}

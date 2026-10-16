@@ -1,0 +1,13 @@
+{#- v36 (PLAN_V22 Phase 189): PV-Anlage (0 % USt) – Seitenfolge Deckblatt · Überblick + Team · Festpreisangebot ·
+    Wirtschaftlichkeit (3 Seiten, Partial von Agent A2, nicht ausgeblendet) · Auftragserteilung ·
+    Vertragsbedingungen · Vollmacht (nur bei 017). Kein KfW-Block. -#}
+{% extends "pdf/angebot/basis.html" %}
+{% block seiten %}
+{% include "pdf/angebot/deckblatt.html" %}
+{% include "pdf/angebot/ueberblick.html" %}
+{% include "pdf/angebot/positionen.html" %}
+{% if kontext.wirtschaftlichkeit %}{% include "pdf/angebot/wirtschaftlichkeit.html" ignore missing %}{% endif %}
+{% include "pdf/angebot/auftrag.html" %}
+{% include "pdf/angebot/bedingungen.html" %}
+{% if kontext.vollmacht %}{% include "pdf/angebot/vollmacht.html" %}{% endif %}
+{% endblock %}

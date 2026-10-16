@@ -1,0 +1,38 @@
+{#- v36 (PLAN_V22 Phase 189): „Ihr Angebot im Überblick“ + Teamfoto – Briefanrede, Einleitung, zweispaltig
+    „Darin enthalten“ (blaue Haken) / „Warum Friondo?“ (dunkle Haken), Schluss, „Ihr Friondo-Team“, darunter
+    „Das Friondo-Team“ mit team.jpg in voller Breite. Quelle: Vortext-Textblock (pdf_kontext.vortext_parsen). -#}
+{%- set u = kontext.ueberblick %}
+<div class="pdf-seite pdf-ueberblick">
+  <h2>Ihr Angebot im Überblick</h2>
+  <p class="pdf-ue-text">{{ u.anrede }}</p>
+  {%- for absatz in u.einleitung %}
+  <p class="pdf-ue-text">{{ absatz }}</p>
+  {%- endfor %}
+  <div class="pdf-ue-spalten">
+    <div>
+      <div class="pdf-ue-spaltentitel">{{ u.enthalten_titel }}</div>
+      <ul class="pdf-haken-liste pdf-haken-blau">
+        {%- for punkt in u.enthalten %}
+        <li><span class="pdf-haken-kreis">✓</span><span>{% if punkt.titel %}<strong>{{ punkt.titel }}</strong> – {% endif %}{{ punkt.text }}</span></li>
+        {%- endfor %}
+      </ul>
+    </div>
+    <div>
+      <div class="pdf-ue-spaltentitel">{{ u.warum_titel }}</div>
+      <ul class="pdf-haken-liste pdf-haken-dunkel">
+        {%- for punkt in u.warum %}
+        <li><span class="pdf-haken-kreis">✓</span><span>{% if punkt.titel %}<strong>{{ punkt.titel }}</strong> – {% endif %}{{ punkt.text }}</span></li>
+        {%- endfor %}
+      </ul>
+    </div>
+  </div>
+  <p class="pdf-ue-text pdf-ue-schluss">
+    {%- for absatz in u.schluss %}{% if absatz.fett %}<strong>{{ absatz.text }}</strong>{% else %}{{ absatz.text }}{% endif %}{% if not loop.last %} {% endif %}{% endfor %}
+    {%- if u.schluss %}<br>{% endif %}
+    {%- for zeile in u.gruss %}<strong>{{ zeile }}</strong>{% if not loop.last %}<br>{% endif %}{% endfor %}
+  </p>
+  <div class="pdf-team">
+    <div class="pdf-ue-spaltentitel">Das Friondo-Team</div>
+    <img src="{{ static }}/pdf/bilder/team.jpg" alt="Das Friondo-Team">
+  </div>
+</div>

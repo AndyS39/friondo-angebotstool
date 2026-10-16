@@ -366,8 +366,13 @@ class Phase78PdfWirtschaftlichkeit(Basis):
         pfad.unlink(missing_ok=True)
         su = angebot.summen()
         self.assertEqual((su["ust"], su["brutto"]), (0, su["netto"]))
-        self.assertIn("Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)", text)
-        self.assertIn("Ihr individuelles PV-Angebot zum Festpreis", text)
+        # v36 (PLAN_V22 Phase 190): engine-unabhängig – die 0-%-Zeile heißt im Layout v3
+        # „0,00 % USt. (§ 12 Abs. 3 UStG)“ (fpdf2: „Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)“); der
+        # Deckblatt-Titel bricht im Browser-Druck nach dem Bindestrich um („PV-\nAngebot“)
+        flach = " ".join(text.replace("-\n", "-").split())
+        self.assertTrue("Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)" in text
+                        or "0,00 % USt. (§ 12 Abs. 3 UStG)" in text, "USt-Zeile 0 % (§ 12 Abs. 3 UStG) fehlt")
+        self.assertIn("Ihr individuelles PV-Angebot zum Festpreis", flach)
         self.assertIn("Komplettpaket 13,65 kWp PV-Anlage", text)
         self.assertIn("Anwendung des Nullsteuersatzes", text)
         # v22: drei Wirtschaftlichkeitsseiten statt der Text-Beispielrechnung

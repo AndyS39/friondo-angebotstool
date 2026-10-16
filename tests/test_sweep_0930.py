@@ -134,7 +134,11 @@ class Anschriften(Basis):
         seite = pypdf.PdfReader(str(pdf_export.pdf_fuer_angebot(self.s, a))).pages[0]
         text = seite.extract_text()
         self.assertNotIn("Ausführungsort:", text)          # Kunde ohne Adresse
-        self.assertLess(text.find("Rechnungsweg 1"), text.find("A N G E B O T"))
+        # v36 (PLAN_V22 Phase 190): Überschrift des Deckblatts engine-unabhängig – fpdf2 „A N G E B O T“,
+        # Layout v3 Eyebrow „ANGEBOT · WÄRMEPUMPE“; der Empfängerblock steht in beiden vor der Überschrift
+        marke = "A N G E B O T" if "A N G E B O T" in text else "ANGEBOT ·"
+        self.assertGreaterEqual(text.find(marke), 0, "Deckblatt-Überschrift fehlt")
+        self.assertLess(text.find("Rechnungsweg 1"), text.find(marke))
         ls = self.client.get(f"/angebote/{a.id}/lieferschein.pdf")
         ls_text = pypdf.PdfReader(io.BytesIO(ls.content)).pages[0].extract_text()
         self.assertNotIn("Ausführungsort:", ls_text)

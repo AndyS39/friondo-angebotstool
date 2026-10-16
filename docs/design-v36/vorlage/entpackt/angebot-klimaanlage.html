@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="assets/8e13ae75-ef70-405a-84ab-b89f79b57d89.js"></script>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/8a76521b-feee-40da-b44e-2cea8ef10ce4.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5ffbb009-91bb-4841-9e6e-2bb6fa45bdff.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5c08d0e3-ce71-4d00-ab37-07c6b3bd0687.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/9a3a357d-fb58-4fd6-9806-e7d202ebf6f2.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/ab8c9f10-7df1-450d-a533-276fa75981b9.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/8a76521b-feee-40da-b44e-2cea8ef10ce4.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5ffbb009-91bb-4841-9e6e-2bb6fa45bdff.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5c08d0e3-ce71-4d00-ab37-07c6b3bd0687.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/9a3a357d-fb58-4fd6-9806-e7d202ebf6f2.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/ab8c9f10-7df1-450d-a533-276fa75981b9.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/8a76521b-feee-40da-b44e-2cea8ef10ce4.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5ffbb009-91bb-4841-9e6e-2bb6fa45bdff.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5c08d0e3-ce71-4d00-ab37-07c6b3bd0687.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/9a3a357d-fb58-4fd6-9806-e7d202ebf6f2.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/ab8c9f10-7df1-450d-a533-276fa75981b9.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/8a76521b-feee-40da-b44e-2cea8ef10ce4.woff2") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5ffbb009-91bb-4841-9e6e-2bb6fa45bdff.woff2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/5c08d0e3-ce71-4d00-ab37-07c6b3bd0687.woff2") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/9a3a357d-fb58-4fd6-9806-e7d202ebf6f2.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Nunito Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("assets/ab8c9f10-7df1-450d-a533-276fa75981b9.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<script src="assets/6a5d070c-bcd3-414b-8766-58709608cb82.js"></script>
+<style>
+body{margin:0;font-family:'Nunito Sans',Helvetica,Arial,sans-serif;color:#15153a}
+doc-page:not(:defined){visibility:hidden}
+a{color:#4389c8}a:hover{color:#15153a}
+.avoid{break-inside:avoid}
+tr{break-inside:auto !important}
+tr.grp{break-after:avoid}
+td{orphans:3;widows:3}
+</style>
+</helmet>
+<doc-page margin="0" lang="de" style="font-family:'Nunito Sans',Helvetica,Arial,sans-serif;color:#15153a;font-size:9.5pt;line-height:1.45">
+
+<div slot="header" style="display:flex;justify-content:space-between;align-items:center;padding:5mm 16mm 0 16mm;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;font-family:'Nunito Sans',Helvetica,Arial,sans-serif"><span>Angebot-Nr. AN-K-261105 · Max Mustermann</span></div>
+
+<div slot="footer" style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr 1fr;gap:5mm;padding:3mm 16mm 6mm 16mm;border-top:0.3mm solid #dfe3ee;font-size:6.5pt;line-height:1.4;color:#3c3f55;background:#fff;font-family:'Nunito Sans',Helvetica,Arial,sans-serif">
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Anschrift</div>Friondo GmbH<br>Arnold-Overbeck-Str. 63-65<br>47139 Duisburg</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Geschäftsführung</div>Andreas Scheelen<br>Charoula Scheelen<br>Ioannis Simeonidis</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Kontakt</div>T: 0203 - 3965 710<br>info@friondo.de<br>www.friondo.de</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Bankverbindung</div>Sparkasse Duisburg · IBAN: DE98 3505 0000 0200 4064 03 · BIC: DUISDE33XXX<br>Sparkasse Krefeld · IBAN: DE06 3205 0000 0000 4974 53 · BIC: SPKRDE33</div>
+  <div><div style="font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8;margin-bottom:1mm">Steuerdaten</div>Amtsgericht Duisburg<br>HRB 34795<br>USt-IdNr. DE350979869</div>
+</div>
+
+<!-- Deckblatt -->
+<section data-screen-label="Deckblatt" style="break-after:page;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:9mm 16mm 5mm 16mm;position:relative">
+    <div style="position:absolute;right:16mm;top:9mm;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase">Seite 1 von 6</div>
+    <img src="assets/9e649223-c4c4-42c9-932a-d422f4adedf6.jpg" alt="Friondo GmbH" style="height:22mm;width:auto;display:block">
+    <a href="https://www.germanenergyawards.com/interview/friondo-gmbh" target="_blank" rel="noopener" style="display:flex;flex-direction:column;align-items:center;gap:1mm;text-decoration:none;color:#15153a">
+      <img src="assets/03578523-71d6-4025-b0c6-0f8d3de6ed17.png" alt="German Energy Awards Winner 2026" style="height:19mm;width:auto;display:block">
+      <span style="font-size:6.5pt;font-weight:600;color:#4389c8;letter-spacing:0.02em">Mehr dazu im Interview ›</span>
+    </a>
+  </div>
+  <div style="position:relative;height:134mm;overflow:hidden;background:#15153a">
+    <img src="assets/f8963cc7-2b10-482e-a43a-311193fc93f1.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(21,21,58,0.82) 0%,rgba(21,21,58,0.55) 22%,rgba(21,21,58,0) 48%),linear-gradient(90deg,rgba(21,21,58,0) 40%,rgba(21,21,58,0.45) 100%)"></div>
+    <div style="position:absolute;left:16mm;right:16mm;top:9mm;display:flex;flex-direction:column;align-items:flex-end;text-align:right;gap:2.5mm;color:#fff">
+      <div style="font-size:8.5pt;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#fff">Angebot · Klimaanlage</div>
+      <h1 style="margin:0;font-size:24pt;font-weight:800;line-height:1.08;text-wrap:balance;max-width:120mm;color:#fff">Ihr individuelles Klimaanlagen-Angebot zum Festpreis</h1>
+      <div style="font-size:12.5pt;font-weight:600;color:#dbe9f7">Kühlen, heizen und wohlfühlen</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr auto;gap:10mm;align-items:start;padding:5mm 16mm 0 16mm">
+    <div style="display:flex;flex-direction:column;gap:2.5mm">
+      <div style="font-size:7pt;color:#6b6f85;border-bottom:0.3mm solid #dfe3ee;padding-bottom:1.2mm;width:fit-content">Friondo GmbH · Arnold-Overbeck-Str. 63-65 · 47139 Duisburg</div>
+      <div style="font-size:11pt;line-height:1.45">Max Mustermann<br>Musterstraße 12<br>47139 Duisburg</div>
+    </div>
+    <div style="display:grid;grid-template-columns:auto auto;column-gap:6mm;row-gap:1.2mm;font-size:9.5pt;background:#f1f6fc;border-radius:2mm;padding:4mm 6mm;min-width:56mm">
+      <span style="color:#6b6f85">Angebot-Nr.</span><span style="font-weight:700;text-align:right">AN-K-261105</span>
+      <span style="color:#6b6f85">Datum</span><span style="font-weight:700;text-align:right">21.07.2026</span>
+      <span style="color:#6b6f85">Ihr Ansprechpartner</span><span style="font-weight:700;text-align:right">[Name Außendienst]</span>
+        <span style="color:#6b6f85">Telefon</span><span style="font-weight:700;text-align:right">[Handynummer]</span>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:2.5mm;padding:3mm 16mm 0 16mm;margin-top:4mm;border-top:0.3mm solid #dfe3ee">
+    <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#4389c8">Mitgliedschaften &amp; Zertifizierungen</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);align-items:center;justify-items:center;gap:6mm;height:16mm">
+      <img src="assets/80dc535c-8711-4659-a633-0ebabc6cb3e8.jpg" alt="SHK Innungsfachbetrieb" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/e6d23ea1-32b7-49f2-aa2c-c1f71d5a496d.jpg" alt="E-Handwerk – Qualifizierter Fachbetrieb der Innung" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/a56cabf7-6f5c-4c54-a8cd-61f349f6e733.png" alt="Bundesverband des Solarhandwerks" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/68ee4c2a-e821-4ba6-bbb1-e734be83761b.jpg" alt="Fachbetrieb Wärmepumpe" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block">
+      <img src="assets/d1095b94-46b3-4dfc-95bb-c1d7a87d3c7e.png" alt="Bosch Premium Partner · Zertifizierter Profi Split-Klimageräte und Wärmepumpen" style="max-height:14mm;max-width:100%;width:auto;height:auto;display:block"></div>
+  </div>
+
+</section>
+
+<!-- Anschreiben -->
+<section data-screen-label="Anschreiben" style="padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:5mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -2mm 0">Seite 2 von 6</div>
+  <div style="display:flex;flex-direction:column;gap:3mm;font-size:10pt;line-height:1.55;text-wrap:pretty">
+    <h2 style="margin:0 0 1mm 0;font-size:15pt;font-weight:800;line-height:1.15">Ihr Angebot im Überblick</h2>
+    <p style="margin:0">Sehr geehrter Herr Mustermann,</p>
+    <p style="margin:0">vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine gute Entscheidung getroffen – eine moderne Split-Klimaanlage sorgt im Sommer für angenehme Kühle, heizt in der Übergangszeit effizient und verbessert die Luftqualität in Ihren Räumen.</p>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10mm">
+      <div style="display:flex;flex-direction:column;gap:2.5mm">
+        <div style="font-size:9pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#4389c8">Darin enthalten</div>
+        <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.4mm;font-size:9pt;line-height:1.35">
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Ihre individuelle Klimaanlage</strong> – Außen- und Innengeräte passend zu Raumgröße und Nutzung</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Detaillierte Installationsleistungen</strong> – fachgerecht, sauber und termingerecht</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Transparent und Festpreis</strong> – klar verständlich und ohne versteckte Kosten</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#4389c8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Unser Rundum-Sorglos-Service</strong> – von der Planung bis zur Inbetriebnahme</span></li>
+        </ul>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2.5mm">
+        <div style="font-size:9pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#4389c8">Warum Friondo?</div>
+        <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1.4mm;font-size:9pt;line-height:1.35">
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Fachkompetenz &amp; Qualität</strong> – Als Meisterbetrieb, Mitglied der Innung und VDI-zertifiziertes Fachunternehmen setzen wir auf höchste Standards.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Bosch-zertifizierter Profi für Split-Klimageräte</strong> – Geschulte Kältetechniker mit Sachkundenachweis nach ChemKlimaschutzV.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Persönliche Beratung</strong> – Wir begleiten Sie von der ersten Idee bis zur perfekten Lösung für Ihr Zuhause.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Effizienz &amp; Nachhaltigkeit</strong> – Unsere Systeme senken Ihren Energieverbrauch spürbar und steigern den Wert Ihrer Immobilie.</span></li>
+          <li style="display:flex;gap:2.5mm"><span style="flex:none;width:4.2mm;height:4.2mm;border-radius:50%;background:#15153a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:7pt;font-weight:800;margin-top:0.6mm">✓</span><span><strong>Alles aus einer Hand</strong> – Planung, Installation, Anmeldung und Service aus einem Haus.</span></li>
+        </ul>
+      </div>
+    </div>
+  <p style="margin:0;font-size:10pt;line-height:1.55">Wir sind auf Klimatechnik spezialisiert und gehören in der Region zu den führenden Anbietern. Lassen Sie uns gemeinsam für Ihr Wohlfühlklima sorgen!<br><strong>Ihr Friondo-Team</strong></p>
+</section>
+<section data-screen-label="Team" style="display:block;padding:6mm 0 0 0">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6mm;padding:0 16mm 3mm 16mm;break-after:avoid">
+    <div style="font-size:9pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#4389c8">Das Friondo-Team</div>
+  </div>
+  <img src="assets/c6bf01ae-483e-4ac3-8095-12111d504ee1.jpg" alt="Das Friondo-Team" style="width:100%;height:92mm;object-fit:cover;object-position:50% 45%;display:block;break-inside:avoid">
+</section>
+
+<!-- Leistungsverzeichnis -->
+<section data-screen-label="Positionen" style="break-before:page;padding:0 16mm 0 16mm">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2mm 0">Seite 3 von 6</div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6mm;margin-bottom:4mm">
+    <h2 style="margin:0;font-size:15pt;font-weight:800;line-height:1.15">Festpreisangebot</h2>
+    <div style="font-size:8pt;color:#6b6f85">Alle Preise in EUR, netto</div>
+  </div>
+  <sc-raw-table style="width:100%;border-collapse:collapse;font-size:8.2pt;line-height:1.35">
+    <sc-raw-thead>
+      <sc-raw-tr style="color:#4389c8;font-size:7pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase">
+        <sc-raw-th style="text-align:left;padding:1.5mm 1.5mm 1.5mm 0;border-bottom:0.4mm solid #15153a;width:9mm">Pos.</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:11mm">Menge</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:10mm">Einh.</sc-raw-th>
+        <sc-raw-th style="text-align:left;padding:1.5mm;border-bottom:0.4mm solid #15153a">Bezeichnung</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm;border-bottom:0.4mm solid #15153a;width:20mm">E-Preis</sc-raw-th>
+        <sc-raw-th style="text-align:right;padding:1.5mm 0 1.5mm 1.5mm;border-bottom:0.4mm solid #15153a;width:22mm">G-Preis</sc-raw-th>
+      </sc-raw-tr>
+    </sc-raw-thead>
+    <sc-raw-tbody>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:3mm 0 1mm 0;font-weight:800;font-size:9pt">Bosch Climate 5000i Multi-Split mit zwei Innengeräten</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">001</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">Stk.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Außengerät Multi-Split 5,3 kW</strong><br>Kältemittel R32, Inverter-Technik, Energieeffizienzklasse A++</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">1.890,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">1.890,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">002</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">2,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">Stk.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Wandgerät 2,6 kW</strong><br>Flüsterleise, WLAN-Steuerung per App, Luftfilter</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">640,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">1.280,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">003</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Kältemittelleitungen und Kondensatableitung</strong><br>Bis 10 m je Innengerät, isoliert, inkl. Wanddurchführungen und Kanal</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">780,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">780,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:3mm 0 1mm 0;font-weight:800;font-size:9pt">Montage und Inbetriebnahme</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">004</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Elektroanschluss</strong><br>Zuleitung und Absicherung ab Hausverteilung</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">420,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">420,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">005</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Montage, Vakuumierung, Dichtheitsprüfung und Inbetriebnahme</strong><br>Außengerät auf Wandkonsole mit Schwingungsdämpfern, Protokoll nach F-Gase-Verordnung</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">1.480,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">1.480,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">006</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Einweisung und Dokumentation</strong><br>Bedienung, Filterpflege, Garantieunterlagen</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr class="grp"><sc-raw-td colspan="6" style="padding:3mm 0 1mm 0;font-weight:800;font-size:9pt">Friondo „fit for future“</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">007</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Friondo „iMSys“</strong><br>Ihr intelligentes Messsystem – neuer Zweiwegezähler sofort bei der Elektromontage, inklusive Smart Meter zur Direktmessung Ihrer Stromverbräuche. Umgehung des Solarspitzengesetzes: aus 60 % wieder 100 %.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+      <sc-raw-tr style="vertical-align:top;border-bottom:0.25mm solid #e6e9f0"><sc-raw-td style="padding:1.5mm 1.5mm 1.5mm 0;color:#6b6f85">008</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right">1,00</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm">psl.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm"><strong>Friondo „SpotDynamic“ – Ökostromtarif</strong><br>Der dynamische Stromtarif für Chancenbewusste: 8,99 € Grundgebühr/Monat, dynamischer Arbeitspreis + 1 Cent Beschaffungskomponente/kWh – 100 % Ökostrom, Kosten-Airbag bei 39 ct/kWh brutto auf das Monatsmittel, 1 Monat Mindestlaufzeit. Exklusiv durch Friondo erhältlich.</sc-raw-td><sc-raw-td style="padding:1.5mm 1.5mm;text-align:right;white-space:nowrap">0,00</sc-raw-td><sc-raw-td style="padding:1.5mm 0 1.5mm 1.5mm;text-align:right;white-space:nowrap;font-weight:700">0,00</sc-raw-td></sc-raw-tr>
+    </sc-raw-tbody>
+  </sc-raw-table>
+  <div class="avoid" style="display:flex;justify-content:flex-end;margin-top:4mm">
+    <div style="min-width:92mm;display:grid;grid-template-columns:1fr auto;row-gap:1.5mm;column-gap:8mm;font-size:9.5pt">
+      <span style="color:#6b6f85">Netto-Summe</span><span style="text-align:right">5.850,00 €</span>
+      <span style="color:#6b6f85">19,00 % USt.</span><span style="text-align:right">1.111,50 €</span>
+      <span style="grid-column:1/-1;border-top:0.4mm solid #15153a;margin-top:1mm"></span>
+      <div style="grid-column:1/-1;margin-top:1.5mm;display:flex;justify-content:space-between;align-items:center;gap:8mm;background:#15153a;color:#fff;padding:3mm 4mm;border-radius:1.5mm"><span style="font-weight:800;font-size:12pt">Gesamt-Betrag</span><span style="font-weight:800;font-size:14pt;line-height:1">6.961,50 €</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Auftragserteilung -->
+<section data-screen-label="Auftragserteilung" style="break-before:page;padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:3mm;font-size:9pt;line-height:1.5;text-wrap:pretty">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -1mm 0">Seite 4 von 6</div>
+  <h2 style="margin:0;font-size:17pt;font-weight:800;line-height:1.15">Auftragserteilung</h2>
+  <p style="margin:0">Sollte Ihnen das Angebot zusagen, beauftragen Sie uns bequem online – oder senden Sie uns das unterschriebene Angebot per Post zurück.</p>
+  <div class="avoid" style="display:grid;grid-template-columns:1fr 1fr;gap:4mm">
+    <div style="padding:4mm;border:0.4mm solid #15153a;border-radius:2mm;display:flex;flex-direction:column;gap:2mm">
+      <div style="font-size:7.5pt;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#4389c8">Barkauf</div>
+      <div style="font-size:12pt;font-weight:800;line-height:1.2">Online beauftragen</div>
+      <div style="color:#3c3f55;flex:1">Anzahlung 50 % spätestens 14 Tage vor Arbeitsbeginn, Restzahlung mit der Schlussrechnung.</div>
+      <a href="https://friondo.de/beauftragung?angebot=AN-K-261105" style="display:inline-flex;align-items:center;justify-content:center;gap:2mm;padding:3.2mm 6mm;border-radius:1.5mm;font-size:9.5pt;font-weight:800;text-decoration:none;letter-spacing:0.02em;background:#15153a;color:#fff">Jetzt online beauftragen ›</a>
+    </div>
+    <div style="padding:4mm;background:#15153a;color:#fff;border-radius:2mm;display:flex;flex-direction:column;gap:2mm">
+      <div style="font-size:7.5pt;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#8fc6f3">Finanzierung mit Cloover</div>
+      <div style="font-size:12pt;font-weight:800;line-height:1.2">Online beauftragen &amp; finanzieren</div>
+      <div style="color:#dbe9f7;font-size:8.5pt">Mit der Ersparnis Ihrer neuen Anlage finanzieren Sie die Anlage.</div>
+      <div style="display:flex;align-items:baseline;gap:2mm"><span style="font-size:7.5pt;color:#dbe9f7">ab</span><span style="font-size:22pt;font-weight:800;line-height:1">[Rate] €</span><span style="font-size:8.5pt;color:#dbe9f7">/ Monat*</span></div>
+      <div style="color:#dbe9f7;flex:1;font-size:8.5pt">Laufzeit [Laufzeit] Jahre · Ihre Finanzierungsanfrage ist bereits angelegt – nur noch bestätigen.</div>
+      <a href="https://app.cloover.com/apply?partner=friondo&amp;offer=AN-K-261105" style="display:inline-flex;align-items:center;justify-content:center;gap:2mm;padding:3.2mm 6mm;border-radius:1.5mm;font-size:9.5pt;font-weight:800;text-decoration:none;letter-spacing:0.02em;background:#4389c8;color:#fff">Finanzierung abschließen ›</a>
+    </div>
+  </div>
+  <div class="avoid" style="display:flex;flex-direction:column;gap:3mm">
+    <div style="display:flex;align-items:baseline;gap:3mm;flex-wrap:wrap"><h3 style="margin:0;font-size:12pt;font-weight:800">Finanzierung mit Cloover</h3><span style="font-size:9.5pt;font-weight:600;color:#4389c8">Saubere Energie. Faire Raten. Maximale Freiheit.</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2.5mm">
+      <div style="padding:2.5mm 3mm;border:0.3mm solid #dfe3ee;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Sofort starten</div><div style="font-size:8.2pt;line-height:1.4">Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine Banktermine</div></div>
+      <div style="padding:2.5mm 3mm;border:0.3mm solid #dfe3ee;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Planbare Monatsraten – Zum Beispiel:</div><div style="font-size:8.2pt;line-height:1.4">• Klimaanlage ab 39 € pro Monat*<br>• Zwei Innengeräte ab 59 € pro Monat<br>So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.</div></div>
+      <div style="padding:2.5mm 3mm;border:0.3mm solid #dfe3ee;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Maximale Flexibilität</div><div style="font-size:8.2pt;line-height:1.4">• Kostenlose Sondertilgungen<br>• Vorzeitige Rückzahlung ohne Strafgebühren<br>• Individuell anpassbare Laufzeiten</div></div>
+      <div style="padding:2.5mm 3mm;background:#f1f6fc;border-radius:2mm"><div style="font-weight:800;color:#4389c8;margin-bottom:0.8mm">Ihre Vorteile</div><div style="font-size:8.2pt;line-height:1.4">Sofort investieren · Monatlich entspannt zahlen · Energiekosten senken · Unabhängiger werden<br><strong>Kundenzufriedenheit: 4,8 von 5</strong> – „Dank Cloover konnten wir unsere Klimaanlage einfach, fair und transparent finanzieren.“</div></div>
+    </div>
+    <p style="margin:0;font-size:7.5pt;color:#6b6f85">*Beispielrate auf Basis einer Angebotssumme von 7.000 € und einer Laufzeit von 15 Jahren.</p>
+  </div>
+  <div class="avoid" style="margin-top:1mm;padding-top:4mm;border-top:0.3mm solid #dfe3ee;display:flex;flex-direction:column;gap:3mm">
+    <h3 style="margin:0;font-size:12pt;font-weight:800">Beauftragung per Post</h3>
+    <p style="margin:0">Senden Sie uns das unterschriebene Angebot an: Friondo GmbH, Arnold-Overbeck-Str. 63-65, 47139 Duisburg – oder eingescannt an info@friondo.de.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12mm;margin-top:7mm">
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Ort, Datum</div>
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Unterschrift des Auftraggebers</div>
+    </div>
+  </div>
+</section>
+
+<!-- Bedingungen -->
+<section data-screen-label="Bedingungen" style="break-before:page;padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:3.5mm;font-size:9pt;line-height:1.5;text-wrap:pretty">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -1.5mm 0">Seite 5 von 6</div>
+  <h2 style="margin:0 0 1mm 0;font-size:15pt;font-weight:800;line-height:1.15">Vertragsbedingungen</h2>
+  <h3 style="margin:0;font-size:10.5pt;font-weight:800;color:#4389c8">Haftungsbegrenzung</h3>
+  <p style="margin:0">Technische und kaufmännische Angaben sind freibleibend. Sie werden erst durch eine nachfolgende Auftragsbestätigung verbindlich.</p>
+  <h3 style="margin:2mm 0 0 0;font-size:10.5pt;font-weight:800;color:#4389c8">Rücktrittsrecht im Zusammenhang mit Technischer Feinplanung</h3>
+  <p style="margin:0">Die in diesem Vertrag vorgesehenen Verpflichtungen und (Liefer-)Leistungen setzen eine eingehende technische Feinplanung voraus, um sicherzustellen, dass das Vorhaben zu den vereinbarten Bedingungen umgesetzt werden kann. Sollte die technische Feinplanung ergeben, dass die Umsetzung des Vorhabens technisch nicht möglich ist oder nur mit erheblichem Mehraufwand erfolgen kann, ist jede Vertragspartei – abweichend der AGB von Friondo – berechtigt, von dem Vertrag zurückzutreten. Ein entsprechender Rücktritt ist innerhalb von sechs (6) Wochen ab Kenntnisnahme in Textform gegenüber der jeweils anderen Vertragspartei zu erklären.</p>
+  <h3 style="margin:2mm 0 0 0;font-size:10.5pt;font-weight:800;color:#4389c8">Zahlung</h3>
+  <p style="margin:0">Eine Anzahlung von 50% des Angebotsbetrags ist spätestens 14 Tage vor Arbeitsbeginn zu zahlen. Die Restzahlung wird mit der Schlussrechnungsstellung fällig. Die Rechnung erhalten Sie im Anschluss zur Installation.</p>
+  <div class="avoid" style="margin-top:2mm;padding:4mm 5mm;background:#f1f6fc;border-radius:2mm;display:flex;flex-direction:column;gap:1.5mm">
+    <p style="margin:0">Wir halten uns freibleibend 30 Tage an dieses Angebot gebunden.</p>
+    <p style="margin:0">Es gelten unsere Allgemeinen Geschäftsbedingungen, diese sind zu finden unter: <a href="https://friondo.de/AGB">https://friondo.de/AGB</a><br>Informationen zu unserem Datenschutz finden Sie unter: <a href="https://friondo.de/Datenschutz">https://friondo.de/Datenschutz</a></p>
+    <p style="margin:0">Wir sichern Ihnen eine fach- und zeitgerechte Ausführung aller angebotenen Leistungen zu. Sie haben Fragen oder wünschen weitere Informationen? Rufen Sie uns an - wir sind für Sie da.</p>
+    <p style="margin:2mm 0 0 0">Mit freundlichen Grüßen</p>
+    <p style="margin:0"><strong>Ihr Friondo-Team</strong></p>
+  </div>
+</section>
+
+<!-- Vollmacht + SEPA -->
+<section data-screen-label="Vollmacht" style="break-before:page;padding:0 16mm 0 16mm;display:flex;flex-direction:column;gap:3.5mm;font-size:8.8pt;line-height:1.5;text-wrap:pretty">
+  <div style="display:flex;justify-content:flex-end;font-size:7pt;color:#6b6f85;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 -1.5mm 0">Seite 6 von 6</div>
+  <h2 style="margin:0;font-size:13.5pt;font-weight:800;line-height:1.2">Vollmacht zur Beauftragung der SpotmyEnergy GmbH sowie zur Anmeldung und Inbetriebsetzung von Anlagen</h2>
+  <p style="margin:0">Ich bevollmächtige als zukünftiger Anlagenbetreiber und Gebäudeeigentümer die Friondo GmbH, in meinem Namen alle erforderlichen Schritte zur Beauftragung der SpotmyEnergy GmbH als Messstellenbetreiber und/oder Stromlieferant einzuleiten und entsprechende Verträge abzuschließen. Dies umfasst auch die Erteilung eines SEPA-Lastschriftmandats für damit verbundene Zahlungen.</p>
+  <p style="margin:0">Die Vollmacht gilt ebenfalls für die Friondo GmbH sowie deren Nachunternehmer zur Anmeldung, Inbetriebnahme, Änderung, Erweiterung oder Abmeldung folgender Anlagen und Verbrauchseinrichtungen beim zuständigen Netzbetreiber oder Energieversorgungsunternehmen: <strong>Photovoltaikanlagen, Wärmepumpen, Ladeeinrichtungen/Wallboxen sowie sonstige steuerbare Verbrauchseinrichtungen gemäß § 14a EnWG (Modul 1, 2 oder 3).</strong></p>
+  <p style="margin:0">Die Vollmacht umfasst insbesondere die An- und Abmeldung von Zählern, die Beantragung neuer Zähler, die Einreichung und Entgegennahme erforderlicher Unterlagen, die Kommunikation mit Netzbetreibern, Messstellenbetreibern und Stromlieferanten, die Kündigung bestehender Verträge, die Durchführung eines Anbieterwechsels sowie die Beauftragung und Betreuung eines intelligenten Messsystems.</p>
+  <p style="margin:0">Die Vollmacht gilt ausschließlich für die genannten Zwecke und erlischt nach Abschluss des beauftragten Vorgangs. Sie kann jederzeit schriftlich widerrufen werden.</p>
+  <div class="avoid" style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:1mm">
+    <div style="padding:4mm;border:0.3mm solid #dfe3ee;border-radius:2mm;display:flex;flex-direction:column;gap:3mm">
+      <div style="font-weight:800;color:#4389c8;font-size:8pt;letter-spacing:0.08em;text-transform:uppercase">Angaben zur Verbrauchsstelle</div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Name:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">Max Mustermann</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Adresse:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">Musterstraße 12, 47139 Duisburg</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Geburtsdatum:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">Telefon:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">+49 170 0000000</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:22mm;flex:none;color:#6b6f85">E-Mail:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">max.mustermann@example.de</span></div>
+    </div>
+    <div style="padding:4mm;border:0.3mm solid #dfe3ee;border-radius:2mm;display:flex;flex-direction:column;gap:3mm">
+      <div style="font-weight:800;color:#4389c8;font-size:8pt;letter-spacing:0.08em;text-transform:uppercase">Bitte ankreuzen</div>
+      <div style="display:flex;gap:2.5mm;align-items:center"><span style="width:4mm;height:4mm;border:0.3mm solid #15153a;border-radius:0.8mm;flex:none"></span><span>Messstellenbetreiber</span></div>
+      <div style="display:flex;gap:2.5mm;align-items:center"><span style="width:4mm;height:4mm;border:0.3mm solid #15153a;border-radius:0.8mm;flex:none"></span><span>Stromlieferant</span></div>
+      <div style="display:flex;gap:2.5mm;align-items:center"><span style="width:4mm;height:4mm;border:0.3mm solid #15153a;border-radius:0.8mm;flex:none"></span><span>Anmeldung/Inbetriebnahme/Änderung/Erweiterung/Abmeldung</span></div>
+    </div>
+  </div>
+  <div class="avoid" style="margin-top:4mm;display:flex;flex-direction:column;gap:3mm">
+    <h2 style="margin:0;font-size:13.5pt;font-weight:800;line-height:1.2">SEPA-Lastschriftmandat</h2>
+    <p style="margin:0">Ich ermächtige den Zahlungsempfänger, fällige Zahlungen mittels Lastschrift von folgendem Konto einzuziehen.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3mm 8mm">
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">Kontoinhaber:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">Adresse:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">IBAN:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+      <div style="display:flex;gap:2mm;align-items:baseline"><span style="width:24mm;flex:none;color:#6b6f85">Kreditinstitut:</span><span style="flex:1;border-bottom:0.3mm solid #15153a">&nbsp;</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;margin-top:12mm">
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Ort, Datum</div>
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Unterschrift Vollmachtgeber</div>
+      <div style="border-top:0.3mm solid #15153a;padding-top:1.5mm;font-size:8pt;color:#6b6f85">Unterschrift Kontoinhaber, sofern abweichend</div>
+    </div>
+  </div>
+</section>
+
+</doc-page>
+</x-dc>
+
+
+</body></html>

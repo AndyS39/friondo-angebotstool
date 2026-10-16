@@ -407,6 +407,17 @@ def migration_v34_auslegung(session: Session) -> list[str]:
     return meldungen
 
 
+def _cloover_kopie(original: Angebot) -> str:
+    """v36 (PLAN_V22 Phase 193, Agent B2): cloover_json der neuen Version – nur Laufzeit, Anzahlung und
+    „Finanzierung im PDF ausblenden“ (app.cloover.KOPIE_FELDER); Rate/Projekt werden neu ermittelt."""
+    import json as _json
+
+    from app import cloover
+    ziel = Angebot()
+    cloover.uebernehmen_bei_kopie(original, ziel)
+    return ziel.cloover_json or _json.dumps({})
+
+
 def version_erzeugen(session: Session, original: Angebot) -> Angebot:
     """v9/v10: erzeugt die nächste Version (<Stamm>.2/.3 …) eines versendeten/
     angenommenen Angebots als Entwurf; das Original wird „Überholt“ und die
@@ -461,6 +472,8 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         # (deckt auch den AD-Rabatt-Pfad in routers/meine_angebote.py ab)
         zahlungsbedingung_key=original.zahlungsbedingung_key or "",
         zahlungsbedingung_text=original.zahlungsbedingung_text or "",
+        # v36 (PLAN_V22 Phase 193): nur Laufzeit/Anzahlung/ausgeblendet – Rate und Projekt neu
+        cloover_json=_cloover_kopie(original),
         # v31 (PLAN_LEAD_V5 Phase 153): Objekt des Vorgangs wandert mit
         objekt_id=original.objekt_id,
     )

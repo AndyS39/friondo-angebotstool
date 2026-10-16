@@ -30,3 +30,6 @@ docs/betrieb/
 Claude outputs/
 # v34: Beispielangebot mit Kundendaten (PLAN_V21 Phase 178)
 Artikel-Preislisten/Wallbox/Beispielangebot.pdf
+
+# v36: entpackte Design-Vorlagen (Bilder/Schriften stecken in den Export-Dateien, die genutzten liegen unter app/static/pdf)
+docs/design-v36/vorlage/entpackt/assets/

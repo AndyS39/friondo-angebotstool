@@ -88,12 +88,14 @@ def signieren(request: Request, angebot_id: int,
     from app import pdf_export
     zeit = datetime.now()
     benutzer = request.state.benutzer
-    pfad = pdf_export.signiertes_pdf_erzeugen(session, angebot, png_bytes, name, zeit)
+    geraet = request.headers.get("user-agent", "")[:150]
+    # v36 (PLAN_V22 Phase 190): Engine html rendert das Angebot erneut mit dem Signatur-Dict
+    # {bild_data_url, name, zeitstempel, geraet} (pdf_export.signatur_dict); Rückfall fpdf2 wie bisher
+    pfad = pdf_export.signiertes_pdf_erzeugen(session, angebot, png_bytes, name, zeit, geraet=geraet)
 
     angebot.signiert_am = zeit
     angebot.signatur_name = name
     angebot.signierte_datei = str(pfad)
-    geraet = request.headers.get("user-agent", "")[:150]
     ip = request.client.host if request.client else ""
     angebot.signatur_protokoll = (
         f"{zeit.strftime('%d.%m.%Y %H:%M:%S')} · Unterzeichner: {name} · "
@@ -246,12 +248,13 @@ def fern_signieren(request: Request, token: str,
 
     from app import graph_versand, pdf_export
     zeit = datetime.now()
-    pfad = pdf_export.signiertes_pdf_erzeugen(session, angebot, png_bytes, name, zeit)
+    geraet = request.headers.get("user-agent", "")[:150]
+    # v36 (Phase 190): Fern-Signatur rendert denselben Weg (Signatur-Dict, Rückfall fpdf2)
+    pfad = pdf_export.signiertes_pdf_erzeugen(session, angebot, png_bytes, name, zeit, geraet=geraet)
 
     angebot.signiert_am = zeit
     angebot.signatur_name = name
     angebot.signierte_datei = str(pfad)
-    geraet = request.headers.get("user-agent", "")[:150]
     ip = request.client.host if request.client else ""
     angebot.signatur_protokoll = (
         f"{zeit.strftime('%d.%m.%Y %H:%M:%S')} · Unterzeichner: {name} · "

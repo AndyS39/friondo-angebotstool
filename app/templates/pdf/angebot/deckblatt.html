@@ -1,0 +1,61 @@
+{#- v36 (PLAN_V22 Phase 189): Deckblatt – Logo links, Award-Badge rechts (Link), Titelbild je Sparte mit dunklem
+    Verlauf, Absenderzeile + Empfängerblock (v20/v31), Infokasten (Angebot-Nr., Datum, Gültig bis, Ansprechpartner,
+    Telefon, Version/Kopie), Leiste „Mitgliedschaften & Zertifizierungen“. Seitenzahl nur über die Randzone der
+    Engine. Farben ausschließlich var(--pdf-…) aus app/static/pdf/angebot.css. -#}
+<div class="pdf-seite pdf-deckblatt">
+  <div class="pdf-db-kopf">
+    <img class="pdf-db-logo" src="{{ static }}/pdf/bilder/logo.jpg" alt="Friondo GmbH">
+    <a class="pdf-db-award" href="{{ kontext.firma.award_link }}">
+      <img src="{{ static }}/pdf/bilder/award-2026.png" alt="German Energy Awards Winner 2026">
+      <span>Mehr dazu im Interview ›</span>
+    </a>
+  </div>
+  <div class="pdf-db-titelbild">
+    <img src="{{ static }}/pdf/{{ kontext.titelbild }}" alt="">
+    <div class="pdf-db-verlauf"></div>
+    <div class="pdf-db-titeltext">
+      <div class="pdf-db-eyebrow">{{ kontext.eyebrow }}</div>
+      <h1>{{ kontext.titel }}</h1>
+      <div class="pdf-db-untertitel">{{ kontext.untertitel }}</div>
+    </div>
+  </div>
+  <div class="pdf-db-adressen">
+    <div class="pdf-db-empfaenger">
+      <div class="pdf-db-absender">{{ kontext.firma.absenderzeile }}</div>
+      <div class="pdf-db-anschrift">{% for zeile in kontext.empfaenger.zeilen %}{{ zeile }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>
+      {%- if kontext.empfaenger.ausfuehrungsort %}
+      <div class="pdf-db-zusatz">Ausführungsort: {{ kontext.empfaenger.ausfuehrungsort }}</div>
+      {%- endif %}
+      {%- if kontext.empfaenger.lieferanschrift %}
+      <div class="pdf-db-zusatz">Lieferanschrift: {{ kontext.empfaenger.lieferanschrift }}</div>
+      {%- endif %}
+    </div>
+    <div class="pdf-db-info">
+      <span class="pdf-db-info-k">Angebot-Nr.</span><span class="pdf-db-info-w">{{ kontext.angebot.nummer }}</span>
+      <span class="pdf-db-info-k">Datum</span><span class="pdf-db-info-w">{{ kontext.angebot.datum }}</span>
+      {%- if kontext.angebot.gueltig_bis %}
+      <span class="pdf-db-info-k">Gültig bis</span><span class="pdf-db-info-w">{{ kontext.angebot.gueltig_bis }}</span>
+      {%- endif %}
+      {%- if kontext.ansprechpartner.name %}
+      <span class="pdf-db-info-k">Ihr Ansprechpartner</span><span class="pdf-db-info-w">{{ kontext.ansprechpartner.name }}</span>
+      {%- endif %}
+      {%- if kontext.ansprechpartner.name and kontext.ansprechpartner.telefon %}
+      <span class="pdf-db-info-k">Telefon</span><span class="pdf-db-info-w">{{ kontext.ansprechpartner.telefon }}</span>
+      {%- endif %}
+      {%- if kontext.angebot.version_von %}
+      <span class="pdf-db-info-voll">Ersetzt Angebot {{ kontext.angebot.version_von.nummer }} vom {{ kontext.angebot.version_von.datum }}</span>
+      {%- endif %}
+      {%- if kontext.angebot.kopie_von %}
+      <span class="pdf-db-info-voll">Kopie von {{ kontext.angebot.kopie_von }}</span>
+      {%- endif %}
+    </div>
+  </div>
+  <div class="pdf-db-zert">
+    <div class="pdf-db-zert-titel">Mitgliedschaften &amp; Zertifizierungen</div>
+    <div class="pdf-db-zert-logos">
+      {%- for zert in kontext.firma.zertifikate %}
+      <img src="{{ static }}/pdf/{{ zert.bild }}" alt="{{ zert.alt }}">
+      {%- endfor %}
+    </div>
+  </div>
+</div>

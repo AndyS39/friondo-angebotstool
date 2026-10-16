@@ -775,9 +775,11 @@ class MailSendenAls(Basis):
 class GoLiveUndHealth(Basis):
     def test_golive_zwoelf_punkte_und_graph_punkt(self):
         punkte = golive.pruefen(self.s)
-        self.assertEqual(len(punkte), 12)
-        self.assertEqual(punkte[-1].titel, "Graph als Anwendung verbunden")
-        self.assertEqual(punkte[-1].link, "/versand")
+        # v36 (PLAN_V22 Phase 188): 13 Punkte – Punkt 13 „Angebots-PDF: Browser-Druck grün“ (A3);
+        # der Graph-Punkt wird deshalb über seinen Titel gesucht
+        self.assertEqual(len(punkte), 13)
+        graph = next(p for p in punkte if p.titel == "Graph als Anwendung verbunden")
+        self.assertEqual(graph.link, "/versand")
         self.modus_setzen("delegiert")
         with contextlib.ExitStack() as stapel:
             for p in anwendung_mocks():

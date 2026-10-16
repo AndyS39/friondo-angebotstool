@@ -5,6 +5,7 @@
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
 {% from "_taifun_pdf.html" import taifun_pdf_eintrag %}
+{% from "_cloover_badge.html" import cloover_badge %}
 
 {% block titel %}Angebote – Friondo Angebotstool{% endblock %}
 {% block mainklasse %}breit{% endblock %}
@@ -88,6 +89,10 @@
 {%- elif key == 'ampel' -%}
 {%- set ampel = v.verfolgung_ampel if v else '' -%}
 <td class="sp-ampel" data-wert="{{ {'heiss': 0, 'warm': 1, 'kalt': 2}.get(ampel, '') }}">{% if ampel %}<span title="{{ ampel }}">{{ {'heiss': '🔥 heiß', 'warm': '🌤 warm', 'kalt': '❄ kalt'}.get(ampel, '') }}</span>{% endif %}</td>
+{%- elif key == 'cloover' -%}
+{#- v36 (PLAN_V22 Phase 194, B3): Cloover-Stand (Vertrag unterschrieben / Barzahlung / Link) aus cloover_json #}
+{%- set cb = cloover_badge_info(a) -%}
+<td class="sp-cloover" data-wert="{{ {'vertrag': 0, 'bar': 1, 'link': 2}.get(cb.art, '') if cb else '' }}">{{ cloover_badge(a) }}</td>
 {%- else -%}
 <td class="sp-{{ key }}"></td>
 {%- endif -%}

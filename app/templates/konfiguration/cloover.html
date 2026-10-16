@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block titel %}Cloover – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+{# v36 (PLAN_V22 Phase 192, Agent B1): Parametrierung → Cloover. Abschnitte Zugang · Finanzierung ·
+   Textbausteine · PDF-Ablage (Partial, Agent B3) · Änderungsprotokoll. Der API-Key steht nur in der .env
+   und erscheint hier nie – auch nicht maskiert. Nur Design-Tokens (Hell/Dunkel). #}
+<div class="seitenkopf">
+    <h1>Angebotstool → Cloover</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+        <a class="knopf zweitrangig" href="/parametrierung/angebotstool">Angebotstool-Einstellungen</a>
+        <a class="knopf zweitrangig" href="/parametrierung/fehlerprotokoll">Fehlerprotokoll</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung {{ 'fehler' if not (meldung.startswith('Cloover-Einstellungen gespeichert') or meldung.startswith('Keine Änderungen')) }}">{{ meldung }}</p>{% endif %}
+{% if test %}<p class="meldung {{ 'fehler' if not test.startswith('Verbindung OK') }}" id="zugang">Verbindungstest: {{ test }}</p>{% endif %}
+{% if not key_gesetzt %}
+<p class="meldung fehler">Key fehlt – Modul aus. <code>CLOOVER_API_KEY</code> in der <code>.env</code> eintragen
+    (Dev-PC und Server), Dienst neu starten; bis dahin werden keine Raten ermittelt und keine Cloover-Projekte angelegt.</p>
+{% endif %}
+
+<form method="post" action="/parametrierung/cloover" class="formular" style="max-width:860px">
+    <input type="hidden" name="cloover_formular" value="1">
+    <h2>Zugang <small class="dezent">{{ 'Key gesetzt' if key_gesetzt else 'Key fehlt' }} · Modus {{ werte.modus }}</small></h2>
+    <table class="tabelle" style="max-width:860px">
+        <tbody>
+        <tr><th>API-Key</th><td>{% if key_gesetzt %}<strong class="ampel gruen">gesetzt</strong> <span class="dezent">(aus der .env – wird nie angezeigt)</span>{% else %}<strong class="fehler-text">fehlt</strong> <span class="dezent">(<code>CLOOVER_API_KEY</code> in der .env)</span>{% endif %}</td></tr>
+        <tr><th>Basis-URL</th><td><code>{{ basis_url }}</code> {% if ist_test_url %}<span class="abzeichen status-versand-vorbereitet">Test-Umgebung</span>{% else %}<span class="abzeichen status-angenommen">Live-URL</span>{% endif %}
+            <br><span class="dezent">Aus <code>CLOOVER_BASIS_URL</code> in der .env; leer = Test-URL <code>{{ test_url }}</code>. Die Live-URL trägt Andreas nach Zulieferung von Cloover ein.</span></td></tr>
+        <tr><th>Wirksamer Modus</th><td><strong>{{ werte.modus }}</strong>{% if werte.modus_gespeichert != werte.modus %} <span class="dezent">(gespeichert „{{ werte.modus_gespeichert }}“ – {{ 'ohne Key immer aus' if not key_gesetzt else 'live nur mit Live-URL' }})</span>{% endif %}</td></tr>
+        </tbody>
+    </table>
+    <label>Modus
+        <select name="cloover_modus">
+            {% for m in modi %}
+            <option value="{{ m }}" {{ 'selected' if werte.modus_gespeichert == m }}>{{ m }}{{ ' – keine Raten, keine Projekte' if m == 'aus' }}{{ ' – Test-Umgebung (Standard, solange die Basis-URL die Test-URL ist)' if m == 'test' }}{{ ' – nur mit Live-URL in der .env' if m == 'live' }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Standard-Konto (Cloover-Konto, <code>userEmail</code> aller Anfragen)
+        <input type="email" name="cloover_standard_email" value="{{ werte.standard_email }}" placeholder="c.castro@friondo.de"></label>
+    <p class="dezent">Projekte laufen unter dem Cloover-Konto des vorbereitenden Innendienstlers (Benutzerverwaltung →
+        Details → „Cloover-Konto (E-Mail)“), sonst unter diesem Standard-Konto. Jede Anfrage trägt <code>userEmail</code>.</p>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+        <button class="knopf zweitrangig" type="submit" formaction="/parametrierung/cloover/test"
+                {{ 'disabled' if not key_gesetzt }}
+                title="v1-Beispielrate 10.000 € brutto, 2.000 € Anzahlung, 10 Jahre; danach v2-Probe mit einem Asset je aktiver Sparte">Verbindung testen</button>
+    </div>
+    {% if letzter_test %}
+    <p>Letzter Verbindungstest: <strong class="{{ 'ampel gruen' if letzter_test.ok else 'fehler-text' }}">{{ 'ok' if letzter_test.ok else 'fehlgeschlagen' }}</strong>
+        am {{ letzter_test.zeit }} – {{ letzter_test.text }}</p>
+    {% else %}
+    <p class="dezent">Noch kein Verbindungstest gespeichert.</p>
+    {% endif %}
+
+    <h2 id="finanzierung">Finanzierung</h2>
+    <div class="formzeile">
+        <label class="schmal" title="durationInYears der Ratenberechnung – der Innendienst kann sie je Angebot ändern (Editor-Karte)">Laufzeit (Jahre, {{ laufzeit_min_api }}–{{ laufzeit_max_api }})
+            <input type="number" name="cloover_laufzeit_jahre" value="{{ werte.laufzeit_jahre }}" min="{{ laufzeit_min_api }}" max="{{ laufzeit_max_api }}" step="1"></label>
+        <label class="schmal" title="downPayment in Euro (Standard 0)">Anzahlung (€)
+            <input type="text" name="cloover_anzahlung_eur" value="{{ werte.anzahlung_eur }}" inputmode="decimal" placeholder="0,00"></label>
+        <label class="schmal" title="financingDuration.start – Mindestlaufzeit, die Cloover dem Kunden im Checkout anbietet [ANNAHME]">Laufzeit von (Jahre)
+            <input type="number" name="cloover_laufzeit_min" value="{{ werte.laufzeit_von_bis[0] }}" min="{{ laufzeit_min_api }}" max="{{ laufzeit_max_api }}" step="1"></label>
+        <label class="schmal" title="financingDuration.end – Höchstlaufzeit im Checkout [ANNAHME]">Laufzeit bis (Jahre)
+            <input type="number" name="cloover_laufzeit_max" value="{{ werte.laufzeit_von_bis[1] }}" min="{{ laufzeit_min_api }}" max="{{ laufzeit_max_api }}" step="1"></label>
+    </div>
+    <p class="dezent">Finanzierungsoptionen im Checkout (<code>financingOption</code>; Standard Cash + Financing [ANNAHME, Rückfrage B3: Bedeutung von ClooverPay]):</p>
+    <div class="formzeile">
+        {% for o in optionen_api %}
+        <label class="kontrollfeld"><input type="checkbox" name="cloover_optionen" value="{{ o }}" {{ 'checked' if o in werte.optionen }}> {{ o }}</label>
+        {% endfor %}
+    </div>
+    <p class="dezent">Sparten mit Cloover-Rate und Cloover-Projekt (nur Profil Standard; Enni, SWD und Sparkasse DU nie):</p>
+    <div class="formzeile">
+        {% for s in sparten_reihenfolge %}
+        <label class="kontrollfeld" title="Anlagentyp {{ asset_typen[s] if s != 'KL' else werte.kl_typ }}"><input type="checkbox" name="cloover_sparten" value="{{ s }}" {{ 'checked' if s in werte.sparten }}> {{ sparten_namen[s] }} ({{ s }})</label>
+        {% endfor %}
+    </div>
+    <label title="Cloover kennt keinen Anlagentyp für Klimaanlagen – Standard „Energetic Renovation“ [ANNAHME, Rückfrage B2]">Anlagentyp Klima (<code>projectAssets.type</code> bei KL)
+        <select name="cloover_kl_typ">
+            {% for t in asset_typen_api %}
+            <option value="{{ t }}" {{ 'selected' if werte.kl_typ == t }}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <p class="dezent">Anlage je Angebot: Typ je Sparte (WP „Heat pump“, PV „Solar“, WB „Wallbox“, KL siehe oben),
+        <code>price</code> = Netto nach Gesamtrabatt, <code>vatPercentage</code> = USt-Satz des Angebots (19 bzw. 0),
+        <code>subsidy</code> = Förderbetrag bei WP, <code>capacity</code> = kW der Leistungsklasse / kWp / Σ Kühllast / 11;
+        <code>inflateTransactionFee</code> immer false. Details: docs/cloover-api.md.</p>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+    </div>
+
+    <h2 id="texte">Textbausteine <small class="dezent">{{ hinweis_entwurf }}</small></h2>
+    {% set fn = texte['cloover_fussnote'] %}
+    <label>Fußnote der Rate im Angebot {% if fn.ist_standard %}<span class="abzeichen status-entwurf">Standardtext</span>{% else %}<span class="abzeichen status-versendet">eigener Text</span>{% endif %}
+        <textarea name="cloover_fussnote" rows="6" placeholder="{{ fn.standard }}">{{ '' if fn.ist_standard else fn.text }}</textarea>
+    </label>
+    <p class="dezent">Platzhalter: {% for ph in platzhalter %}<code>{{ '{' ~ ph ~ '}' }}</code>{% if not loop.last %} · {% endif %}{% endfor %}.
+        Leer lassen = Standardtext (Entwurf laut Plan; der verbindliche Pflichtangaben-Wortlaut kommt von Cloover – Rückfrage B1).
+        Ohne Förderung entfällt der Halbsatz „‚mit Förderung‘ …“ automatisch.</p>
+    {% if fn.ist_standard %}<details><summary class="dezent" style="cursor:pointer">Standardtext anzeigen</summary><p class="dezent">{{ fn.standard }}</p></details>{% endif %}
+    {% set ds = texte['cloover_datenschutz'] %}
+    <label>Datenschutzsatz unter dem Cloover-Block {% if ds.ist_standard %}<span class="abzeichen status-entwurf">Standardtext</span>{% else %}<span class="abzeichen status-versendet">eigener Text</span>{% endif %}
+        <textarea name="cloover_datenschutz" rows="4" placeholder="{{ ds.standard }}">{{ '' if ds.ist_standard else ds.text }}</textarea>
+    </label>
+    <p class="dezent">Leer lassen = Standardtext (Entwurf; Wortlaut mit dem Datenschutzbeauftragten abstimmen – Rückfrage B7).
+        Mit dem persönlichen Link gehen Name, E-Mail, Telefon, Adresse und das Angebot an Cloover; Kunden, die das nicht
+        wünschen, bekommen im Editor das Häkchen „Finanzierung im PDF ausblenden“.</p>
+    {% if ds.ist_standard %}<details><summary class="dezent" style="cursor:pointer">Standardtext anzeigen</summary><p class="dezent">{{ ds.standard }}</p></details>{% endif %}
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+    </div>
+</form>
+
+{% include "konfiguration/_cloover_ablage.html" ignore missing %}
+
+{% if protokoll %}
+<h2>Änderungsprotokoll (letzte 30)</h2>
+<pre class="dezent" style="white-space:pre-wrap">{{ protokoll }}</pre>
+{% endif %}
+<p class="dezent">Endpunkte, Feldzuordnung Angebot → Anlage, Netto-Regel, Kontrollwerte, Einrichtung der .env und die
+    Rückfragen an Cloover: docs/cloover-api.md. Fehlgeschlagene Aufrufe stehen im Fehlerprotokoll (Fehlertyp „Cloover“,
+    ohne Key und ohne Kundendaten).</p>
+{% endblock %}

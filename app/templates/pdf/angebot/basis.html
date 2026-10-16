@@ -1,0 +1,26 @@
+{#- v36 (PLAN_V22 Phase 188): Vorlagenbasis des Angebots-PDFs (Layout v3, Browser-Druck über app/pdf_html.py).
+    Kontext: ein Dict aus app/pdf_kontext.py (Vertrag im Modul-Docstring), `static` = file://-Adresse von app/static.
+    Sparten-Vorlagen (wp.html, pv.html, kl.html, wb.html) erben hiervon und füllen den Block `seiten` mit den
+    Seiten-Bausteinen (Includes deckblatt.html, ueberblick.html, positionen.html, kfw.html, wirtschaftlichkeit.html,
+    auftrag.html, bedingungen.html, vollmacht.html). Kopfzeile = Browser-Kopfvorlage (pdf_html.kopfzeile_html),
+    Fußzeile = wiederholter Tabellenfuß. Farben nur über var(--pdf-…) aus app/static/pdf/angebot.css. -#}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>{{ kontext.angebot.nummer }} – {{ kontext.sparte_name }} – Friondo GmbH</title>
+<link rel="stylesheet" href="{{ static }}/pdf/angebot.css">
+<link rel="stylesheet" href="{{ static }}/pdf/angebot_kfw.css">
+<link rel="stylesheet" href="{{ static }}/pdf/angebot_wirtschaftlichkeit.css">
+{% block styles %}{% endblock %}
+</head>
+<body class="pdf-sparte-{{ kontext.sparte | lower }}">
+<table class="pdf-dok">
+  <thead><tr><td></td></tr></thead>
+  <tfoot><tr><td>{% include "pdf/angebot/_fuss.html" %}</td></tr></tfoot>
+  <tbody><tr><td>
+{% block seiten %}{% endblock %}
+  </td></tr></tbody>
+</table>
+</body>
+</html>

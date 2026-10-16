@@ -20,6 +20,21 @@
         {# v30-Nachtrag 12.10.2026 (Entscheidung 9): gewählte Zahlungsbedingung nur lesend #}
         {% if zahlungsbedingung_name %}· Zahlungsbedingung: <strong>{{ zahlungsbedingung_name }}</strong>{% endif %}
     </p>
+    {# v36 (PLAN_V22 Phase 193): Cloover-Rate lesend – ohne Knöpfe, ohne Laufzeit-/Anzahlungsfelder #}
+    {% if cloover_karte and cloover_karte.relevant and cloover_karte.rate_ohne %}
+    <p class="dezent cloover-lesesicht" id="cloover-rate">
+        Finanzierung (Cloover):
+        {% if cloover_karte.rate_mit %}
+            <strong>ab {{ cloover_karte.rate_mit }} pro Monat mit Förderung</strong>
+            · ab {{ cloover_karte.rate_ohne }} pro Monat ohne Förderung
+        {% else %}
+            <strong>ab {{ cloover_karte.rate_ohne }} pro Monat</strong>
+        {% endif %}
+        · Laufzeit {{ cloover_karte.laufzeit }} Jahre{% if cloover_karte.anzahlung_cent %} · Anzahlung {{ cloover_karte.anzahlung_text }} €{% endif %}
+        · Stand {{ cloover_karte.stand }}
+        {% if cloover_karte.checkout_link %}· <a href="{{ cloover_karte.checkout_link }}" target="_blank" rel="noopener">Finanzierungs-Link</a>{% endif %}
+    </p>
+    {% endif %}
     <p>
         <a class="knopf klein" href="/meine-angebote/{{ angebot.id }}/pdf" target="_blank">Angebots-PDF</a>
         <a class="knopf klein zweitrangig" href="/vorgaenge/zu-angebot/{{ angebot.id }}">Vorgangsakte</a>

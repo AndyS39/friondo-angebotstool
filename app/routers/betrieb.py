@@ -120,8 +120,15 @@ def betrieb_seite(request: Request, session: Session = Depends(get_session)):
              "ablauf": graph_versand.geheimnis_ablauf_datum(),
              "tage": graph_versand.geheimnis_ablauf_tage(),
              "warnung": graph_versand.geheimnis_warnung()}
+    # v36 (PLAN_V22 Phase 188/190): Kachel „Angebots-PDF“ (Engine, Browser, letzte Druckdauer, Test)
+    from app import pdf_html
+    pdf = {"engine": daten.get("pdf_engine") or pdf_html.engine(session),
+           "engine_name": pdf_html.ENGINE_NAMEN.get(daten.get("pdf_engine") or pdf_html.engine(session), ""),
+           "status": pdf_html.status(), "letzter_test": pdf_html.letzter_test(session),
+           "warnung": (daten.get("pdf_engine") == pdf_html.ENGINE_HTML
+                       and daten.get("pdf_letzter_test_ok") is False)}
     return render(request, "konfiguration/betrieb.html", aktiv="/parametrierung",
-                  graph=graph,
+                  graph=graph, pdf=pdf,
                   health=daten, uptime_text=_uptime_text(daten["uptime_s"]),
                   pool=daten["pool"], pool_groesse=f"{db_modul.POOL_SIZE} + {db_modul.MAX_OVERFLOW}",
                   pool_timeout=db_modul.POOL_TIMEOUT,

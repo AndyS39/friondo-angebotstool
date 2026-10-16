@@ -39,10 +39,12 @@ ART_NAMEN["lead"] = "Lead-Management"
 # keine Mail [ANNAHME]; sie ist eine Angebotstool-Glocke (nicht in LEAD_ARTEN – fällt
 # damit nicht unter glocke_lead_arten, v29)
 # v32 (Phase 163, N): ID-Glocke „Bestellung angekündigt“ (art verfolgung) ebenso ohne Mail
-MAIL_FREIE_ARTEN = {"todo", "nachfassen", "verfolgung"}
+# v36 (PLAN_V22 Phase 194, B3): Glocke „Cloover: Vertrag unterschrieben“ (art cloover) ebenso ohne Mail
+MAIL_FREIE_ARTEN = {"todo", "nachfassen", "verfolgung", "cloover"}
 ART_NAMEN["todo"] = "To-Do"
 ART_NAMEN["nachfassen"] = "Fällig heute"
 ART_NAMEN["verfolgung"] = "Bestellung angekündigt"
+ART_NAMEN["cloover"] = "Cloover"
 
 
 # --- Glocke (Kopfzeile) -----------------------------------------------------------

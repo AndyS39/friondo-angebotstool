@@ -274,6 +274,33 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
 - Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v35.md` (TAIFUN-Ordner und Testdatei, Kanäle prüfen,
   HV-Gruppen-Parameter, Profilbilder).
 
+## 4e. Besonderheiten beim Update auf v36 (ein Commit, 16.10.2026)
+
+- Neue Abhängigkeiten `playwright` (Browser-Druck des Angebots-PDFs) und `qrcode` (QR-Code des Cloover-Links) –
+  `update.bat` führt `pip install -r requirements.txt` aus und lädt Playwright-Chromium **nur**, wenn weder Edge noch
+  `PDF_BROWSER_PFAD` in der `.env` vorhanden sind (braucht Internet); auf dem Server wird Edge erwartet (Kanal
+  `msedge`). Danach prüfen: `venv\Scripts\python -c "import playwright, qrcode"` und
+  `scripts\pdf-browser-pruefen.bat` (findet Edge/Chrome, druckt ein Test-PDF, meldet Dauer; unter dem Dienstkonto
+  SYSTEM z. B. per `psexec -s` – Ergebnis in `docs/nach-dem-update-v36.md` Teil A nachtragen).
+- `migrate.py` meldet beim ersten Lauf: „Angebots-PDF: Browser-Test ok (msedge …) – Engine html (Layout v3) angelegt“
+  **oder** „Browser-Druck nicht verfügbar (…) – Engine auf fpdf2 gestellt“ (dann weiter das alte Layout, Parametrierung →
+  Angebots-PDF zeigt den Grund); „v36: Vortext „Friondo PV|KL|WB Standard“ auf den Design-Wortlaut gesetzt – bisherige
+  Fassung als „… (bis v35)“ erhalten“; „v36: Nachtext „Friondo Standard|PV Standard“: Raten-Absatz -> [CLOOVER] …“,
+  „… KL Standard: [CLOOVER] vor „So bleibt Ihr Budget flexibel …“ eingefügt“, „… WB Standard: Nachtext A … vorangestellt“;
+  Spalten `angebote.cloover_json`, `benutzer.cloover_email`, Tabelle `cloover_pdf_tokens`; Einstellungen `pdf_engine`,
+  `pdf_letzter_test`, `cloover_*`. Der zweite Lauf meldet „keine Änderungen nötig“.
+- Cloover bleibt nach dem Update **aus**, solange `CLOOVER_API_KEY` in der `.env` fehlt (keine Raten, keine Projekte);
+  Einschalten erst nach den Prüfpunkten in `docs/nach-dem-update-v36.md` Teil B (Key, Modus test, Verbindungstest,
+  PDF-Ablage, Echtlauf).
+- Danach `scripts\smoke.bat` wie immer (Angebots-PDF jetzt über den Browser, Zielwert < 3 s warm); `/health` zeigt
+  **18 Läufe** (neu `cloover-status`, ohne Key „inaktiv“) und die Felder `pdf_engine`/`pdf_browser`.
+- Rückweg: `rollback.bat --nur-code` (v35-Code läuft auf der v36-Datenbank – nur additive Änderungen; Rückweg-Probe
+  in der Rollout-Prüfung der Plan-Kette v36–v38). Nach einem Rückweg drucken Angebote wieder mit fpdf2; die Nachtexte
+  tragen dann den Platzhalter `[CLOOVER]` als Text – vor einem längeren Rückweg die Textblöcke „Friondo Standard/PV/KL/WB
+  Standard“ aus der Historie zurückstellen.
+- Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v36.md` (Edge auf dem Server, `pdf_engine`, Titelbilder/Teamfoto,
+  Cloover-Key/-Modus, Verbindungstest, PDF-Ablage, Fußnote/Datenschutzsatz).
+
 ## 5. Versionsstand prüfen
 
 Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem

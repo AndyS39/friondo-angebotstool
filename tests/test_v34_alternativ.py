@@ -59,14 +59,15 @@ class PdfDarstellung(Basis):
 
     def test_pdf_kasten_label_und_summe(self):
         wp, pv = self.wp_mit_alternativ()
-        original = pdf_export._alternativ_kasten
-        with mock.patch.object(pdf_export, "_alternativ_kasten", side_effect=original) as spy:
-            pfad = pdf_export.pdf_fuer_angebot(self.s, wp)
-        self.assertEqual(spy.call_count, 1)                          # ein Kasten je Block
+        pfad = pdf_export.pdf_fuer_angebot(self.s, wp)
         text = pdf_text(pfad)
         flach = " ".join(text.split())
-        self.assertIn(f"Die folgenden Positionen sind bereits in Ihrem Angebot {pv.nummer} (PV) "
-                      "enthalten und werden dort berechnet.", flach)
+        hinweis = (f"Die folgenden Positionen sind bereits in Ihrem Angebot {pv.nummer} (PV) "
+                   "enthalten und werden dort berechnet.")
+        # v36 (PLAN_V22 Phase 190): engine-unabhängig über den gedruckten Hinweistext statt über den
+        # fpdf2-internen Zeichner _alternativ_kasten – ein Kasten je Block
+        self.assertEqual(flach.count(hinweis), 1)
+        self.assertIn(hinweis, flach)
         self.assertEqual(text.count("im PV-Angebot"), 2)
         self.assertNotIn("Altern.", text)
         self.assertIn("1.500,00", text)                              # Einzelpreis bleibt sichtbar
@@ -103,10 +104,12 @@ class PdfDarstellung(Basis):
             e_preis_cent=61_606, ek_cent=30_000, alternativ=True,
             alternativ_zu=f"PV-Angebot {pv.nummer}"))
         self.s.commit()
-        original = pdf_export._alternativ_kasten
-        with mock.patch.object(pdf_export, "_alternativ_kasten", side_effect=original) as spy:
-            pdf_export.pdf_fuer_angebot(self.s, self.neu(wp.id))
-        self.assertEqual(spy.call_count, 2)
+        # v36 (PLAN_V22 Phase 190): zwei Blöcke mit Alternativ-Position → der Hinweistext steht
+        # zweimal im PDF (engine-unabhängig statt Spy auf den fpdf2-Zeichner _alternativ_kasten)
+        flach = " ".join(pdf_text(pdf_export.pdf_fuer_angebot(self.s, self.neu(wp.id))).split())
+        hinweis = (f"Die folgenden Positionen sind bereits in Ihrem Angebot {pv.nummer} (PV) "
+                   "enthalten und werden dort berechnet.")
+        self.assertEqual(flach.count(hinweis), 2)
 
     def test_gpreis_label_passt_in_spalte(self):
         pdf = pdf_export.AngebotsPdf("AN-C-TEST")

@@ -417,8 +417,27 @@ def kombi_versand(request: Request, vorgang_id: int,
             graph_versand.nicht_verbunden_text(session)
             + " Danach den Kombi-Versand erneut starten."), status_code=303)
     kunde = session.get(Kunde, vorgang.kunde_id)
+    # v36 (PLAN_V22 Phase 194, Agent B3): EIN Cloover-Projekt je Kombi-Mail VOR dem Druck (Fassung A je
+    # Tool-Angebot abgelegt, alle Assets + PDF-URLs in einem POST /api/projects, derselbe Link in allen
+    # PDFs); Netz nur nach Freigabe – haben alle relevanten Angebote schon dasselbe Projekt, passiert nichts
+    from app import cloover_projekt
+    verbindung_freigeben(session)
+    cloover_meldung = cloover_projekt.vor_pdf_kombi(session, angebote, benutzer)
     # PDFs: je Angebot ein Anhang (Tool frisch erzeugt, TAIFUN aus dem Upload)
-    pdfs = [kombi_modul.pdf_fuer(session, a) for a in angebote]
+    # v36 (Phase 190, Nachtrag): angemeldeter Benutzer = Ansprechpartner-Rückfall im Layout v3
+    pdfs = [kombi_modul.pdf_fuer(session, a, benutzer=benutzer) for a in angebote]
+    # v36 (Phase 194, B3): gedruckte PDFs = Fassung B (Link + QR) → Ablage je Angebot ersetzen (gleiche URL)
+    cloover_hinweise = ([cloover_meldung] if cloover_meldung else []) \
+        + cloover_projekt.nach_pdf_kombi(session, angebote, pdfs)
+    # v36 (PLAN_V22 Phase 190): automatischer Rückfall auf fpdf2 je Tool-Angebot → Grund in der
+    # Meldung („PDF im alten Layout erzeugt (Browser-Druck fehlgeschlagen: …)“); Schalter fpdf2 = kein Hinweis
+    from app import pdf_export as pdf_export_modul
+    rueckfall_hinweise: list[str] = []
+    for angebot in angebote:
+        if not angebot.extern:
+            hinweis = pdf_export_modul.letzter_rueckfall(angebot.id)
+            if hinweis:
+                rueckfall_hinweise.append(f"{angebot.nummer}: {hinweis}")
     # Broschüren über alle Tool-Angebote dedupliziert (je Dateiname einmal)
     logik, _ = logik_modul.hole_logik(session)
     broschueren: list = []
@@ -498,8 +517,16 @@ def kombi_versand(request: Request, vorgang_id: int,
         if empfaenger_leer:
             meldung += (" PFLICHT: Empfänger ist leer (SWD-Profil) – bitte den "
                         "SWD-Kontakt vor dem Senden in Outlook eintragen!")
+        if rueckfall_hinweise:   # v36 (Phase 190)
+            meldung += " " + " ".join(h + "." for h in rueckfall_hinweise)
+        if cloover_hinweise:   # v36 (Phase 194, B3): Cloover-Projekt / PDF-Ablage
+            meldung += " " + " ".join(h.rstrip(".") + "." for h in cloover_hinweise)
         return RedirectResponse(ziel + quote_plus(
             f"Kombi-Entwurf für {nummern} erstellt. " + meldung), status_code=303)
+    if rueckfall_hinweise:   # v36 (Phase 190): auch bei Graph-Fehler nennen
+        meldung += " " + " ".join(h + "." for h in rueckfall_hinweise)
+    if cloover_hinweise:   # v36 (Phase 194, B3): auch bei Graph-Fehler nennen
+        meldung += " " + " ".join(h.rstrip(".") + "." for h in cloover_hinweise)
     return RedirectResponse(ziel + quote_plus(meldung), status_code=303)
 
 

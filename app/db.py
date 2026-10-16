@@ -451,6 +451,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "kl_json": "TEXT NOT NULL DEFAULT ''",                   # v24 Phase 114 (Klima)
         "wb_json": "TEXT NOT NULL DEFAULT ''",                   # v34 Phase 179 (Wallbox)
         "auslegung_text": "TEXT NOT NULL DEFAULT ''",            # v34 Phase 180 (Auslegung intern)
+        "cloover_json": "TEXT NOT NULL DEFAULT '{}'",             # v36 Phase 193 (Cloover)
         "liefer_anschrift": "VARCHAR(300) NOT NULL DEFAULT ''",   # v11 Phase 66
         "kopie_von": "VARCHAR(30) NOT NULL DEFAULT ''",           # v11 Phase 66
         "projekt_gewerk_id": "INTEGER",     # v11 Projektierung
@@ -548,6 +549,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "vorname": "VARCHAR(100) NOT NULL DEFAULT ''",
         "infotext": "TEXT NOT NULL DEFAULT ''",
         "bild_datei": "VARCHAR(300) NOT NULL DEFAULT ''",
+        "cloover_email": "VARCHAR(200) NOT NULL DEFAULT ''",       # v36 Phase 192 (Cloover-Konto)
         "buchungslink": "VARCHAR(500)",                         # v23 Phase 104
         "nebenstelle": "VARCHAR(20)",                           # v23 Phase 104
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",

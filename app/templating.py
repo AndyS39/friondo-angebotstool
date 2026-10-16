@@ -102,6 +102,21 @@ templates.env.globals["formular_namen"] = _FORMULAR_NAMEN
 from app import profilbild as _profilbild  # noqa: E402
 templates.env.globals["profilbild_url"] = _profilbild.url_fuer
 
+# v36 (PLAN_V22 Phase 194, Agent B3): Cloover-Badge (Vertrag unterschrieben / Barzahlung / Link – nur aus
+# cloover_json, keine Datenbank; Makro _cloover_badge.html) und Rückfall-Kontext des Parametrierungs-Partials
+# _cloover_ablage.html (kurze Lesesitzung – nur, wenn die Route keinen Kontext `ablage` übergibt)
+from app import cloover_projekt as _cloover_projekt  # noqa: E402
+templates.env.globals["cloover_badge_info"] = _cloover_projekt.badge_fuer
+
+
+def _cloover_ablage_kontext() -> dict:
+    from app import cloover_pdf_ablage, db
+    with db.kurz(schreibend=False) as s:
+        return cloover_pdf_ablage.seiten_kontext(s)
+
+
+templates.env.globals["cloover_ablage_kontext"] = _cloover_ablage_kontext
+
 # Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
     ("/leads", "Leads VOT"),

@@ -63,6 +63,12 @@
         <span class="kachel-wert">{{ graph.modus }}</span>
         <span class="dezent">{% if graph.warnung %}{{ graph.warnung }}{% elif graph.ablauf %}Geheimnis gültig bis {{ graph.ablauf | de_datum }} (noch {{ graph.tage }} Tage){% elif graph.grund %}{{ graph.grund }}{% else %}Zugriff als Anwendung über die Zugriffsgruppe{% endif %}
             · <a href="/versand">Verbindungs-Seite</a></span></div>
+    {# v36 (PLAN_V22 Phase 188/190): Angebots-PDF – Engine, Browser des Druckers, letzte Druckdauer, letzter Test #}
+    <div class="karte betrieb-kachel{{ ' betrieb-kachel-warn' if pdf.warnung }}" id="kachel-angebots-pdf"><span class="kachel-titel">Angebots-PDF</span>
+        <span class="kachel-wert">{{ pdf.engine }}</span>
+        <span class="dezent">{{ pdf.engine_name }} · Browser {{ pdf.status.browser or '–' }} {{ pdf.status.version }} · letzte Druckdauer {{ pdf.status.letzte_dauer_ms }} ms · {{ pdf.status.anzahl }} Drucke / {{ pdf.status.fehler }} Fehler
+            {% if pdf.letzter_test %}· Browser-Test {{ pdf.letzter_test.zeit }} {{ 'ok' if pdf.letzter_test.ok else 'FEHLGESCHLAGEN' }}{% endif %}
+            · <a href="/parametrierung/angebots-pdf">Angebots-PDF</a></span></div>
 </div>
 
 <section class="karte" id="wartung">

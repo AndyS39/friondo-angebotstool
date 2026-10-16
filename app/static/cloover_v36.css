@@ -1,0 +1,71 @@
+/* v36 (PLAN_V22 Phase 193, Agent B2): Editor-Karte „Finanzierung (Cloover)“ und Lesesicht des
+   Außendienstes – nur Design-v2-Tokens (Hell/Dunkel), keine festen Farben. */
+.cloover-karte {
+    margin: 0.6rem 0 0;
+    padding: 0.55rem 0.9rem 0.7rem;
+    border: 1px solid var(--linie);
+    border-radius: var(--r-l, 10px);
+    background: var(--flaeche-karte);
+    border-left: 4px solid var(--akzent);
+}
+.cloover-karte > summary { cursor: pointer; }
+.cloover-karte > summary .dezent { font-weight: normal; }
+.cloover-karte .cloover-inhalt { margin-top: 0.45rem; }
+.cloover-raten {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.6rem;
+    align-items: baseline;
+    margin: 0.2rem 0 0.4rem;
+}
+.cloover-raten .cloover-rate {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.cloover-raten .cloover-rate strong {
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-titel);
+}
+.cloover-raten .cloover-rate.mit-foerderung strong { color: var(--akzent); }
+.cloover-anfrage {
+    font-size: 1.05rem;
+    color: var(--text-dezent);
+}
+.cloover-stand { font-size: 0.85rem; color: var(--text-dezent); }
+.cloover-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: flex-end;
+    margin: 0.4rem 0 0;
+}
+.cloover-form label { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.9rem; }
+.cloover-form input[type="number"], .cloover-form input[type="text"] { max-width: 9rem; }
+.cloover-form .kontrollfeld { flex-direction: row; align-items: center; gap: 0.4rem; }
+.cloover-knoepfe { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; align-items: center; }
+.cloover-karte .fehlertext { margin: 0.25rem 0 0; }
+.cloover-veraltet {
+    margin: 0.25rem 0 0;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--r-m, 6px);
+    background: var(--status-orange-bg);
+    color: var(--status-orange);
+    font-size: 0.85rem;
+}
+.cloover-badge {
+    display: inline-block;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    background: var(--akzent-flaeche);
+    color: var(--akzent-text, var(--akzent));
+    vertical-align: middle;
+}
+.cloover-hinweis { margin: 0.5rem 0 0; }
+.cloover-lesesicht strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) {
+    .cloover-raten { gap: 0.4rem 1rem; }
+    .cloover-form input[type="number"], .cloover-form input[type="text"] { max-width: 100%; }
+}

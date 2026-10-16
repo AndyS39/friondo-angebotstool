@@ -308,7 +308,9 @@ class Uebernahme(Basis):
         flach = " ".join(text.split())
         self.assertIn(f"Enthält die Elektroarbeiten aus Angebot {wp.nummer} (Wärmepumpe).", flach)
         self.assertIn(f"Elektroarbeiten Klimaanlage (aus Angebot {kl.nummer})", flach)
-        self.assertIn("Umsatzsteuer 0 %", flach)
+        # v36 (PLAN_V22 Phase 190): 0-%-Zeile engine-unabhängig (fpdf2 „Umsatzsteuer 0 %“,
+        # Layout v3 „0,00 % USt. (§ 12 Abs. 3 UStG)“)
+        self.assertTrue("Umsatzsteuer 0 %" in flach or "0,00 % USt." in flach, "USt 0 % fehlt")
         # KL-Angebot: Position Alternativ „im PV-Angebot“ im PDF
         text_kl = " ".join(pdf_text(pdf_export.pdf_fuer_angebot(self.s, self.neu(kl.id))).split())
         self.assertIn("im PV-Angebot", text_kl)

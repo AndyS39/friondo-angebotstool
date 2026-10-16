@@ -43,7 +43,10 @@ OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern",
                 # API-Key-Schutz statt Session-Cookie
                 "/api/leads",
                 # v27 (Phase 129): Betriebs-Status ohne Anmeldung (nur Lesen)
-                "/health")
+                "/health",
+                # v36 (PLAN_V22 Phase 194, Agent B3): Token-Route der Cloover-PDF-Ablage
+                # (GET /oeffentlich/cloover/<token>.pdf – nur mit gültigem Token, sonst 404)
+                "/oeffentlich/cloover")
 # v27 (Phase 130): Pflicht-PIN-Wechsel – für jede Rolle erreichbar
 PIN_WECHSEL_PFAD = "/pin-wechsel"
 # v32 (PLAN_V19 Phase 164): /suche – die Route prüft die Rolle selbst (Montage und

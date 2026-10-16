@@ -7,6 +7,7 @@
 {% block inhalt %}
 {# v34 (PLAN_V21 Phase 180, Agent E): Alternativ-Badge/Balken, Elektro-Knöpfe, Auslegung (intern) #}
 <link rel="stylesheet" href="/static/angebot_v34.css?v={{ css_version }}">
+<link rel="stylesheet" href="/static/cloover_v36.css?v={{ css_version }}">{# v36 (PLAN_V22 Phase 193): Karte Finanzierung (Cloover) #}
 <div class="seitenkopf">
     <h1>Angebot {{ angebot.nummer }}
         <span class="abzeichen" title="Konfigurator-Typ">{{ angebot.konfigurator_typ or 'WP' }}</span>
@@ -50,6 +51,11 @@
         </form>
         {% endif %}
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
+        {% if request.state.benutzer and request.state.benutzer.basisrolle in ('admin', 'innendienst') %}
+        {# v36 (PLAN_V22 Phase 190): dieselbe Vorlage als HTML – Design-Abnahme ohne Druck (nie EK/DB) #}
+        <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/pdf.html" target="_blank"
+           title="Angebots-PDF (Layout v3) als HTML im Browser – Design-Abnahme ohne Druck">HTML-Vorschau</a>
+        {% endif %}
         {% if (angebot.konfigurator_typ or 'WP') == 'WP' %}
         {# v19 (PLAN_V14 Phase 96): internes Arbeitsblatt fürs KfW-Portal #}
         <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/bza-datenblatt"
@@ -104,6 +110,9 @@
 {# v14 (Phase 72): Kopfkarte mit Status-Schrittleiste #}
 <div class="editor-kopfkarte">
 {{ statuskette(angebot.status) }}
+{#- v36 (PLAN_V22 Phase 194, B3): Badge „Cloover: Vertrag unterschrieben (TT.MM.JJJJ)“ / „Barzahlung gewählt“ #}
+{% set cloover_b = cloover_badge_info(angebot) %}
+{% if cloover_b and cloover_b.art != 'link' %}<p style="margin:0.3rem 0 0"><span class="abzeichen {{ cloover_b.klasse }} cloover-abzeichen cloover-abzeichen-{{ cloover_b.art }}" title="{{ cloover_b.titel }}">{{ cloover_b.text }}</span>{% if cloover_b.art == 'vertrag' and angebot.status != 'Angenommen' %} <span class="dezent">Angebot auf Angenommen setzen? (manuell, Status unten)</span>{% endif %}</p>{% endif %}
 <p class="dezent" style="margin:0.3rem 0 0">
     Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
     {% if kunde and (kunde.strasse or kunde.ort) %} · {{ kunde.strasse }}, {{ kunde.plz }} {{ kunde.ort }}{% endif %}
@@ -201,6 +210,13 @@ function zbFreitextUmschalten(an) {
     <summary>Auslegung (intern) <span class="dezent">– Herleitung aus der Erfassung, erscheint nicht im Angebots-PDF</span></summary>
     <div class="auslegung-text">{{ angebot.auslegung_text }}</div>
 </details>
+{% endif %}
+
+{# v36 (PLAN_V22 Phase 193, Agent B2): Karte „Finanzierung (Cloover)“ – Rate, Laufzeit/Anzahlung,
+   Häkchen „im PDF ausblenden“, Cloover-Projekt (B3); nur Innendienst/Admin (der Außendienst nutzt die
+   meine_angebote-Templates, dort lesend ohne Knöpfe) #}
+{% if not angebot.extern and request.state.benutzer and request.state.benutzer.basisrolle in ('admin', 'innendienst') %}
+{% include "angebote/_cloover_karte.html" %}
 {% endif %}
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}

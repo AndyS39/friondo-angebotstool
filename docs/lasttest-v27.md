@@ -98,13 +98,26 @@ Client-Sicht (p95 je Gruppe) und /health bzw. die Protokolle der Kopie:
 |---|---|---|
 | p95 Listen und Akten (Erfassungsliste, Angebotsliste, Vorgangsakte, Hauptboard, Kundenkartei ohne Vorschläge, Leads VOT, Editor-Seite, Projektakte, Einsatz) | **≤ 1,5 s** | Gruppe `Listen und Akten` |
 | p95 Editor-Aktionen (Position ändern/löschen/sortieren) | **≤ 1,0 s** | Gruppe `Editor-Aktionen` |
-| p95 Angebots-PDF | **≤ 4 s** | `GET /angebote/{id}/pdf` |
+| p95 Angebots-PDF – seit v36 **Browser-Druck** (HTML-Vorlagen + Edge headless, ein Browser-Prozess je Dienst, **Semaphore 2** parallele Drucke, Timeout 30 s; Zielwert unverändert) | **≤ 4 s** | `GET /angebote/{id}/pdf` (Innendienst-Szenario, Profil `normal`) |
 | p95 Protokoll-PDF | ≤ 3 s | `GET /erfassungen/{id}/protokoll.pdf` |
 | Terminvorschläge (mit 2 s simulierter Latenz) | ≤ 6 s | `GET …/termin/vorschlaege.json` |
 | `TimeoutError` (Pool) | **0** | fehler.log der Kopie + Client-Timeouts |
 | „database is locked“ an der Oberfläche | **0** (interne Wiederholung erlaubt, Zähler im Bericht) | 5xx-Antworten mit „Datenbank kurz belegt“ + Anfrage-Einträge in fehler.log |
 | Pool-Spitze | ≤ 60 % des Maximums | /health alle 10 s und Pool-Checkouts in zugriff.log |
 | Fehlerquote (5xx, Timeouts, Verbindungsfehler) | < 0,1 % | Client-Sicht |
+
+**Angebots-PDF (v36, PLAN_V22 Phase 191):** `GET /angebote/{id}/pdf` liegt seit v27 im
+Innendienst-Szenario des Profils `normal` (einmal je Durchlauf, nach den zehn
+Positionsänderungen) und trifft damit die neue Engine (`pdf_engine = html` in der
+Kopie – `migrate.py` setzt den Wert, wenn der Browser-Test grün ist; der Lasttest-Server
+auf dem Dev-PC braucht dafür Edge). Der Druck läuft außerhalb der Datenbanksitzung in
+einem Browser-Prozess je Dienst; höchstens **zwei** Drucke gleichzeitig (Semaphore), ein
+dritter wartet in der Warteschlange – die Wartezeit zählt im p95 mit. Einzelmessung
+Phase 191 (Dev-PC, Edge 155, WP mit 25 Positionen, 11 Seiten, 1,8 MB): 20 Drucke
+nacheinander Mittel 2,66 s (min 2,52 / max 2,92 s), vier parallel 2,7 / 2,9 / 5,5 / 5,5 s
+(zwei warten), Neustart nach Browser-Absturz 3,8 s bis zum nächsten PDF
+(`tests/test_v36_laufzeit.py`). Mit zwölf Innendienst-Nutzern und 5–15 s Denkzeit ist
+die Gleichzeitigkeit im Lastmodell klein; der Zielwert **≤ 4 s** bleibt.
 
 **Schreibsturm:** keine verlorene Änderung (Soll/Ist je Position), keine 500er.
 **Stressstufe:** Lastmodell auf 100 Nutzer verdoppelt (10 Minuten) – nur zur

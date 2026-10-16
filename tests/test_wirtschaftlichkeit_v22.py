@@ -257,10 +257,17 @@ class PdfEinbindung(unittest.TestCase):
         pfad.unlink(missing_ok=True)
         return seiten
 
-    @staticmethod
-    def _wirtschaftlichkeitsseiten(seiten):
-        return [s for s in seiten if "Seite 1 von 3" in s or "Seite 2 von 3" in s
-                or "Seite 3 von 3" in s]
+    # v36 (PLAN_V22 Phase 190, Nachtrag A3): Erkennung der drei Wirtschaftlichkeitsseiten über ihre
+    # gedruckten Seitentitel (Auf einen Blick / Ersparnis im Detail / Sicherheit & Transparenz) – in
+    # beiden Engines identisch (fpdf2 _h1 bzw. pdf_kontext_wirtschaftlichkeit.TITEL); die innere
+    # Zählung „Seite x von 3“ gibt es im Layout v3 nicht mehr (Kopfzeile „SEITE x VON y“ des Dokuments).
+    SEITENTITEL = ("So rechnet sich Ihre Energielösung", "Was Sie Jahr für Jahr sparen",
+                   "So sicher ist Ihre Rechnung")
+
+    @classmethod
+    def _wirtschaftlichkeitsseiten(cls, seiten):
+        return [s for s in seiten
+                if any(t in " ".join(s.split()) for t in cls.SEITENTITEL)]
 
     def test_drei_seiten_ohne_leerseite(self):
         a = self.angebot()

@@ -657,7 +657,16 @@ def editor(request: Request, angebot_id: int,
     zb_name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
     folge_hinweise = lieferschein_pdf.folge_hinweise(
         angebot, lieferschein_pdf.folgepositionen_lesen(session))
+    # v36 (PLAN_V22 Phase 193, Agent B2): Karte „Finanzierung (Cloover)“ – nur lesende Werte, nie EK/DB
+    from app import cloover as cloover_modul
+    cloover_karte = cloover_modul.editor_kontext(session, angebot, benutzer)
+    # v36 (PLAN_V22 Phase 194, Agent B3): Block „Cloover-Projekt“ (Status, Link, Voraussetzungen, Knöpfe –
+    # templates/angebote/_cloover_projekt.html, eingebunden in B2s Karte „Finanzierung (Cloover)“)
+    from app import cloover_projekt
+    cloover_projekt_ctx = cloover_projekt.editor_kontext(session, angebot, kunde, benutzer)
     return render(request, "angebote/editor.html", aktiv="/angebote",
+                  cloover_karte=cloover_karte,
+                  cloover_projekt=cloover_projekt_ctx,   # v36 (Phase 194, B3)
                   **anschrift_kontext,
                   zahlungsbedingungen=zb_eintraege, zahlungsbedingung_key=zb_gewaehlt,
                   zahlungsbedingung_name=zb_name,
@@ -1162,6 +1171,44 @@ def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
                         filename=f"{angebot.nummer}.pdf")
 
 
+@router.get("/{angebot_id}/pdf.html")
+def pdf_html_vorschau(request: Request, angebot_id: int,
+                      session: Session = Depends(get_session)):
+    """v36 (PLAN_V22 Phase 190): dieselbe HTML-Vorlage des Angebots-PDFs (Layout v3) als
+    Seite im Browser – Design-Abnahme ohne Druck (Druckvorschau über @media print), nur
+    Innendienst/Admin (Außendienst 403 – die Vorlage trägt ohnehin nie EK/DB). Unabhängig vom
+    Engine-Schalter; Bilder/Schriften über den Web-Mount /static. `?fassung=intern` kennzeichnet
+    die Vorschau als interne Fassung (Kontext-Vertrag), `?signatur=demo` zeigt die
+    Signaturzeile mit Demo-Daten."""
+    from fastapi.responses import HTMLResponse, PlainTextResponse
+
+    from app import pdf_html
+    benutzer = request.state.benutzer
+    if benutzer is None or benutzer.basisrolle not in ("admin", "innendienst"):
+        return PlainTextResponse("Nur Innendienst/Admin.", status_code=403)
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    if angebot.extern:
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=Externer+Eintrag+ohne+PDF",
+                                status_code=303)
+    fassung = "intern" if request.query_params.get("fassung") == "intern" else "kunde"
+    signatur = None
+    if request.query_params.get("signatur") == "demo":
+        import datetime as _dt
+
+        from app import pdf_export
+        signatur = pdf_export.signatur_dict(b"", "Max Mustermann", _dt.datetime.now(), "Vorschau")
+        signatur["bild_data_url"] = ""   # kein Bild – nur die Zeile „signiert am“
+    try:
+        html = pdf_html.angebot_html(session, angebot, signatur=signatur, fassung=fassung,
+                                     static_url="/static", benutzer=benutzer)
+    except NotImplementedError as fehler:
+        return PlainTextResponse(
+            f"HTML-Vorschau noch nicht verfügbar – {fehler}", status_code=503)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/{angebot_id}/lieferschein.pdf")
 def lieferschein(angebot_id: int, session: Session = Depends(get_session)):
     """v13 (PLAN_V13 Phase 80): Lieferschein ohne Preise – nur für Tool-
@@ -1336,7 +1383,27 @@ def email_entwurf(request: Request, angebot_id: int,
                 graph_versand.nicht_verbunden_text(session)
                 + " Danach den Versand erneut vorbereiten."), status_code=303)
 
-    pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
+    # v36 (PLAN_V22 Phase 190, Nachtrag): Fern-Signatur-Token VOR dem Druck ausstellen, wenn der
+    # Knopf „Jetzt online beauftragen“ im PDF den Link tragen soll – Fern-Signatur aktiv UND BASIS_URL
+    # aus der .env (dieselbe Bedingung wie pdf_kontext); sonst bleibt der PDF-Knopf mailto und der
+    # Token entsteht wie bisher erst nach dem Druck für die Mail. Bestehende Token-Funktion (Modul v4).
+    from app.routers.signatur import fern_aktiv, fern_token_ausstellen
+    from app import config as konfig
+    fern = fern_aktiv(session)
+    token = ""
+    if fern and konfig.BASIS_URL_AUS_ENV:
+        token = fern_token_ausstellen(session, angebot)
+        session.commit()
+    # v36 (PLAN_V22 Phase 194, Agent B3): Cloover-Projekt VOR dem Druck – Voraussetzungen, Rate, PDF-Fassung A
+    # ohne Link ablegen, POST /api/projects (Netz nur nach Freigabe); vorhandene Projekt-ID → kein zweites
+    # Projekt (nur das PDF wird neu abgelegt); Meldung „Cloover-Link nicht möglich: …“ hängt an die Versand-Meldung
+    from app import cloover_projekt
+    verbindung_freigeben(session)
+    cloover_meldung = cloover_projekt.vor_pdf(session, angebot, request.state.benutzer)
+    # v36: der angemeldete Benutzer geht als Ansprechpartner-Rückfall in den PDF-Kontext (A1-Vertrag)
+    pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot, benutzer=request.state.benutzer)
+    # v36 (Phase 194, B3): das Versand-PDF ist Fassung B (Link + QR-Code) → abgelegte Datei ersetzen (gleiche URL)
+    cloover_pdf_meldung = cloover_projekt.nach_pdf(session, angebot, pdf_pfad)
     # Anhänge (Phase 15/67, v27-Nachtrag 2): volle Logik für ALLE Sparten – das
     # Blatt „Anhänge“ gilt sparten- und profilübergreifend („immer“ vor Sparte/
     # Profil geprüft, KL nimmt denselben Pfad wie WP/PV); fehlende Dateien
@@ -1347,13 +1414,12 @@ def email_entwurf(request: Request, angebot_id: int,
         logik, angebot, anhaenge_modul.profilname_fuer(session, angebot))
     # Fern-Signatur (Phase 28): bei aktivem Schalter Einmal-Link in die Mail
     signatur_link = ""
-    from app.routers.signatur import fern_aktiv, fern_token_ausstellen
-    if fern_aktiv(session):
+    if fern:
         from app.models import einstellung_holen
-        token = fern_token_ausstellen(session, angebot)
+        if not token:   # v36: ohne BASIS_URL aus der .env wie bisher erst hier ausstellen
+            token = fern_token_ausstellen(session, angebot)
         # v27 (PLAN_V17 Phase 129): BASIS_URL aus der .env geht vor (Reverse-Proxy),
         # sonst wie bisher Einstellung bzw. Adresse der Anfrage
-        from app import config as konfig
         basis = konfig.BASIS_URL if konfig.BASIS_URL_AUS_ENV else ""
         if not basis:
             basis = einstellung_holen(session, "signatur_fern_basis_url", "").rstrip("/")
@@ -1415,6 +1481,14 @@ def email_entwurf(request: Request, angebot_id: int,
         if angebot.status == "Entwurf":
             angebot.status = "Versand vorbereitet"
         session.commit()
+    # v36 (PLAN_V22 Phase 190): automatischer Rückfall auf fpdf2 (Browser-Druck fehlgeschlagen)
+    # → Grund in der Versand-Meldung („PDF im alten Layout erzeugt (…)“); Schalter fpdf2 = kein Hinweis
+    rueckfall_hinweis = pdf_export.letzter_rueckfall(angebot.id)
+    if rueckfall_hinweis:
+        meldung += " " + rueckfall_hinweis + "."
+    for zusatz in (cloover_meldung, cloover_pdf_meldung):   # v36 (Phase 194, B3): Cloover-Projekt/-PDF
+        if zusatz:
+            meldung += " " + zusatz.rstrip(".") + "."
     ziel = f"/angebote/{angebot_id}?meldung={quote_plus(meldung)}"
     if erfolg:
         ziel += "&versand=1"
@@ -1988,6 +2062,14 @@ def _zahlungsbedingung_uebernehmen(ziel: Angebot, quelle: Angebot) -> None:
     zahlungsbedingungen.uebernehmen(ziel, quelle)
 
 
+def _cloover_uebernehmen(ziel: Angebot, quelle: Angebot) -> None:
+    """v36 (PLAN_V22 Phase 193): Duplizieren und Kopieren übernehmen aus cloover_json nur Laufzeit,
+    Anzahlung und „Finanzierung im PDF ausblenden“ – Rate und Cloover-Projekt werden für das neue
+    Angebot neu ermittelt (Überarbeiten: angebot_aufbau.version_erzeugen)."""
+    from app import cloover
+    cloover.uebernehmen_bei_kopie(quelle, ziel)
+
+
 def _positionen_kopieren(ziel: Angebot, quelle: Angebot) -> None:
     """Positions-Snapshots 1:1 mit allen Kennzeichen (Bugfix 30.09.2026: vorher
     gingen beim Duplizieren bauseits, Positionsrabatt, Sonderpreis, manuell
@@ -2046,6 +2128,7 @@ def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
         kopie.wirtschaftlichkeit_ausblenden = quelle.wirtschaftlichkeit_ausblenden   # v22
         kopie.objekt_id = quelle.objekt_id   # v31 (PLAN_LEAD_V5 Phase 153): gleiches Objekt
         _zahlungsbedingung_uebernehmen(kopie, quelle)   # v30 (Phase 150)
+        _cloover_uebernehmen(kopie, quelle)   # v36 (PLAN_V22 Phase 193): nur Laufzeit/Anzahlung/ausgeblendet
         _positionen_kopieren(kopie, quelle)
         ergebnis["kopie"] = kopie
 
@@ -2143,6 +2226,7 @@ def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
         kopie.foerder_hoechstkosten_cent = quelle.foerder_hoechstkosten_cent
         kopie.kopie_von = quelle.nummer
         _zahlungsbedingung_uebernehmen(kopie, quelle)   # v30 (Phase 150)
+        _cloover_uebernehmen(kopie, quelle)   # v36 (PLAN_V22 Phase 193): Rate/Projekt werden neu ermittelt
         # bewusst NICHT kopiert: rechnung_*/liefer_anschrift (gehören zum alten
         # Kunden), Vertriebler, Versand-/monday-Zustand
         kopie.positionen.clear()   # Profil-Positionsregeln liefen bereits im Original

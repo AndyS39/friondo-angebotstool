@@ -50,6 +50,21 @@ venv\Scripts\python.exe -m pip install -q -r requirements.txt || (
     echo FEHLER: pip install fehlgeschlagen - siehe Meldung oben.
     goto :migration_fehler
 )
+rem v36 (PLAN_V22 Phase 188): Angebots-PDF per Browser-Druck. Edge ist auf dem Windows Server vorhanden
+rem (Kanal msedge) - nur wenn Edge fehlt und kein PDF_BROWSER_PFAD in der .env steht, wird der
+rem Playwright-Chromium nachgeladen (braucht Internet auf dem Server; schlaegt das fehl, stellt migrate.py
+rem die Engine auf fpdf2 - altes Layout - und scripts\pdf-browser-pruefen.bat hilft bei der Suche).
+set "EDGE_DA="
+if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "EDGE_DA=1"
+if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "EDGE_DA=1"
+findstr /b /c:"PDF_BROWSER_PFAD=" .env >nul 2>&1 && set "EDGE_DA=1"
+if not defined EDGE_DA (
+    echo       Edge nicht gefunden - Playwright-Chromium fuer den PDF-Druck nachladen ^(Internet noetig^) ...
+    venv\Scripts\python.exe -m playwright install chromium || (
+        echo       WARNUNG: Chromium konnte nicht geladen werden - Angebots-PDFs entstehen im alten Layout
+        echo       ^(fpdf2^), bis ein Browser vorhanden ist: scripts\pdf-browser-pruefen.bat, docs\angebots-pdf.md
+    )
+)
 
 echo [5/7] Datenbank migrieren ...
 if exist migrate.py (

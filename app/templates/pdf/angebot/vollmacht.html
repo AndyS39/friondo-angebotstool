@@ -1,0 +1,43 @@
+{#- v36 (PLAN_V22 Phase 189): Vollmacht (Nachtext D) – Regel unverändert (nur bei aktiver Position 016/017,
+    WB immer; Profile Enni/SWD ohne). Text wörtlich aus der Vorlage, Kasten „Angaben zur Verbrauchsstelle“ vorbelegt
+    (leer → Linie), „Bitte ankreuzen“ mit drei Kästchen, SEPA-Block mit vier Linien, drei Unterschriftslinien. -#}
+{%- set v = kontext.vollmacht %}
+<div class="pdf-seite pdf-vollmacht">
+  <h2 class="pdf-vm-titel">{{ v.titel }}</h2>
+  {%- for absatz in v.absaetze %}
+  {%- if absatz.fett_ab and absatz.fett_ab in absatz.text %}
+  {%- set teile = absatz.text.split(absatz.fett_ab, 1) %}
+  <p>{{ teile[0] }}<strong>{{ absatz.fett_ab }}{{ teile[1] }}</strong></p>
+  {%- else %}
+  <p>{{ absatz.text }}</p>
+  {%- endif %}
+  {%- endfor %}
+  <div class="pdf-vm-kaesten">
+    <div class="pdf-karte pdf-vm-karte">
+      <div class="pdf-vm-kartentitel">{{ v.verbrauchsstelle_titel }}</div>
+      {%- for feld in v.verbrauchsstelle %}
+      <div class="pdf-feldzeile"><span class="pdf-feld-label">{{ feld.label }}</span><span class="pdf-feld-wert">{{ feld.wert if feld.wert else " " }}</span></div>
+      {%- endfor %}
+    </div>
+    <div class="pdf-karte pdf-vm-karte">
+      <div class="pdf-vm-kartentitel">{{ v.kaestchen_titel }}</div>
+      {%- for text in v.kaestchen %}
+      <div class="pdf-kaestchen-zeile"><span class="pdf-kaestchen"></span><span>{{ text }}</span></div>
+      {%- endfor %}
+    </div>
+  </div>
+  <div class="pdf-vm-sepa">
+    <h2 class="pdf-vm-titel">{{ v.sepa_titel }}</h2>
+    <p>{{ v.sepa_text }}</p>
+    <div class="pdf-vm-sepa-felder">
+      {%- for label in v.sepa_zeilen %}
+      <div class="pdf-feldzeile"><span class="pdf-feld-label pdf-feld-label-breit">{{ label }}</span><span class="pdf-feld-wert">&nbsp;</span></div>
+      {%- endfor %}
+    </div>
+    <div class="pdf-unterschriften pdf-unterschriften-3">
+      {%- for text in v.unterschriften %}
+      <div class="pdf-unterschrift"><div class="pdf-unterschrift-linie">{{ text }}</div></div>
+      {%- endfor %}
+    </div>
+  </div>
+</div>

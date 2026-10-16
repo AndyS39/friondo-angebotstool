@@ -29,6 +29,10 @@
     <div class="kachel stat"><span class="stat-zahl">{{ gesamt.versendet }}</span>Angebote versendet</div>
     <div class="kachel stat"><span class="stat-zahl">{{ gesamt.angenommen }}</span>Angenommen</div>
     <div class="kachel stat"><span class="stat-zahl">{{ ('%.0f' | format(gesamt.quote)) }} %</span>Abschlussquote</div>
+    {#- v36 (PLAN_V22 Phase 194, B3): Cloover-Verträge im Zeitraum (Rückmeldung primary_signed_contract) [ANNAHME] #}
+    {% if cloover_vertraege is defined and cloover_vertraege %}
+    <div class="kachel stat" id="kachel-cloover-vertraege" title="Angebote, deren Cloover-Finanzierungsvertrag im Zeitraum als unterschrieben zurückgemeldet wurde (Lauf cloover-status); Summe = Endbetrag der Angebote"><span class="stat-zahl">{{ cloover_vertraege.anzahl }}</span>Cloover-Verträge <span class="dezent">({{ cloover_vertraege.summe_cent | euro }})</span></div>
+    {% endif %}
 </div>
 
 <h2>Angebote: Tool · TAIFUN · gesamt</h2>

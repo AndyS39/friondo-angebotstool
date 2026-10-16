@@ -52,6 +52,12 @@ PLATZHALTER = [
     # v30 (PLAN_V18 Phase 150) [ANNAHME]: Name des am Angebot gewählten Eintrags
     ("{zahlungsbedingung}", "Name der am Angebot gewählten Zahlungsbedingung, "
                             "z. B. „80 % Anzahlung, 2 % Skonto“ (Standard: „Standard“)"),
+    # v36 (PLAN_V22 Phase 193/194): Cloover-Finanzierung – leer bei Enni/SWD/Sparkasse DU, Modus „aus“,
+    # ausgeblendeter Finanzierung oder ohne berechnete Rate; Kombi-Vorlage: eine Zeile je Angebot
+    ("{cloover_rate}", "Cloover-Monatsrate ohne Förderung, z. B. „ab 389,99 € pro Monat“ (sonst leer; "
+                       "Kombi-Vorlage: eine Zeile je Angebot)"),
+    ("{cloover_link}", "persönlicher Cloover-Finanzierungs-Link des Angebots (leer ohne Cloover-Projekt)"),
+    ("{cloover_finanzierungsangebot}", "Finanzierungsangebot von Cloover (financial_offer, leer ohne Projekt)"),
 ]
 
 _MUSTER = re.compile(r"\{[a-z_]+\}")
@@ -131,6 +137,10 @@ def kombi_mail_fuer_vorgang(session, angebote, kunde,
     basis["angebotsnummern"] = ", ".join(
         (a.taifun_nummer or a.nummer) if a.extern else a.nummer for a in angebote)
     basis["angebotsliste"] = angebotsliste_text(session, angebote)
+    # v36 (PLAN_V22 Phase 193) [ANNAHME]: Kombi – {cloover_rate} je Angebot eine Zeile, {cloover_link} =
+    # gemeinsamer Link des Kombi-Projekts (Agent B3)
+    from app import cloover
+    basis.update(cloover.kombi_platzhalter(session, angebote))
     return (einsetzen(betreff, basis), einsetzen_html(als_html(text), basis))
 
 
@@ -209,7 +219,11 @@ def werte_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
     # v30 (PLAN_V18 Phase 150): {zahlungsbedingung} = Name des gewählten Eintrags
     from app import zahlungsbedingungen
     zahlungsbedingung_name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
+    # v36 (PLAN_V22 Phase 193): {cloover_rate}, {cloover_link}, {cloover_finanzierungsangebot}
+    from app import cloover
+    cloover_werte = cloover.mail_platzhalter(session, angebot)
     return {
+        **cloover_werte,
         "zahlungsbedingung": zahlungsbedingung_name,
         "briefanrede": briefanrede(kunde),
         "anrede": briefanrede(kunde),

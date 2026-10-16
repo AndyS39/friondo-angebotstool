@@ -1,0 +1,81 @@
+{#- v36 (PLAN_V22 Phase 189): Auftragserteilung – Einleitung wörtlich, Karte 1 „BARKAUF – Online beauftragen“
+    (Kurzsatz der Zahlungsbedingung, Knopf online/E-Mail), Karte 2 je Profil (Cloover mit Rate/Laufzeit/Knopf/QR
+    aus Teil B, sonst Enni/SWD/Sparkasse-Text), Cloover-Block (nur Standard, Partial _cloover.html),
+    „Beauftragung per Post“, bei WP „Aufschiebende Bedingung“ + „Voraussichtliches Datum der Umsetzung“,
+    Unterschriftszeile „Ort, Datum“ / „Unterschrift des Auftraggebers“ – hier sitzt die Vor-Ort-Signatur. -#}
+{%- set a = kontext.auftrag %}
+{%- set c = a.cloover %}
+<div class="pdf-seite pdf-auftrag">
+  <h2>Auftragserteilung</h2>
+  <p>{{ a.einleitung }}</p>
+  <div class="pdf-auftrag-karten">
+    <div class="pdf-auftrag-karte pdf-auftrag-karte-hell">
+      <div class="pdf-auftrag-eyebrow">{{ a.karte1.titel }}</div>
+      <div class="pdf-auftrag-gross">{{ a.karte1.untertitel }}</div>
+      <div class="pdf-auftrag-text pdf-auftrag-fuell">{{ a.karte1.text }}</div>
+      <a class="pdf-knopf pdf-knopf-dunkel" href="{{ a.karte1.knopf_url }}">{{ a.karte1.knopf_text }}</a>
+    </div>
+    <div class="pdf-auftrag-karte pdf-auftrag-karte-dunkel">
+      <div class="pdf-auftrag-eyebrow pdf-auftrag-eyebrow-hell">{{ a.karte2.titel }}</div>
+      <div class="pdf-auftrag-gross">{{ a.karte2.untertitel }}</div>
+      {%- if a.karte2.art == "cloover" %}
+      {%- if c and (c.rate_text or c.rate_mit_text) %}
+      <div class="pdf-auftrag-text pdf-auftrag-klein">{{ a.karte2.text }}</div>
+      <div class="pdf-auftrag-rate"><span class="pdf-auftrag-rate-ab">ab</span><span class="pdf-auftrag-rate-betrag">{{ c.rate_mit_text or c.rate_text }}</span><span class="pdf-auftrag-rate-monat">/ Monat*</span></div>
+      {%- if c.rate_mit_text and c.rate_text %}
+      <div class="pdf-auftrag-klein">ohne Förderung ab {{ c.rate_text }}</div>
+      {%- endif %}
+      <div class="pdf-auftrag-text pdf-auftrag-klein pdf-auftrag-fuell">Laufzeit {{ c.laufzeit }} Jahre{% if c.checkout_link %} · Ihre Finanzierungsanfrage ist bereits angelegt – nur noch bestätigen.{% endif %}</div>
+      {%- if c.checkout_link %}
+      <div class="pdf-auftrag-link">
+        <a class="pdf-knopf pdf-knopf-blau" href="{{ c.checkout_link }}">{{ a.karte2.knopf_text }}</a>
+        {%- if c.qr_svg %}<span class="pdf-auftrag-qr">{{ c.qr_svg | safe }}</span>{% endif %}
+      </div>
+      <div class="pdf-auftrag-linktext">{{ c.link_kurz or c.checkout_link }}</div>
+      {%- elif c.hinweis_link %}
+      <div class="pdf-auftrag-klein">{{ c.hinweis_link }}</div>
+      {%- endif %}
+      {%- else %}
+      <div class="pdf-auftrag-text pdf-auftrag-klein pdf-auftrag-fuell">{{ a.karte2.text }}</div>
+      {%- endif %}
+      {%- else %}
+      {%- for absatz in a.karte2.absaetze %}
+      <div class="pdf-auftrag-text pdf-auftrag-klein{% if loop.last %} pdf-auftrag-fuell{% endif %}">{{ absatz }}</div>
+      {%- endfor %}
+      {%- endif %}
+    </div>
+  </div>
+  {%- if a.cloover_block %}
+  {% include "pdf/angebot/_cloover.html" %}
+  {%- endif %}
+  <div class="pdf-auftrag-post">
+    <h3>{{ a.post_titel }}</h3>
+    <p>{{ a.post_text }}</p>
+    {%- if a.aufschiebende_bedingung %}
+    <p><strong>Aufschiebende Bedingung:</strong> {{ a.aufschiebende_bedingung }}</p>
+    {%- endif %}
+    <div class="pdf-auftrag-abschluss">
+    {%- if a.umsetzungsdatum %}
+    <p>{{ a.umsetzung_vor }} <span class="pdf-auftrag-feld"></span>{{ a.umsetzung_nach }}</p>
+    {%- endif %}
+    {%- if a.ausfuehrungszeitraum %}
+    <p>{{ a.ausfuehrungszeitraum_text }} <span class="pdf-auftrag-feld"></span></p>
+    {%- endif %}
+    <div class="pdf-unterschriften pdf-unterschriften-2">
+      <div class="pdf-unterschrift">
+        {%- if kontext.signatur %}<div class="pdf-signatur-zeit">{{ kontext.signatur.zeitstempel }}</div>{% endif %}
+        <div class="pdf-unterschrift-linie">{{ a.unterschrift.ort_datum }}</div>
+      </div>
+      <div class="pdf-unterschrift">
+        {%- if kontext.signatur %}
+        <div class="pdf-signatur-bild">{% if kontext.signatur.bild_data_url %}<img src="{{ kontext.signatur.bild_data_url }}" alt="Unterschrift">{% endif %}</div>
+        {%- endif %}
+        <div class="pdf-unterschrift-linie">{{ a.unterschrift.unterschrift }}</div>
+        {%- if kontext.signatur %}
+        <div class="pdf-signatur-text">{{ kontext.signatur.name }} · signiert am {{ kontext.signatur.zeitstempel }}</div>
+        {%- endif %}
+      </div>
+    </div>
+    </div>
+  </div>
+</div>

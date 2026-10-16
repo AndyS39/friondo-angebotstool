@@ -172,10 +172,11 @@ def gewerke_hinweise(session: Session, vorgang: Vorgang,
     return hinweise
 
 
-def pdf_fuer(session: Session, angebot: Angebot) -> Path:
+def pdf_fuer(session: Session, angebot: Angebot, benutzer=None) -> Path:
     """Angebots-PDF für den Kombi-Anhang: Tool-Angebote frisch erzeugt,
-    TAIFUN-Einträge aus dem hinterlegten Upload."""
+    TAIFUN-Einträge aus dem hinterlegten Upload. v36 (Phase 190, Nachtrag):
+    `benutzer` = der vorbereitende Innendienstler (Ansprechpartner-Rückfall im Layout v3)."""
     if angebot.extern:
         return Path(angebot.extern_pdf_pfad)
     from app import pdf_export
-    return pdf_export.pdf_fuer_angebot(session, angebot)
+    return pdf_export.pdf_fuer_angebot(session, angebot, benutzer=benutzer)

@@ -1,0 +1,380 @@
+/* v36 (PLAN_V22 Phase 188) – Angebots-PDF, Layout v3: Grundlage für alle Sparten (WP/PV/KL/WB).
+   Dieses Stylesheet wird nur vom Browser-Druck (app/pdf_html.py) über file:// geladen; die Farben sind die
+   PDF-Tokens aus den Design-Vorlagen (docs/design-v36/vorlage/) und bewusst fest – kein Hell/Dunkel-Modus
+   im Druck. Templates unter app/templates/pdf/angebot/ verwenden ausschließlich var(--pdf-…).
+   Seitenaufbau: @page A4 ohne Rand, 10 mm Randzone oben für die Browser-Kopfzeile (Angebot-Nr. · Kunde ·
+   SEITE x VON y), Inhalt mit 16 mm Innenabstand, Fußzeile fünfspaltig als wiederholter Tabellenfuß. */
+
+@import url("fonts/nunito-sans/nunito-sans.css");
+
+:root {
+  --pdf-dunkel: #15153a;
+  --pdf-blau: #4389c8;
+  --pdf-grau: #6b6f85;
+  --pdf-linie: #dfe3ee;
+  --pdf-flaeche: #f1f6fc;
+  --pdf-hell: #dbe9f7;
+  --pdf-weiss: #ffffff;
+  --pdf-text: #15153a;
+  --pdf-text-weich: #3c3f55;   /* Kartentext/Zeilentext der Vorlage (Phase 189) */
+  --pdf-blau-hell: #8fc6f3;    /* Eyebrow auf dunkler Karte (Phase 189) */
+  --pdf-innen: 16mm;
+  --pdf-schrift: 9.5pt;
+  --pdf-zeile: 1.45;
+}
+
+@page {
+  size: A4;
+  margin: 10mm 0 0 0;          /* Randzone der Browser-Kopfzeile – kein Seiteninhalt reicht hinein */
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--pdf-weiss);
+  color: var(--pdf-text);
+  font-family: "Nunito Sans", "Segoe UI", Arial, sans-serif;
+  font-size: var(--pdf-schrift);
+  line-height: var(--pdf-zeile);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Dokumenttabelle: <thead> und <tfoot> wiederholt Chromium auf jeder gedruckten Seite */
+table.pdf-dok { width: 100%; border-collapse: collapse; }
+table.pdf-dok > thead > tr > td,
+table.pdf-dok > tbody > tr > td,
+table.pdf-dok > tfoot > tr > td { padding: 0; vertical-align: top; }
+table.pdf-dok > thead > tr > td { height: 4mm; }
+
+/* Seiten innerhalb des Dokuments */
+.pdf-seite {
+  padding: 0 var(--pdf-innen);
+  break-before: page;
+  page-break-before: always;
+}
+.pdf-seite:first-child { break-before: auto; page-break-before: auto; }
+.pdf-seite + .pdf-seite { margin-top: 0; }
+/* Phase 189: Luft unter der Randzone und Mindesthöhe, damit der wiederholte Tabellenfuß auch auf der letzten
+   Seite unten steht (297 mm − 10 mm Randzone − 4 mm Tabellenkopf − Fußzeile ≈ 265 mm; 250 mm lässt Reserve) */
+.pdf-seite:not(.pdf-deckblatt) { padding-top: 3mm; min-height: 250mm; }
+
+/* Fußzeile (fünfspaltig, wörtlich wie das Design) */
+.pdf-fuss {
+  padding: 3mm var(--pdf-innen) 5mm;
+  border-top: 0.3mm solid var(--pdf-linie);
+  color: var(--pdf-grau);
+  font-size: 6.5pt;
+  line-height: 1.35;
+}
+.pdf-fuss-spalten { display: flex; gap: 4mm; }
+.pdf-fuss-spalten > div { flex: 1 1 0; }
+.pdf-fuss-spalten > div:nth-child(4) { flex: 1.5 1 0; }   /* Bankverbindung wie die Vorlage (1.5fr) */
+.pdf-fuss strong { color: var(--pdf-dunkel); font-weight: 700; display: block; margin-bottom: 0.5mm; }
+
+/* Typografie-Grundlagen */
+h1, h2, h3, h4 { margin: 0; color: var(--pdf-dunkel); line-height: 1.2; }
+h1 { font-size: 22pt; font-weight: 800; }
+h2 { font-size: 16pt; font-weight: 800; }
+h3 { font-size: 11pt; font-weight: 700; }
+p { margin: 0 0 2.6mm; }
+a { color: var(--pdf-blau); text-decoration: none; }
+strong { font-weight: 700; }
+.pdf-eyebrow {
+  color: var(--pdf-blau);
+  font-size: 7.5pt;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 1.5mm;
+}
+.pdf-dezent { color: var(--pdf-grau); }
+.pdf-klein { font-size: 7.5pt; }
+.pdf-rechts { text-align: right; }
+.pdf-zahl { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Karten, Kästen, Linien */
+.pdf-karte {
+  border: 0.3mm solid var(--pdf-linie);
+  border-radius: 2.5mm;
+  padding: 4mm 5mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.pdf-karte.pdf-flaeche { background: var(--pdf-flaeche); border-color: var(--pdf-flaeche); }
+.pdf-box-dunkel {
+  background: var(--pdf-dunkel);
+  color: var(--pdf-weiss);
+  border-radius: 2.5mm;
+  padding: 4mm 5mm;
+}
+.pdf-box-dunkel * { color: var(--pdf-weiss); }
+.pdf-hinweiskasten {
+  background: var(--pdf-flaeche);
+  border: 0.3mm solid var(--pdf-blau);
+  border-radius: 2mm;
+  padding: 2.5mm 4mm;
+  margin: 2mm 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.pdf-linie { border: 0; border-top: 0.3mm solid var(--pdf-linie); margin: 3mm 0; }
+.pdf-abstand-s { height: 2mm; }
+.pdf-abstand-m { height: 5mm; }
+.pdf-abstand-l { height: 10mm; }
+
+/* Tabellen (Festpreisangebot) */
+table.pdf-tabelle { width: 100%; border-collapse: collapse; }
+table.pdf-tabelle th {
+  text-align: left;
+  font-size: 7pt;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pdf-grau);
+  border-bottom: 0.4mm solid var(--pdf-dunkel);
+  padding: 1.5mm 1.5mm;
+}
+table.pdf-tabelle td {
+  border-bottom: 0.25mm solid var(--pdf-linie);
+  padding: 2mm 1.5mm;
+  vertical-align: top;
+}
+table.pdf-tabelle tr { break-inside: avoid; page-break-inside: avoid; }
+table.pdf-tabelle thead { display: table-header-group; }
+
+/* Haken-Listen */
+ul.pdf-haken { list-style: none; margin: 0; padding: 0; }
+ul.pdf-haken li { position: relative; padding-left: 5.5mm; margin-bottom: 1.6mm; }
+ul.pdf-haken li::before {
+  content: "";
+  position: absolute; left: 0; top: 1.1mm;
+  width: 3.2mm; height: 1.7mm;
+  border-left: 0.5mm solid var(--pdf-blau);
+  border-bottom: 0.5mm solid var(--pdf-blau);
+  transform: rotate(-45deg);
+}
+ul.pdf-haken.pdf-haken-dunkel li::before { border-color: var(--pdf-dunkel); }
+
+/* Zwei Spalten */
+.pdf-spalten { display: flex; gap: 6mm; }
+.pdf-spalten > div { flex: 1 1 0; min-width: 0; }
+
+/* Unterschriftslinien */
+.pdf-linie-feld { border-bottom: 0.3mm solid var(--pdf-dunkel); height: 9mm; }
+.pdf-linie-text { font-size: 7pt; color: var(--pdf-grau); margin-top: 1mm; }
+
+/* Bildschirm-Vorschau (GET /angebote/<id>/pdf.html): Seiten als weiße Blätter auf grauem Grund */
+@media screen {
+  body { background: #e9ecf1; /* fest: Vorschau-Hintergrund außerhalb des Blatts */ }
+  table.pdf-dok { width: 210mm; margin: 8mm auto; background: var(--pdf-weiss); box-shadow: 0 2mm 8mm rgba(0, 0, 0, 0.12); }
+  .pdf-seite { min-height: 260mm; padding-top: 10mm; }
+}
+
+/* =========================================================================================
+   v36 (PLAN_V22 Phase 189, Agent A1) – Seiten-Bausteine des Layouts v3 nach den Design-Vorlagen
+   (docs/design-v36/vorlage/entpackt/): Deckblatt, Überblick + Team, Festpreisangebot, Auftragserteilung,
+   Cloover-Block, Vertragsbedingungen, Vollmacht. Maße/Schriftgrößen wie die Vorlage, Farben nur Tokens.
+   ========================================================================================= */
+
+/* --- Deckblatt (randlos: Titelbild über die volle Seitenbreite) --- */
+.pdf-deckblatt { padding: 0; }
+.pdf-db-kopf {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5mm var(--pdf-innen) 5mm;
+}
+.pdf-db-logo { height: 22mm; width: auto; display: block; }
+.pdf-db-award { display: flex; flex-direction: column; align-items: center; gap: 1mm; text-decoration: none; color: var(--pdf-dunkel); }
+.pdf-db-award img { height: 19mm; width: auto; display: block; }
+.pdf-db-award span { font-size: 6.5pt; font-weight: 600; color: var(--pdf-blau); letter-spacing: 0.02em; }
+.pdf-db-titelbild { position: relative; height: 134mm; overflow: hidden; background: var(--pdf-dunkel); }
+.pdf-db-titelbild > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%; display: block; }
+.pdf-db-verlauf {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--pdf-dunkel) 82%, transparent) 0%,
+                    color-mix(in srgb, var(--pdf-dunkel) 55%, transparent) 22%, transparent 48%),
+    linear-gradient(90deg, transparent 40%, color-mix(in srgb, var(--pdf-dunkel) 45%, transparent) 100%);
+}
+.pdf-db-titeltext {
+  position: absolute; left: var(--pdf-innen); right: var(--pdf-innen); top: 9mm;
+  display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2.5mm; color: var(--pdf-weiss);
+}
+.pdf-db-eyebrow { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--pdf-weiss); }
+.pdf-db-titeltext h1 { font-size: 24pt; font-weight: 800; line-height: 1.08; text-wrap: balance; max-width: 120mm; color: var(--pdf-weiss); }
+.pdf-db-untertitel { font-size: 12.5pt; font-weight: 600; color: var(--pdf-hell); }
+.pdf-db-adressen { display: grid; grid-template-columns: 1fr auto; gap: 10mm; align-items: start; padding: 5mm var(--pdf-innen) 0; }
+.pdf-db-empfaenger { display: flex; flex-direction: column; gap: 2.5mm; }
+.pdf-db-absender { font-size: 7pt; color: var(--pdf-grau); border-bottom: 0.3mm solid var(--pdf-linie); padding-bottom: 1.2mm; width: fit-content; }
+.pdf-db-anschrift { font-size: 11pt; line-height: 1.45; }
+.pdf-db-zusatz { font-size: 7pt; color: var(--pdf-grau); line-height: 1.4; }
+.pdf-db-info {
+  display: grid; grid-template-columns: auto auto; column-gap: 6mm; row-gap: 1.2mm; font-size: 9.5pt;
+  background: var(--pdf-flaeche); border-radius: 2mm; padding: 4mm 6mm; min-width: 56mm; align-content: start;
+}
+.pdf-db-info-k { color: var(--pdf-grau); }
+.pdf-db-info-w { font-weight: 700; text-align: right; }
+.pdf-db-info-voll { grid-column: 1 / -1; font-size: 7.5pt; color: var(--pdf-grau); padding-top: 0.8mm; border-top: 0.3mm solid var(--pdf-linie); }
+.pdf-db-zert { display: flex; flex-direction: column; gap: 2.5mm; padding: 3mm var(--pdf-innen) 0; margin-top: 4mm; border-top: 0.3mm solid var(--pdf-linie); }
+.pdf-db-zert-titel { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pdf-blau); }
+.pdf-db-zert-logos { display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; justify-items: center; gap: 6mm; height: 16mm; }
+.pdf-db-zert-logos img { max-height: 14mm; max-width: 100%; width: auto; height: auto; display: block; }
+
+/* --- Ihr Angebot im Überblick + Team --- */
+.pdf-ueberblick h2 { font-size: 15pt; margin-bottom: 1mm; }
+.pdf-ueberblick { display: flex; flex-direction: column; gap: 3mm; }
+.pdf-ue-text { font-size: 10pt; line-height: 1.55; margin: 0; text-wrap: pretty; }
+.pdf-ue-spalten { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin: 2mm 0; }
+.pdf-ue-spaltentitel { font-size: 9pt; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pdf-blau); margin-bottom: 2.5mm; }
+ul.pdf-haken-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.4mm; font-size: 9pt; line-height: 1.35; }
+ul.pdf-haken-liste li { display: flex; gap: 2.5mm; }
+.pdf-haken-kreis {
+  flex: none; width: 4.2mm; height: 4.2mm; border-radius: 50%; color: var(--pdf-weiss);
+  display: flex; align-items: center; justify-content: center; font-size: 7pt; font-weight: 800; margin-top: 0.6mm;
+}
+.pdf-haken-blau .pdf-haken-kreis { background: var(--pdf-blau); }
+.pdf-haken-dunkel .pdf-haken-kreis { background: var(--pdf-dunkel); }
+.pdf-ue-schluss { margin-top: 1mm; }
+.pdf-team { margin: 3mm calc(-1 * var(--pdf-innen)) 0; break-inside: avoid; page-break-inside: avoid; }
+.pdf-team .pdf-ue-spaltentitel { padding: 0 var(--pdf-innen) 0; margin-bottom: 2mm; break-after: avoid; }
+/* Vorlage: 92 mm – mit dem längeren WP-Vortext (zusätzlicher Absatz) bleiben nur ~100 mm auf der Seite,
+   deshalb 80 mm, damit Überschrift und Foto sicher auf Seite 2 stehen */
+.pdf-team img { width: 100%; height: 80mm; object-fit: cover; object-position: 50% 45%; display: block; }
+
+/* --- Festpreisangebot --- */
+.pdf-pos-kopf { display: flex; align-items: baseline; justify-content: space-between; gap: 6mm; margin-bottom: 4mm; }
+.pdf-pos-kopf h2 { font-size: 15pt; }
+.pdf-pos-netto { font-size: 8pt; color: var(--pdf-grau); }
+table.pdf-pos-tabelle { font-size: 8.6pt; line-height: 1.4; }
+.pdf-sparte-pv table.pdf-pos-tabelle, .pdf-sparte-kl table.pdf-pos-tabelle, .pdf-sparte-wb table.pdf-pos-tabelle { font-size: 8.2pt; line-height: 1.35; }
+table.pdf-pos-tabelle th { color: var(--pdf-blau); }
+table.pdf-pos-tabelle th:first-child, table.pdf-pos-tabelle td:first-child { padding-left: 0; }
+table.pdf-pos-tabelle th:last-child, table.pdf-pos-tabelle td:last-child { padding-right: 0; }
+col.pdf-col-nr { width: 9mm; }
+col.pdf-col-menge { width: 11mm; }
+col.pdf-col-einheit { width: 10mm; }
+col.pdf-col-epreis { width: 20mm; }
+col.pdf-col-gpreis { width: 22mm; }
+table.pdf-pos-tabelle td.pdf-pos-nr { color: var(--pdf-grau); }
+table.pdf-pos-tabelle td.pdf-pos-gpreis { font-weight: 700; }
+tr.pdf-pos-alternativ td.pdf-pos-gpreis { font-weight: 400; font-size: 7.5pt; }   /* „im PV-Angebot“ passt in 22 mm */
+tr.pdf-pos-gruppe { break-after: avoid; page-break-after: avoid; }
+tr.pdf-pos-gruppe td { padding: 4mm 0 1.5mm; font-weight: 800; font-size: 9.5pt; border-bottom: 0; }
+.pdf-sparte-pv tr.pdf-pos-gruppe td, .pdf-sparte-kl tr.pdf-pos-gruppe td, .pdf-sparte-wb tr.pdf-pos-gruppe td { padding: 3mm 0 1mm; font-size: 9pt; }
+tr.pdf-pos-kastenzeile { break-after: avoid; page-break-after: avoid; }
+tr.pdf-pos-kastenzeile td { padding: 1.5mm 0 1mm; border-bottom: 0; }
+tr.pdf-pos-kastenzeile .pdf-hinweiskasten { margin: 0; color: var(--pdf-dunkel); font-size: 8pt; }
+tr.pdf-pos-alternativ td { background: color-mix(in srgb, var(--pdf-grau) 10%, var(--pdf-weiss)); color: var(--pdf-text-weich); }
+.pdf-pos-punkt { position: relative; padding-left: 3.2mm; }
+.pdf-pos-punkt::before { content: "\2022"; position: absolute; left: 0; }
+.pdf-pos-punkt-2 { padding-left: 7mm; }
+.pdf-pos-punkt-2::before { content: "-"; left: 3.5mm; }
+.pdf-pos-textzeile.pdf-dezent { font-size: 7.8pt; }
+.pdf-pos-rabatt { color: var(--pdf-blau); font-weight: 700; margin-top: 0.8mm; }
+.pdf-pos-hinweise { margin-top: 5mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-pos-hinweise h3 { font-size: 10pt; margin-bottom: 1.5mm; }
+.pdf-pos-hinweise p { font-size: 8.5pt; line-height: 1.45; margin-bottom: 1.5mm; }
+.pdf-summen-anker { display: flex; justify-content: flex-end; margin-top: 4mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-summen { min-width: 92mm; display: grid; grid-template-columns: 1fr auto; row-gap: 1.2mm; column-gap: 8mm; font-size: 9.5pt; }
+.pdf-summen-k { color: var(--pdf-grau); }
+.pdf-summen-w { text-align: right; }
+.pdf-summen-fett { font-weight: 800; font-size: 12pt; color: var(--pdf-dunkel); }
+.pdf-summen-blau { color: var(--pdf-blau); font-weight: 700; font-size: 9.5pt; margin-top: 1mm; }
+.pdf-summen-linie { grid-column: 1 / -1; border-top: 0.4mm solid var(--pdf-dunkel); margin-top: 1mm; }
+.pdf-summen-box {
+  grid-column: 1 / -1; margin-top: 1.5mm; display: flex; justify-content: space-between; align-items: center; gap: 8mm;
+  padding: 3mm 4mm; border-radius: 1.5mm;
+}
+.pdf-summen-box span:first-child { font-weight: 800; font-size: 12pt; }
+.pdf-summen-box span:last-child { font-weight: 800; font-size: 14pt; line-height: 1; }
+.pdf-summen-hinweis { grid-column: 1 / -1; font-size: 7.5pt; color: var(--pdf-grau); text-align: right; }
+
+/* --- Auftragserteilung --- */
+.pdf-auftrag { display: flex; flex-direction: column; gap: 3mm; font-size: 9pt; line-height: 1.5; text-wrap: pretty; }
+.pdf-auftrag h2 { font-size: 17pt; }
+.pdf-auftrag p { margin: 0; }
+.pdf-auftrag-karten { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-auftrag-karte { padding: 4mm; border-radius: 2mm; display: flex; flex-direction: column; gap: 2mm; }
+.pdf-auftrag-karte-hell { border: 0.4mm solid var(--pdf-dunkel); }
+.pdf-auftrag-karte-dunkel { background: var(--pdf-dunkel); color: var(--pdf-weiss); }
+.pdf-auftrag-karte-dunkel .pdf-auftrag-gross { color: var(--pdf-weiss); }
+.pdf-auftrag-eyebrow { font-size: 7.5pt; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--pdf-blau); }
+.pdf-auftrag-eyebrow-hell { color: var(--pdf-blau-hell); }
+.pdf-auftrag-gross { font-size: 12pt; font-weight: 800; line-height: 1.2; color: var(--pdf-dunkel); }
+.pdf-auftrag-text { color: var(--pdf-text-weich); }
+.pdf-auftrag-karte-dunkel .pdf-auftrag-text, .pdf-auftrag-karte-dunkel .pdf-auftrag-klein { color: var(--pdf-hell); }
+.pdf-auftrag-klein { font-size: 8.5pt; }
+.pdf-auftrag-fuell { flex: 1; }
+.pdf-auftrag-rate { display: flex; align-items: baseline; gap: 2mm; }
+.pdf-auftrag-rate-ab { font-size: 7.5pt; color: var(--pdf-hell); }
+.pdf-auftrag-rate-betrag { font-size: 22pt; font-weight: 800; line-height: 1; color: var(--pdf-weiss); }
+.pdf-auftrag-rate-monat { font-size: 8.5pt; color: var(--pdf-hell); }
+.pdf-knopf {
+  display: inline-flex; align-items: center; justify-content: center; gap: 2mm; padding: 3.2mm 6mm; border-radius: 1.5mm;
+  font-size: 9.5pt; font-weight: 800; text-decoration: none; letter-spacing: 0.02em; color: var(--pdf-weiss);
+}
+.pdf-knopf-dunkel { background: var(--pdf-dunkel); }
+.pdf-knopf-blau { background: var(--pdf-blau); }
+.pdf-auftrag-link { display: flex; align-items: center; gap: 3mm; }
+.pdf-auftrag-link .pdf-knopf { flex: 1; }
+.pdf-auftrag-qr { flex: none; width: 22mm; height: 22mm; background: var(--pdf-weiss); border-radius: 1mm; padding: 1mm; }
+.pdf-auftrag-qr svg { width: 100%; height: 100%; display: block; }
+.pdf-auftrag-linktext { font-size: 7pt; color: var(--pdf-hell); word-break: break-all; }
+.pdf-auftrag-post { margin-top: 1mm; padding-top: 4mm; border-top: 0.3mm solid var(--pdf-linie); display: flex; flex-direction: column; gap: 3mm; }
+.pdf-auftrag-post h3 { font-size: 12pt; font-weight: 800; break-after: avoid; page-break-after: avoid; }
+/* Umsetzungsdatum + Unterschriftszeile bleiben zusammen; der Text davor darf umbrechen */
+.pdf-auftrag-abschluss { display: flex; flex-direction: column; gap: 3mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-auftrag-feld { display: inline-block; min-width: 40mm; border-bottom: 0.3mm solid var(--pdf-dunkel); }
+.pdf-unterschriften { display: grid; gap: 12mm; margin-top: 5mm; }
+.pdf-unterschriften-2 { grid-template-columns: 1fr 1fr; }
+.pdf-unterschriften-3 { grid-template-columns: 1fr 1fr 1fr; gap: 8mm; margin-top: 12mm; }
+.pdf-unterschrift { display: flex; flex-direction: column; justify-content: flex-end; }
+.pdf-unterschriften-3 .pdf-unterschrift { justify-content: flex-start; }   /* alle drei Linien auf einer Höhe */
+.pdf-unterschrift-linie { border-top: 0.3mm solid var(--pdf-dunkel); padding-top: 1.5mm; font-size: 8pt; color: var(--pdf-grau); }
+.pdf-signatur-bild { height: 14mm; display: flex; align-items: flex-end; margin-bottom: -1mm; }
+.pdf-signatur-bild img { max-height: 14mm; max-width: 60mm; width: auto; height: auto; display: block; }
+.pdf-signatur-zeit { font-size: 9pt; color: var(--pdf-dunkel); padding-bottom: 1mm; }
+.pdf-signatur-text { font-size: 7.5pt; color: var(--pdf-dunkel); margin-top: 1mm; }
+
+/* --- Cloover-Block --- */
+.pdf-cloover { display: flex; flex-direction: column; gap: 3mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-cloover-kopf { display: flex; align-items: baseline; gap: 3mm; flex-wrap: wrap; }
+.pdf-cloover-kopf h3 { font-size: 12pt; font-weight: 800; }
+.pdf-cloover-slogan { font-size: 9.5pt; font-weight: 600; color: var(--pdf-blau); }
+.pdf-cloover-boxen { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5mm; }
+.pdf-cloover-box { padding: 2.5mm 3mm; border: 0.3mm solid var(--pdf-linie); border-radius: 2mm; }
+.pdf-cloover-box-flaeche { background: var(--pdf-flaeche); border-color: var(--pdf-flaeche); }
+.pdf-cloover-boxtitel { font-weight: 800; color: var(--pdf-blau); margin-bottom: 0.8mm; }
+.pdf-cloover-boxtext { font-size: 8.2pt; line-height: 1.4; }
+.pdf-cloover-fussnote { margin: 0; font-size: 7.5pt; color: var(--pdf-grau); }
+
+/* --- Vertragsbedingungen --- */
+.pdf-bedingungen { display: flex; flex-direction: column; gap: 3.5mm; font-size: 9pt; line-height: 1.5; text-wrap: pretty; }
+.pdf-bedingungen h2 { font-size: 15pt; margin-bottom: 1mm; }
+.pdf-bedingungen p { margin: 0; }
+.pdf-bed-abschnitt { display: flex; flex-direction: column; gap: 1.5mm; }
+.pdf-bed-abschnitt h3 { font-size: 10.5pt; font-weight: 800; color: var(--pdf-blau); break-after: avoid; page-break-after: avoid; }
+/* „# “-Titel der Nachtexte (z. B. „Installationsvoraussetzungen“) als übergeordnete Zwischenüberschrift */
+.pdf-bed-abschnitt.pdf-bed-ebene1 { gap: 0; margin-top: 1mm; }
+.pdf-bed-abschnitt.pdf-bed-ebene1 h3 { font-size: 11.5pt; }
+.pdf-bed-fussnote { font-size: 7.5pt; color: var(--pdf-grau); }
+.pdf-bed-schluss { margin-top: 2mm; display: flex; flex-direction: column; gap: 1.5mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-bed-gruss { margin-top: 2mm; }
+
+/* --- Vollmacht + SEPA --- */
+.pdf-vollmacht { display: flex; flex-direction: column; gap: 3.5mm; font-size: 8.8pt; line-height: 1.5; text-wrap: pretty; }
+.pdf-vollmacht p { margin: 0; }
+.pdf-vm-titel { font-size: 13.5pt; font-weight: 800; line-height: 1.2; }
+.pdf-vm-kaesten { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 1mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-vm-karte { display: flex; flex-direction: column; gap: 3mm; padding: 4mm; }
+.pdf-vm-kartentitel { font-weight: 800; color: var(--pdf-blau); font-size: 8pt; letter-spacing: 0.08em; text-transform: uppercase; }
+.pdf-feldzeile { display: flex; gap: 2mm; align-items: baseline; }
+.pdf-feld-label { width: 22mm; flex: none; color: var(--pdf-grau); }
+.pdf-feld-label-breit { width: 24mm; }
+.pdf-feld-wert { flex: 1; border-bottom: 0.3mm solid var(--pdf-dunkel); min-height: 4.5mm; }
+.pdf-kaestchen-zeile { display: flex; gap: 2.5mm; align-items: center; }
+.pdf-kaestchen { width: 4mm; height: 4mm; border: 0.3mm solid var(--pdf-dunkel); border-radius: 0.8mm; flex: none; }
+.pdf-vm-sepa { margin-top: 4mm; display: flex; flex-direction: column; gap: 3mm; break-inside: avoid; page-break-inside: avoid; }
+.pdf-vm-sepa-felder { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm 8mm; }

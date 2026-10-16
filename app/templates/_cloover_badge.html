@@ -1,0 +1,8 @@
+{# v36 (PLAN_V22 Phase 194, Agent B3): Badge „Cloover: Vertrag unterschrieben (TT.MM.JJJJ)“ /
+   „Cloover: Barzahlung gewählt“ / „Cloover-Link“ für Editor, Angebotsliste und Vorgangsakte.
+   Datenquelle ist das Jinja-Global cloover_badge_info(angebot) (app/cloover_projekt.badge_fuer – nur
+   cloover_json, keine Datenbank). Nur Tokens über die Status-Klassen der Abzeichen. #}
+{% macro cloover_badge(angebot, klein=False) -%}
+{%- set b = cloover_badge_info(angebot) -%}
+{%- if b %}<span class="abzeichen {{ b.klasse }} cloover-abzeichen cloover-abzeichen-{{ b.art }}" title="{{ b.titel }}">{{ b.text }}</span>{% endif -%}
+{%- endmacro %}

@@ -1,0 +1,48 @@
+{# v36 (PLAN_V22 Phase 194, Agent B3): Parametrierung → Cloover → Abschnitt „PDF-Ablage“. Eingebunden am Ende
+   von konfiguration/cloover.html (Agent B1). Kontext `ablage` = cloover_pdf_ablage.seiten_kontext(session);
+   fehlt er (B1-Route ohne Übergabe), liefert das Jinja-Global cloover_ablage_kontext() ihn über eine kurze
+   Lesesitzung. Routen: POST /parametrierung/cloover/ablage (speichern), …/ablage-test (Test-PDF ablegen und
+   prüfen). Nur Tokens. #}
+{% set ab = ablage if ablage is defined and ablage else cloover_ablage_kontext() %}
+{% set ablage_meldung = request.query_params.get('ablage', '') %}
+<h2 id="ablage">PDF-Ablage <small class="dezent">öffentlich abrufbare URL des Angebots-PDFs für Cloover (<code>offerPDF</code>)</small></h2>
+{% if ablage_meldung %}<p class="meldung {{ 'fehler' if not (ablage_meldung.startswith('Ablage OK') or ablage_meldung.startswith('PDF-Ablage')) }}">{{ ablage_meldung }}</p>{% endif %}
+<p class="dezent">Cloover braucht für jedes Projekt eine ohne Anmeldung abrufbare PDF-URL; das Tool selbst läuft nur im VPN.
+    Standard ist eine eigene SharePoint-Bibliothek (Upload über Graph als Anwendung, anonymer Lese-Link mit Ablauf nach
+    {{ ab.link_tage }} Tagen); Alternative ist die Token-Route unter <code>BASIS_URL</code> (öffentliche HTTPS-Adresse des
+    Tools). Ohne Ablage werden Raten ermittelt, aber keine Cloover-Projekte angelegt. Einrichtung: docs/cloover-api.md.</p>
+<p>Bereitschaft: {% if ab.bereit %}<strong class="ampel gruen">bereit</strong> <span class="dezent">({{ ab.anbieter_name }})</span>
+    {% else %}<strong class="fehler-text">nicht bereit</strong> <span class="dezent">– {{ ab.grund }}</span>{% endif %}</p>
+<form method="post" action="/parametrierung/cloover/ablage" class="formular" style="max-width:860px">
+    <label>Anbieter
+        <select name="cloover_pdf_ablage">
+            {% for key, name in ab.anbieter_liste %}
+            <option value="{{ key }}" {{ 'selected' if ab.anbieter == key }}>{{ key }} – {{ name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>SharePoint-Site <span class="dezent">(Site-ID <code>host,guid,guid</code>, <code>friondo.sharepoint.com:/sites/Cloover</code> oder die Site-URL)</span>
+        <input type="text" name="cloover_sharepoint_site" value="{{ ab.site }}" placeholder="friondo.sharepoint.com:/sites/Cloover-Angebote"></label>
+    <label>Bibliothek/Ordner <span class="dezent">(Standard „Cloover-Angebote“ – Dateien heißen AN-C-&lt;Nr&gt;-&lt;Zufall&gt;.pdf, nie mit Kundennamen)</span>
+        <input type="text" name="cloover_sharepoint_ordner" value="{{ ab.ordner }}" placeholder="Cloover-Angebote"></label>
+    <table class="tabelle" style="max-width:860px">
+        <tbody>
+        <tr><th>Graph-Modus</th><td>{{ ab.graph_modus }}{% if ab.graph_modus != 'anwendung' %} <span class="fehler-text">– die SharePoint-Ablage braucht Graph als Anwendung (Verbindungstest unter „Versand“)</span>{% endif %}</td></tr>
+        <tr><th>Token-Route</th><td><code>{{ ab.token_route }}</code> {% if ab.basis_url_aus_env %}<span class="abzeichen status-angenommen">BASIS_URL aus der .env</span>{% else %}<span class="dezent">– BASIS_URL fehlt in der .env (Anbieter basis_url nicht nutzbar)</span>{% endif %}</td></tr>
+        </tbody>
+    </table>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">PDF-Ablage speichern</button>
+        <button class="knopf zweitrangig" type="submit" formaction="/parametrierung/cloover/ablage-test"
+                title="Kleines Test-PDF ohne Kundendaten ablegen, per HEAD ohne Anmeldung prüfen (application/pdf) und das Ersetzen prüfen">Test-PDF ablegen und prüfen</button>
+    </div>
+</form>
+{% if ab.letzter_test %}
+<p>Letzter Ablage-Test: <strong class="{{ 'ampel gruen' if ab.letzter_test.ok else 'fehler-text' }}">{{ 'ok' if ab.letzter_test.ok else 'fehlgeschlagen' }}</strong>
+    am {{ ab.letzter_test.zeit }} – {{ ab.letzter_test.text }}{% if ab.letzter_test.url %} · <a href="{{ ab.letzter_test.url }}" target="_blank" rel="noopener">Test-PDF öffnen</a>{% endif %}</p>
+{% else %}
+<p class="dezent">Noch kein Ablage-Test gespeichert.</p>
+{% endif %}
+<p class="dezent">Voraussetzungen SharePoint (Admin mit admin@): Site/Bibliothek anlegen, der Tool-App <code>Sites.Selected</code> mit
+    Schreibrecht auf genau diese Site geben, Freigabe „Jeder mit dem Link“ für die Site erlauben – Befehle in docs/cloover-api.md.
+    Der Lauf <code>cloover-status</code> fragt stündlich den Projektstand ab (Vertrag unterschrieben, Barzahlung).</p>

@@ -58,6 +58,12 @@
         {# v30 (PLAN_V18 Phase 148/150): Seite heißt „BzA-Datenblatt“ (Puffer-Prozentsatz), neue Karte Zahlungsbedingungen #}
         {{ eintrag('BzA-Datenblatt', 'Puffer-Prozentsatz der Zeile „Geplante förderfähige Kosten inkl. … % Puffer“ (Abschnitt 4)', '/parametrierung/bza-ersteller') }}
         {{ eintrag('Zahlungsbedingungen', 'Texte je Angebot wählbar (Nachtext „Zahlung“, Platzhalter {zahlungsbedingungen}), Standard, deaktivieren statt löschen', '/parametrierung/zahlungsbedingungen') }}
+        {% if ist_admin %}
+        {# v36 (PLAN_V22 Phase 188/190): Engine-Schalter, Browser-Test, Test-PDF, Bilder/Schriften #}
+        {{ eintrag('Angebots-PDF', 'Layout v3: Browser-Druck (Edge) oder fpdf2-Rückfall, Test-PDF, Bilder/Schriften, letzter Browser-Test', '/parametrierung/angebots-pdf') }}
+        {# v36 (PLAN_V22 Phase 192): Cloover-Finanzierung (nur Admin; Key nur in der .env) #}
+        {{ eintrag('Cloover', 'Finanzierungspartner: Key-Stand, Modus aus/test/live, Standard-Konto, Laufzeit/Anzahlung, Optionen, Sparten, Textbausteine, Verbindungstest', '/parametrierung/cloover') }}
+        {% endif %}
         {{ eintrag('Logik & Importe', 'Logik-Excel: Validierungsbericht, Fragen, Angebotsaufbau, KfW-/PV-/KL-Parameter, Klima-Import', '/parametrierung/logik') }}
         {{ eintrag('Klima-Logik (KL)', 'Lesesicht Paketmatrix, Montagematrix, Kombinationen, KL-Artikel', '/parametrierung/kl-logik') }}
         {{ eintrag('Klima-Import (Vorschau)', 'Artikel → Klima-Positionslisten KL001–KL050, Diff vor dem Import', '/parametrierung/artikel/kl-import') }}

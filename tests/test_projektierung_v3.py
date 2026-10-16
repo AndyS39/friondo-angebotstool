@@ -444,7 +444,9 @@ class Phase86GoLive(Basis):
         self.assertEqual(seite.status_code, 200)
         punkte = golive.pruefen(self.s)
         # v33 (PLAN_V20 Phase 166): 12. Punkt „Graph als Anwendung verbunden“ (Agent G)
-        self.assertEqual(len(punkte), 12)
+        # v36 (PLAN_V22 Phase 188/190): 13. Punkt „Angebots-PDF: Browser-Druck grün“ (Agent A3)
+        self.assertEqual(len(punkte), 13)
+        self.assertIn("Angebots-PDF: Browser-Druck grün", [p.titel for p in punkte])
         titel = [p.titel for p in punkte]
         self.assertIn("UGL-Testdatei von Collin bestätigt", titel)
         self.assertIn("Bestandsimport durchgeführt", titel)

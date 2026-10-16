@@ -796,7 +796,13 @@ def _daten() -> list[str]:
                                     # Objektfotos (objekt_id aus den Ordnernamen), Rechte/Profilbild, Boards
                                     ("app.taifun_export", "migration_v35_taifun"),
                                     ("app.lead_kanaele", "migration_v35_kanaele"),
-                                    ("app.galerie", "migration_v35_objektfotos")):
+                                    ("app.galerie", "migration_v35_objektfotos"),
+                                    # v36 (PLAN_V22 Phase 188): Engine-Schalter pdf_engine (fpdf2, wenn der Browser-Test fehlschlaegt)
+                                    ("app.pdf_html", "migration_v36_pdf_engine"),
+                                    # v36 (PLAN_V22 Phase 189): Design-Wortlaute der Vortexte PV/KL/WB als neue Fassung
+                                    ("app.angebotsprofile", "migration_v36_texte"),
+                                    # v36 (PLAN_V22 Phase 193): Platzhalter [CLOOVER] in den Nachtexten A (fpdf2-Rueckfall)
+                                    ("app.angebotsprofile", "migriere_cloover_platzhalter")):
             try:
                 modul = importlib.import_module(modulname)
             except ImportError:

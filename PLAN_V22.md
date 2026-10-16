@@ -118,7 +118,7 @@ vor (→ JPEG ≤ 350 KB).
 
 ## Phase 188 – PDF-Engine: HTML-Vorlagen + Browser-Druck
 
-- [ ] **Renderer `app/pdf_html.py`:** `angebot_pdf(session, angebot, *,
+- [x] **Renderer `app/pdf_html.py`:** `angebot_pdf(session, angebot, *,
       signatur=None, fassung="kunde") -> bytes` rendert die Jinja2-Vorlage zu
       HTML (alle Bilder/Schriften als `file://`-Pfade unter
       `app/static/pdf/`, keine externen Quellen), schreibt sie in einen
@@ -144,7 +144,7 @@ vor (→ JPEG ≤ 350 KB).
       Fehlerprotokoll (Fehlertyp „PDF“) und Rückfall auf fpdf2 mit Hinweis
       in der Versand-Meldung „PDF im alten Layout erzeugt (Browser-Druck
       fehlgeschlagen: <Grund>)“.
-- [ ] **Engine-Schalter:** Parameter `pdf_engine` = `html` | `fpdf2`
+- [x] **Engine-Schalter:** Parameter `pdf_engine` = `html` | `fpdf2`
       (Standard `html`, migrate.py setzt `fpdf2`, solange der Browser-Test
       beim Start fehlschlägt, und protokolliert das); Parametrierung →
       **Angebots-PDF** (`/parametrierung/angebots-pdf`, Admin): Browser
@@ -152,7 +152,7 @@ vor (→ JPEG ≤ 350 KB).
       Dauer in ms), Schalter, Hinweis auf fehlende Schriften/Bilder; Go-live-
       Checkliste (v18) erhält den Prüfpunkt „Angebots-PDF: Browser-Druck
       grün“; `GET /health` meldet `pdf_engine` und letzte Druckdauer.
-- [ ] **Vorlagenbasis `app/templates/pdf/angebot/basis.html`:** CSS-Tokens
+- [x] **Vorlagenbasis `app/templates/pdf/angebot/basis.html`:** CSS-Tokens
       aus dem Design (`--pdf-dunkel:#15153a; --pdf-blau:#4389c8;
       --pdf-grau:#6b6f85; --pdf-linie:#dfe3ee; --pdf-flaeche:#f1f6fc;
       --pdf-hell:#dbe9f7`), `@page { size: A4; margin: 0 }`, Innenabstand
@@ -166,7 +166,7 @@ vor (→ JPEG ≤ 350 KB).
       `team.jpg`, `titel-wp.jpg`, `titel-pv.jpg`, `titel-kl.jpg`,
       `titel-wb.jpg`; Titelbilder auf 1600 px Breite, JPEG 82 %, ≤ 350 KB;
       Teamfoto ≤ 400 KB). Ziel: Angebots-PDF ≤ 2,5 MB (Test).
-- [ ] **Sparten-Vorlagen** `wp.html`, `pv.html`, `kl.html`, `wb.html` erben
+- [x] **Sparten-Vorlagen** `wp.html`, `pv.html`, `kl.html`, `wb.html` erben
       von `basis.html` und setzen nur Titel/Untertitel/Titelbild/Spartenname;
       Seiten-Bausteine als Includes: `deckblatt.html`, `ueberblick.html`,
       `positionen.html`, `kfw.html`, `wirtschaftlichkeit.html` (3 Seiten),
@@ -176,7 +176,7 @@ vor (→ JPEG ≤ 350 KB).
       Bausteine, Vermerke, Zahlungsbedingung, Textblöcke, Signatur, Cloover
       aus Teil B) – dieselbe Funktion versorgt die HTML-Vorschau (Phase 190).
       Lieferschein/Protokoll/BzA/Montageformulare bleiben fpdf2.
-- [ ] Tests `tests/test_v36_pdf_engine.py`: Druck läuft ohne offene Sitzung
+- [x] Tests `tests/test_v36_pdf_engine.py`: Druck läuft ohne offene Sitzung
       (Wächter), Semaphore/Timeout, Rückfall fpdf2 bei fehlendem Browser
       (gemockt), Dateigröße, Seitenzahl „SEITE 2 VON n“ auf Seite 2 (pypdf-
       Textprüfung), Schrift eingebettet (Fontname in der
@@ -190,7 +190,7 @@ Anschreiben · Positionen · KfW-Förderung · Auftragserteilung · Bedingungen
 · Vollmacht); Claude Code übernimmt sie 1:1 und listet in der
 Gesamtübersicht jede Abweichung.
 
-- [ ] **Deckblatt** (Seitenzahl nur in der Randzone): Logo links, rechts Award-
+- [x] **Deckblatt** (Seitenzahl nur in der Randzone): Logo links, rechts Award-
       Badge mit Link (`https://www.germanenergyawards.com/interview/friondo-gmbh`,
       „Mehr dazu im Interview ›“); Titelbild je Sparte mit dunklem Verlauf;
       Eyebrow „ANGEBOT · WÄRMEPUMPE | PV-ANLAGE | KLIMAANLAGE | WALLBOX“,
@@ -213,7 +213,7 @@ Gesamtübersicht jede Abweichung.
       Angebot AN-… vom TT.MM.JJJJ“, bei Kopien „Kopie von AN-…“ [ANNAHME: im
       Infokasten]. Leiste „Mitgliedschaften & Zertifizierungen“ mit den fünf
       Logos.
-- [ ] **„Ihr Angebot im Überblick“ + Teamfoto:** Briefanrede-Baustein
+- [x] **„Ihr Angebot im Überblick“ + Teamfoto:** Briefanrede-Baustein
       ({briefanrede}), Einleitungsabsatz, zweispaltig „DARIN ENTHALTEN“
       (blaue Haken) und „WARUM FRIONDO?“ (dunkle Haken), Schlusssatz, „Ihr
       Friondo-Team“, darunter „DAS FRIONDO-TEAM“ mit Teamfoto (volle Breite).
@@ -229,7 +229,7 @@ Gesamtübersicht jede Abweichung.
       sorgen!“ / „… Ihr Zuhause zur Ladestation machen!“), alte Fassungen
       bleiben als Historie (Textblock-Versionen). Enni/SWD/Sparkasse DU
       behalten ihre Vortexte.
-- [ ] **Festpreisangebot:** Titel „Festpreisangebot“ (Folgeseiten
+- [x] **Festpreisangebot:** Titel „Festpreisangebot“ (Folgeseiten
       „Festpreisangebot (Fortsetzung)“ über wiederholten Tabellenkopf),
       rechts „Alle Preise in EUR, netto“, Spalten POS. · MENGE · EINH. ·
       BEZEICHNUNG · E-PREIS · G-PREIS, Gruppenüberschriften (editierbar wie
@@ -255,7 +255,7 @@ Gesamtübersicht jede Abweichung.
       Förderblock steht der Gesamt-Betrag bzw. Endbetrag in der dunklen Box
       [ANNAHME]. Zahlen wie heute (Decimal, Cent, Rundung laut V21
       Rückfrage 7).
-- [ ] **„Ihre KfW-Förderung“** (nur WP, Förderblock nicht ausgeblendet):
+- [x] **„Ihre KfW-Förderung“** (nur WP, Förderblock nicht ausgeblendet):
       Eyebrow „ANTRAG: KFW 458 (WOHNGEBÄUDE)“, Titel, Untertitel „<F> % zahlt
       die KfW – <100−F> % bleiben für Sie“, Zeile „Angebotssumme <Endbetrag>
       (inkl. 19 % USt.)“ / „Förderfähig bis <Höchstkosten>“, **Balken** mit
@@ -275,14 +275,14 @@ Gesamtübersicht jede Abweichung.
       überschriebene Förderung (v8) wird wie heute ohne Kennzeichen
       gedruckt; Förderblock ausgeblendet → Seite entfällt, Summenblock ohne
       Förderzeilen.
-- [ ] **Wirtschaftlichkeit PV** (drei Seiten, nur PV, nicht ausgeblendet):
+- [x] **Wirtschaftlichkeit PV** (drei Seiten, nur PV, nicht ausgeblendet):
       Inhalte und Rechenkern unverändert (v22), Darstellung als HTML-Vorlagen
       nach `docs/wirtschaftlichkeit-mockup/seite1–3.html`, Schrift Nunito
       statt Poppins, Farben auf die PDF-Tokens gezogen; Platz: nach dem
       Festpreisangebot, vor der Auftragserteilung. `wirtschaftlichkeit_pdf.py`
       bleibt nur für den fpdf2-Rückfall. Kontrollwerte
       `test_wirtschaftlichkeit_v22.py` unverändert.
-- [ ] **„Auftragserteilung“:** Einleitungssatz wörtlich, **Karte 1
+- [x] **„Auftragserteilung“:** Einleitungssatz wörtlich, **Karte 1
       „BARKAUF – Online beauftragen“** mit Kurzsatz aus der gewählten
       Zahlungsbedingung (erste Zeile des Textes [ANNAHME]) und Knopf: mit
       `BASIS_URL` und aktiver Fern-Signatur → „Jetzt online beauftragen ›“
@@ -305,7 +305,7 @@ Gesamtübersicht jede Abweichung.
       Nachtext C WP); Unterschriftszeile „Ort, Datum“ / „Unterschrift des
       Auftraggebers“ – hier wird die **Vor-Ort-Signatur** eingebettet
       (Bild, Name, Zeitstempel, siehe Phase 190).
-- [ ] **„Vertragsbedingungen“:** Abschnitte aus den Nachtext-Textblöcken B/C
+- [x] **„Vertragsbedingungen“:** Abschnitte aus den Nachtext-Textblöcken B/C
       (`###`-Überschriften → blaue Zwischenüberschriften): Haftungsbegrenzung
       · Rücktrittsrecht im Zusammenhang mit Technischer Feinplanung ·
       Zahlung (= `{zahlungsbedingungen}`, v30) · WP „Hinweis zur KfW-
@@ -314,17 +314,17 @@ Gesamtübersicht jede Abweichung.
       freundlichen Grüßen / Ihr Friondo-Team“). Die Design-Wortlaute sind
       mit den heutigen Textblöcken identisch (geprüft); Abweichungen meldet
       Claude Code.
-- [ ] **Vollmacht** (Regel unverändert: nur bei aktiver Position 016 und/oder
+- [x] **Vollmacht** (Regel unverändert: nur bei aktiver Position 016 und/oder
       017; in keinem KL-Angebot ohne diese Positionen): Text wörtlich, Kasten
       „ANGABEN ZUR VERBRAUCHSSTELLE“ **vorbelegt** mit Name (Kunde),
       Adresse (Ausführungsort), Telefon, E-Mail (leer → Linie), Geburtsdatum
       leer; Kasten „BITTE ANKREUZEN“ mit drei Kästchen; SEPA-Block mit vier
       Linien; drei Unterschriftslinien.
-- [ ] **Kopf-/Fußzeile:** Kopf auf jeder Seite „Angebot-Nr. <Nr> ·
+- [x] **Kopf-/Fußzeile:** Kopf auf jeder Seite „Angebot-Nr. <Nr> ·
       <Kundenname>“ und „SEITE x VON y“ (Randzone); Fuß auf jeder Seite fünfspaltig wörtlich wie das
       Design (Anschrift · Geschäftsführung · Kontakt · Bankverbindung ·
       Steuerdaten) – Inhalte aus den bestehenden Firmen-Konstanten.
-- [ ] Tests `tests/test_v36_layout.py` (HTML-Kontext und gerendertes HTML,
+- [x] Tests `tests/test_v36_layout.py` (HTML-Kontext und gerendertes HTML,
       dazu je Sparte ein PDF-Text-Vergleich): Empfängerblock-Varianten (v20-
       Fälle), EP/bauseits/Alternativ/Rabatt/Endbetrag/Förderzeilen, 0 %-Zeile
       PV, KfW-Seite nur mit Förderblock, dynamische Positionsnummern,
@@ -334,38 +334,38 @@ Gesamtübersicht jede Abweichung.
 
 ## Phase 190 – Einbindung: Vorschau, Versand, Signatur, Rückfall
 
-- [ ] **Alle PDF-Wege** nutzen `pdf_html.angebot_pdf`: Editor-Vorschau,
+- [x] **Alle PDF-Wege** nutzen `pdf_html.angebot_pdf`: Editor-Vorschau,
       Download, „Versand vorbereiten“, Kombi-Versand, Archiv/Ablage unter
       `data/angebote/`, Fern-Signatur-Anzeige, Außendienst „Meine Angebote“
       (ohne EK/DB – unverändert, der Kontext enthält keine EK-Felder). Neue
       Route **`GET /angebote/<id>/pdf.html`** (ID/Admin): dieselbe Vorlage
       als HTML im Browser (Design-Abnahme ohne Druck, Druckvorschau über
       `@media print`).
-- [ ] **Vor-Ort-Signatur:** `signaturen.py` erzeugt das signierte PDF durch
+- [x] **Vor-Ort-Signatur:** `signaturen.py` erzeugt das signierte PDF durch
       **erneutes Rendern** mit `signatur={bild_data_url, name, zeitstempel,
       geraet}` – das Signaturbild sitzt auf der Linie „Unterschrift des
       Auftraggebers“, darunter „<Name> · signiert am TT.MM.JJJJ HH:MM“; Ablage
       `data/angebote/signiert/` und Signaturprotokoll unverändert; Status
       „Angenommen“ wie heute. Bestehende signierte PDFs bleiben unverändert.
       Fern-Signatur (Modul v4) rendert ebenso – Link nur mit `BASIS_URL`.
-- [ ] **Rückfall und Bestand:** `pdf_engine = fpdf2` erzeugt weiterhin das
+- [x] **Rückfall und Bestand:** `pdf_engine = fpdf2` erzeugt weiterhin das
       alte Layout (alle Routen); bereits erzeugte PDFs versendeter Angebote
       werden **nicht** neu erzeugt (Archiv bleibt); „Überarbeiten“ erzeugt
       die neue Version im neuen Layout. Versand-Meldung nennt bei Rückfall
       den Grund.
-- [ ] **Doku/Texte:** `ANGEBOTSTEXTE.md` neu gegliedert – Abschnitt 11
+- [x] **Doku/Texte:** `ANGEBOTSTEXTE.md` neu gegliedert – Abschnitt 11
       „Layout v3 (v36)“ mit Seitenfolge je Sparte, Kennzeichen-Regeln,
       Zuordnung Textblock → Seite; Abschnitte 1–10 als Quelle der Wortlaute
       gekennzeichnet. `docs/design-v36/` mit Abnahme-PDFs je Sparte (Demo-
       Daten) und Screenshots Editor-Vorschau.
-- [ ] Tests `tests/test_v36_einbindung.py`: alle Routen liefern PDF mit
+- [x] Tests `tests/test_v36_einbindung.py`: alle Routen liefern PDF mit
       neuer Engine, HTML-Vorschau nur ID/Admin (AD 403, kein EK im HTML),
       Signatur-Rendering (Bild und Zeile im PDF-Text), Rückfall-Schalter,
       Kombi-Versand mit zwei PDFs im neuen Layout.
 
 ## Phase 191 – Abnahme Teil A
 
-- [ ] **Abnahme-PDFs** `docs/design-v36/abnahme-wp.pdf` (WP mit Förderung,
+- [x] **Abnahme-PDFs** `docs/design-v36/abnahme-wp.pdf` (WP mit Förderung,
       Rabatt, einer EP-Position, Vollmacht), `abnahme-pv.pdf` (0 %, drei
       Wirtschaftlichkeitsseiten, Vollmacht über 017), `abnahme-kl.pdf` (ohne
       Vollmacht), `abnahme-wb.pdf` (Fall B aus V21), `abnahme-enni.pdf` (WP
@@ -373,7 +373,7 @@ Gesamtübersicht jede Abweichung.
       (WP mit Alternativ-Kasten), `abnahme-signiert.pdf` (mit Demo-Signatur)
       – Demo-Daten, keine Kundendaten. Sichtvergleich mit den Vorlagen,
       Abweichungsliste in der Gesamtübersicht.
-- [ ] **Laufzeit:** 20 PDFs nacheinander ≤ 3 s im Mittel, 4 parallel ohne
+- [x] **Laufzeit:** 20 PDFs nacheinander ≤ 3 s im Mittel, 4 parallel ohne
       Fehler (Semaphore greift), Browser-Prozess nach Absturz neu gestartet
       (Test mit gekilltem Prozess); Lasttest-Profil `normal` mit PDF-
       Erzeugung im Modell (`docs/lasttest-v27.md` ergänzen).
@@ -412,7 +412,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
 
 ## Phase 192 – Cloover-Client, Konfiguration, Verbindungstest
 
-- [ ] **`.env` und Konfiguration:** `CLOOVER_API_KEY` (leer = Modul aus),
+- [x] **`.env` und Konfiguration:** `CLOOVER_API_KEY` (leer = Modul aus),
       `CLOOVER_BASIS_URL` (Standard Test-URL
       `https://partners-api-530331765008.europe-west3.run.app`; Live-URL
       trägt Andreas nach Zulieferung von Cloover ein), `.env.example`
@@ -434,7 +434,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Projekt unter ihm, sonst unter dem Standard-Konto [ANNAHME].
       Änderungen ins Protokoll `cloover_protokoll` (letzte 30, Key nur als
       gesetzt/entfernt).
-- [ ] **Client `app/cloover_api.py`** (Vorbild `heizreport_api.py`):
+- [x] **Client `app/cloover_api.py`** (Vorbild `heizreport_api.py`):
       `konfiguriert()`, `rate_berechnen(assets, laufzeit, anzahlung,
       user_email)` (v2; Fallback v1 mit `totalCostOfInstallation` = Endbetrag
       brutto, wenn v2 HTTP 4xx wegen Anlagentyp liefert), `projekt_anlegen(
@@ -448,7 +448,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Fehlerprotokoll (Fehlertyp „Cloover“, ohne Header/Key, Körper ohne
       Kundendaten – nur Feldnamen). HTTP-Nahtstelle `_roh_anfrage` (in Tests
       gemockt). Rundung: `monthlyPayment` kaufmännisch auf Cent.
-- [ ] **Anlagen aus dem Angebot (`cloover_api.assets_fuer(angebot)`):** je
+- [x] **Anlagen aus dem Angebot (`cloover_api.assets_fuer(angebot)`):** je
       Angebot genau ein Asset (Kombi: eines je Angebot): WP → `Heat pump`,
       `capacity` = Leistungsklasse kW aus dem Steckbrief/Paket; PV → `Solar`,
       `capacity` = kWp aus `pv_json` [ANNAHME: Speicher nicht als eigenes
@@ -461,27 +461,27 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       „Förderblock ausgeblendet“ = 0), `currency` EUR, `inflateTransactionFee`
       immer `false`. Kontrollwert: WP Endbetrag 42.830,55 €, Förderung
       16.500,00 € → `price` 35.992.06, `vatPercentage` 19, `subsidy` 16500.
-- [ ] **Verbindungstest** (`POST /parametrierung/cloover/test`):
+- [x] **Verbindungstest** (`POST /parametrierung/cloover/test`):
       `rate_berechnen` mit 10.000 € brutto, 2.000 € Anzahlung, 10 Jahre über
       v1 → „Verbindung OK · Beispielrate 93,36 €/Monat (Test-Umgebung)“
       bzw. „Cloover erreichbar, aber Key abgelehnt (HTTP 401)“; zusätzlich
       v2-Probe mit einem Asset je aktiver Sparte und Meldung je Typ („Klima:
       Typ Energetic Renovation akzeptiert“ / „abgelehnt: <message>“).
-- [ ] Tests `tests/test_v36_cloover_api.py`: Body v2 wörtlich (Netto-Preis,
+- [x] Tests `tests/test_v36_cloover_api.py`: Body v2 wörtlich (Netto-Preis,
       USt, subsidy), v1-Fallback, Rundung 93,3582 → 93,36, Fehlerblöcke,
       Fehlerprotokoll ohne Key, Modus `aus` = keine Aufrufe, Parametrierungs-
       Seite ohne Key-Wert.
 
 ## Phase 193 – Rate im Angebot (Karte „Finanzierung mit Cloover“, Editor-Karte)
 
-- [ ] **Speicherung:** Spalte `angebote.cloover_json` (additiv) mit
+- [x] **Speicherung:** Spalte `angebote.cloover_json` (additiv) mit
       `{laufzeit_jahre, anzahlung_cent, rate_ohne_cent, rate_mit_cent,
       endbetrag_cent, foerderung_cent, ust_satz, stand, quelle: v2|v1,
       fehler, projekt_id, checkout_link, financial_offer, pdf_url, status,
       status_stand, ausgeblendet}`; Überarbeiten/Duplizieren/Kopieren
       übernehmen nur Laufzeit/Anzahlung/`ausgeblendet` (Rate und Projekt
       werden neu ermittelt – neue Version = neuer Endbetrag).
-- [ ] **Berechnung** (`cloover.rate_aktualisieren(angebot_id)`, außerhalb der
+- [x] **Berechnung** (`cloover.rate_aktualisieren(angebot_id)`, außerhalb der
       Sitzung, `_speichern`-Muster beim Schreiben): automatisch beim
       „Versand vorbereiten“, beim Kombi-Versand und vor jeder PDF-Erzeugung,
       wenn `stand` fehlt oder Endbetrag/Förderung/USt/Laufzeit/Anzahlung vom
@@ -491,7 +491,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Rate, zeigt die Karte „Monatsrate auf Anfrage“ ohne Zahlen und die Versand-Meldung nennt „Cloover-Rate nicht
       verfügbar: <Grund>“. Keine Rate bei Modus `aus`, bei den Profilen Enni/SWD/Sparkasse DU,
       bei Sparten außerhalb `cloover_sparten`, bei `ausgeblendet`.
-- [ ] **Editor-Karte „Finanzierung (Cloover)“** unter der Kopfkarte
+- [x] **Editor-Karte „Finanzierung (Cloover)“** unter der Kopfkarte
       (Innendienst/Admin; AD lesend ohne Knöpfe): Laufzeit (1–25, Standard
       aus Parametrierung), Anzahlung €, Rate ohne Förderung, Rate mit
       Förderung (nur WP mit Förderbetrag > 0), Stand, Quelle, Häkchen
@@ -501,7 +501,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       kopieren, Finanzierungsangebot öffnen, „Projekt anlegen“ bei fehlendem
       Projekt). Hinweise rot: „E-Mail des Kunden fehlt“, „Telefon fehlt“,
       „Firmenkunde – Cloover nur für Privatkunden“ (Phase 194).
-- [ ] **Rate im neuen Layout** (Seite „Auftragserteilung“, Teil A Phase
+- [x] **Rate im neuen Layout** (Seite „Auftragserteilung“, Teil A Phase
       189, nur Profil Standard): **Karte 2** „FINANZIERUNG MIT CLOOVER –
       Online beauftragen & finanzieren“ zeigt „ab <Rate ohne Förderung> € /
       Monat*“ (bei WP mit Förderung stattdessen die Rate **mit** Förderung
@@ -535,18 +535,18 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Rückfrage B1 (Cloover/PAngV) ein Entwurf und in der Parametrierung als
       Textbaustein `cloover_fussnote` editierbar (Platzhalter {endbetrag},
       {laufzeit}, {anzahlung}, {foerderung}, {stand}).
-- [ ] **Mail-Platzhalter** `{cloover_rate}` („ab 389,99 € pro Monat“ bzw.
+- [x] **Mail-Platzhalter** `{cloover_rate}` („ab 389,99 € pro Monat“ bzw.
       leer) und `{cloover_link}` (Phase 194) in allen Angebots- und
       Kombi-Vorlagen verfügbar; Vorlagen-Vorschau zeigt sie; bestehende
       Vorlagen werden nicht automatisch geändert (Team-Hinweis).
-- [ ] Tests `tests/test_v36_rate.py`: Block wörtlich für WP mit/ohne
+- [x] Tests `tests/test_v36_rate.py`: Block wörtlich für WP mit/ohne
       Förderung, PV 0 %, KL, WB; Enni/SWD/Sparkasse DU ohne Cloover-Karte; `ausgeblendet`;
       Fehlerfall ohne Zahlen; Neuberechnung bei geändertem Endbetrag;
       Platzhalter; AD-Sicht lesend.
 
 ## Phase 194 – Persönlicher Abschluss-Link: PDF-Ablage, Cloover-Projekt, QR-Code, Status
 
-- [ ] **PDF-Ablage `app/cloover_pdf_ablage.py`** (Cloover braucht eine
+- [x] **PDF-Ablage `app/cloover_pdf_ablage.py`** (Cloover braucht eine
       öffentlich abrufbare URL des Angebots-PDFs; das Tool läuft nur im
       VPN): Anbieter-Schnittstelle `ablegen(datei, name) -> url`,
       `ersetzen(url, datei)`, `pruefen(url)` mit zwei Anbietern –
@@ -565,7 +565,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       eingerichtet“). Verbindungstest „Test-PDF ablegen und prüfen“ in der
       Parametrierung. Ablage-Datei trägt den Angebotsnamen ohne Kundennamen
       (`AN-C-<Nr>-<Zufall>.pdf`). Rückfrage B4 (Cloover: anderer Upload-Weg).
-- [ ] **Projekt anlegen beim „Versand vorbereiten“** (und im Kombi-Versand;
+- [x] **Projekt anlegen beim „Versand vorbereiten“** (und im Kombi-Versand;
       Reihenfolge innerhalb der bestehenden Versandroute, Netz-I/O außerhalb
       der Sitzung): (1) Voraussetzungen prüfen – Modus ≠ `aus`, Sparte
       zugelassen, Profil = Standard, nicht `ausgeblendet`, Kunde Privatperson
@@ -592,7 +592,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       derselbe Link in allen PDFs; jedes PDF zeigt seine eigene Rate und
       zusätzlich „Gesamtrate für alle Angebote dieser Mail: ab … €“
       [ANNAHME, Rückfrage B6].
-- [ ] **Link im PDF** (Karte 2 der Auftragserteilung, nur mit
+- [x] **Link im PDF** (Karte 2 der Auftragserteilung, nur mit
       `checkout_link`): Knopf „Finanzierung abschließen ›“ verlinkt auf den
       `checkout_link`, daneben ein **QR-Code** (Bibliothek `qrcode` als SVG
       im HTML, 22 × 22 mm, Fehlerkorrektur M; im fpdf2-Rückfall mit
@@ -609,7 +609,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Datenschutzbeauftragtem abstimmen, Rückfrage B7). `financial_offer`
       wird nicht gedruckt, sondern in der Editor-Karte und als Mail-
       Platzhalter `{cloover_finanzierungsangebot}` angeboten.
-- [ ] **Status-Abruf:** Scheduler-Lauf `cloover-status` alle 60 Minuten
+- [x] **Status-Abruf:** Scheduler-Lauf `cloover-status` alle 60 Minuten
       (`scheduler.registrieren`, `db.kurz()` je Angebot, höchstens 50 je
       Lauf): für Angebote mit `projekt_id`, Status Versendet/Versand
       vorbereitet/Angenommen, nicht überholt/abgelehnt, Projekt jünger als
@@ -625,7 +625,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Editor-Karte. Statistik: Kennzahl „Cloover-Verträge“ (Anzahl/Summe
       Endbetrag im Zeitraum) im Reiter Angebote [ANNAHME]. Unbekannte
       `status`-Werte werden roh angezeigt (Rückfrage B8: Statusliste).
-- [ ] Tests `tests/test_v36_projekt.py` (HTTP und Ablage gemockt): Body
+- [x] Tests `tests/test_v36_projekt.py` (HTTP und Ablage gemockt): Body
       `POST /api/projects` wörtlich (Kunde, Adresse, Asset, Laufzeit 1–20,
       Optionen, PDF-URL), Voraussetzungen je Grund, kein Doppelprojekt,
       Überarbeiten = neues Projekt, Kombi = ein Projekt mit n Assets,
@@ -637,6 +637,8 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
 ## Phase 195 – Tests, Rollout-Vorbereitung, Doku, CLAUDE.md v36 (Teil A + B)
 
 - [ ] **Tests gesamt:** `test_v36_pdf_engine.py`, `test_v36_layout.py`,
+      *(Stand 16.10.2026: v36-Tests und Nachbarn auf der migrierten Kopie grün – Gesamtsuite,
+      Cloover-Echtlauf (kein Key auf dem Dev-PC) und Wächter-Gesamtlauf einmal am Ende der Plan-Kette v36–v38.)*
       `test_v36_einbindung.py`, `test_v36_cloover_api.py`, `test_v36_rate.py`,
       `test_v36_projekt.py`; angepasste Alt-Tests (PDF-Textprüfungen der
       Regressionstests auf die neue Engine umgestellt – Summen und Pflicht-
@@ -652,6 +654,8 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       QR-Scan öffnet den Checkout, Statusabruf; Ergebnis in die
       Gesamtübersicht (Projekt-ID, ohne Link).
 - [ ] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
+      *(laut Brief EINE Rollout-Vorbereitung am Ende der Plan-Kette v36–v38 – siehe
+      `diagnose/v36/gesamtuebersicht.md` §10.)*
       diagnose\, migrate.py zweimal (additiv: Parameter `pdf_engine`,
       Textblock-Fassungen v36, `angebote.cloover_json`,
       `benutzer.cloover_email`, Cloover-Parameter, Textbausteine,
@@ -665,7 +669,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       Edge-Pfad prüfen (`scripts\pdf-browser-pruefen.bat`: findet Edge/Chrome,
       druckt ein Test-PDF unter dem Dienstkonto SYSTEM, meldet Dauer),
       Ergebnis in `docs/nach-dem-update-v36.md`.
-- [ ] **Doku:** CLAUDE.md Abschnitt „Neu in v36 – Angebotslayout v3
+- [x] **Doku:** CLAUDE.md Abschnitt „Neu in v36 – Angebotslayout v3
       (HTML-Vorlagen + Browser-Druck) und Cloover-Finanzierung (abgestimmt
       15./16.10.2026)“ nach „Neu in v35“, Zuordnungstabelle `| v36 |
       PLAN_V22.md | 188–195 |`, Titelzeile „(v36)“; in „Unverändert aus v2“
@@ -689,7 +693,7 @@ Sondertilgung; implizierter Nominalzins der Test-Umgebung ≈ 7,2 % p. a.
       live erst nach Live-Key, Verbindungstest, Test-PDF, Fußnoten-Wortlaut
       von Cloover, Datenschutzsatz); `docs/updates.md`; `config.VERSION =
       "v36"`.
-- [ ] **Gesamtübersicht am Ende:** erledigte Phasen, Testergebnisse,
+- [x] **Gesamtübersicht am Ende:** erledigte Phasen, Testergebnisse,
       angepasste Alt-Tests mit Begründung, Abweichungsliste Layout ↔
       Vorlagen, Druckzeiten, Ergebnis des Cloover-Echtlaufs, Liste der
       [ANNAHME]-Stellen, Rückfragen gebündelt. **Ein Commit** „v36:

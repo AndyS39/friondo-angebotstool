@@ -1,0 +1,83 @@
+{#- v36 (PLAN_V22 Phase 189, Agent A2): Seite „Ihre KfW-Förderung“ des Angebots-PDFs (nur WP mit Förderblock).
+    Aufbau und Wortlaute 1:1 aus der Design-Vorlage docs/design-v36/vorlage/entpackt/angebot-waermepumpe.html
+    (Abschnitt „KfW-Förderung“): Eyebrow, Titel, Untertitel, KfW-Wortmarke rechts oben, Zeile Angebotssumme /
+    Förderfähig bis, Balken mit Segmenten Grund · Klima · Einkommen · Eigenanteil, Liste der Bausteine,
+    „KfW-Zuschuss gesamt“, Kasten Angebotssumme − KfW-Zuschuss = Eigenanteil, Hinweistexte, „So läuft Ihre
+    Förderung ab“ (sechs Schritte), Boxen „Gut zu wissen“ und „Das brauchen Sie für den Antrag“.
+    Daten: kontext.kfw aus app/pdf_kontext_kfw.py (Beträge fertige Texte, Positionsnummern dynamisch).
+    Rendert nur mit `kontext` (kein extends); Styles in app/static/pdf/angebot_kfw.css (Präfix .kfw-),
+    Farben ausschließlich über var(--pdf-…) bzw. die Zusatzvariablen dieses Stylesheets. -#}
+{%- set k = kontext.kfw -%}
+<div class="pdf-seite kfw-seite">
+  <div class="kfw-kopf">
+    <div class="kfw-kopf-text">
+      <div class="kfw-eyebrow">{{ k.eyebrow }}</div>
+      <h2 class="kfw-titel">{{ k.titel }}</h2>
+      <div class="kfw-untertitel">{{ k.untertitel }}</div>
+    </div>
+    <img class="kfw-wortmarke" src="{{ static }}/pdf/{{ k.bild }}" alt="KfW">
+  </div>
+
+  <div class="kfw-summen">
+    <div class="kfw-summen-zeile">
+      <span>Angebotssumme {{ k.angebotssumme }} {{ k.angebotssumme_zusatz }}</span>
+      <span>Förderfähig bis {{ k.hoechstkosten }}</span>
+    </div>
+    <div class="kfw-balken">
+      {%- for b in k.balken %}
+      <div class="kfw-segment kfw-segment-{{ b.klasse }}{% if b.schmal %} kfw-segment-schmal{% elif b.kompakt %} kfw-segment-kompakt{% endif %}" style="width:{{ b.breite_prozent }}%">
+        {%- if not b.schmal %}<span class="kfw-segment-name">{{ b.name }}{% if not b.kompakt %} {{ b.prozent }} %{% endif %}</span>{% endif %}
+        <span class="kfw-segment-wert">{% if b.kompakt %}{{ b.prozent }} %{% else %}{{ b.betrag }}{% endif %}</span>
+      </div>
+      {%- endfor %}
+    </div>
+  </div>
+
+  <div class="kfw-zweispaltig">
+    <div class="kfw-liste">
+      {%- for b in k.bausteine %}
+      <span class="kfw-punkt kfw-punkt-{{ b.klasse }}"></span>
+      <span>{{ b.name }}{% if b.klammer %} {{ b.klammer }}{% endif %}</span>
+      <span class="kfw-betrag">{{ b.betrag }}</span>
+      {%- endfor %}
+      <span class="kfw-liste-linie"></span>
+      <span></span><span class="kfw-gesamt">KfW-Zuschuss gesamt</span><span class="kfw-betrag kfw-gesamt kfw-blau">{{ k.zuschuss }}</span>
+    </div>
+    <div class="kfw-kasten">
+      <span class="kfw-dezent">Angebotssumme</span><span class="kfw-betrag">{{ k.angebotssumme }}</span>
+      <span class="kfw-dezent">− KfW-Zuschuss</span><span class="kfw-betrag">{{ k.zuschuss }}</span>
+      <span class="kfw-kasten-linie"></span>
+      <span class="kfw-eigen-label">= Eigenanteil</span><span class="kfw-eigen-wert">{{ k.eigenanteil }}</span>
+    </div>
+  </div>
+
+  <div class="kfw-hinweise">
+    {%- if k.hinweise %}
+    <p>{{ k.hinweise | join(" ") }}</p>
+    {%- endif %}
+    <p>{{ k.disclaimer }}</p>
+  </div>
+
+  <div class="kfw-ablauf">
+    <h3 class="kfw-ablauf-titel">So läuft Ihre Förderung ab</h3>
+    <div class="kfw-schritte">
+      {%- for s in k.schritte %}
+      <div class="kfw-schritt">
+        <span class="kfw-schritt-nr{% if s.nr > 3 %} kfw-schritt-nr-blau{% endif %}">{{ s.nr }}</span>
+        <div><strong>{{ s.titel }}</strong><br><span class="kfw-schritt-text">{{ s.text }}</span></div>
+      </div>
+      {%- endfor %}
+    </div>
+  </div>
+
+  <div class="kfw-boxen">
+    <div class="kfw-box kfw-box-flaeche">
+      <div class="kfw-box-titel">Gut zu wissen</div>
+      <div>{% for z in k.gut_zu_wissen %}• {{ z }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>
+    </div>
+    <div class="kfw-box kfw-box-rahmen">
+      <div class="kfw-box-titel">Das brauchen Sie für den Antrag</div>
+      <div>{% for z in k.antrag_unterlagen %}• {{ z }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div>
+    </div>
+  </div>
+</div>

@@ -227,11 +227,16 @@ def anlegen(request: Request, session: Session = Depends(get_session)):
     fehler = _email_pruefen(rolle, email)
     if fehler:
         return _meldung("/benutzer", fehler)
+    # v36 (PLAN_V22 Phase 192): optionales Cloover-Konto (nur wenn das Formular es mitschickt)
+    cloover_email = (form.get("cloover_email") or "").strip().lower()
+    if cloover_email and not _EMAIL_MUSTER.match(cloover_email):
+        return _meldung("/benutzer", "Cloover-Konto: ungültige E-Mail-Adresse")
     # Häkchen „PIN-Wechsel beim nächsten Login verlangen“ (beim Anlegen vorbelegt an)
     neuer = Benutzer(name=name, rolle=rolle, email=email,
                      pin_wechsel_noetig=form.get("pin_wechsel") == "on",
                      # v31 (PLAN_LEAD_V5 Phase 156): Häkchen „Leadmanager“
-                     leadmanager=form.get("leadmanager") == "on")
+                     leadmanager=form.get("leadmanager") == "on",
+                     cloover_email=cloover_email[:200])
     auth.pin_setzen(neuer, pin)          # schreibt pin_hash_v2 UND pin_hash
     session.add(neuer)
     session.flush()
@@ -289,6 +294,13 @@ def aendern(request: Request, benutzer_id: int,
     # entfällt – die Spalte bleibt, wird aber weder gelesen noch geschrieben
     if form.get("vorname") is not None:
         benutzer.vorname = (form.get("vorname") or "").strip()[:100]
+    # v36 (PLAN_V22 Phase 192): Cloover-Konto (userEmail) – nur ändern, wenn das Formular das Feld
+    # mitschickt (cloover_dabei); leer = Projekte laufen unter dem Standard-Konto der Parametrierung
+    if form.get("cloover_dabei") == "1":
+        cloover_email = (form.get("cloover_email") or "").strip().lower()
+        if cloover_email and not _EMAIL_MUSTER.match(cloover_email):
+            return _meldung("/benutzer", "Cloover-Konto: ungültige E-Mail-Adresse")
+        benutzer.cloover_email = cloover_email[:200]
     # v33 (Phase 167): Rolle Handelsvertreter ↔ AD-Profil-Kennzeichen terminiert_selbst
     rollen_modul.hv_spiegeln(session, benutzer)
     # v12 (Phase 73): Leadmanager-Einstellungen (Round-Robin-Zuweisung)

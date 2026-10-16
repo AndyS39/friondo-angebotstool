@@ -211,6 +211,7 @@ class Benutzer(Base):
     vorname: Mapped[str] = mapped_column(String(100), default="")
     infotext: Mapped[str] = mapped_column(Text, default="")
     bild_datei: Mapped[str] = mapped_column(String(300), default="")   # relativ zu DATA_ORDNER
+    cloover_email: Mapped[str] = mapped_column(String(200), default="")   # v36 (PLAN_V22 Phase 192): Cloover-Konto
     # v31 (PLAN_LEAD_V5 Phase 156): Häkchen „Leadmanager“ – nur diese Benutzer stehen in den
     # Innendienst-/Leadmanager-Auswahlen des Lead-Moduls
     leadmanager: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -1263,6 +1264,7 @@ class Angebot(Base):
     wb_json: Mapped[str] = mapped_column(Text, default="")
     # v34 (PLAN_V21 Phase 180): Auslegungstext (vormals 0,00-€-Position) – nur Innendienst/Admin
     auslegung_text: Mapped[str] = mapped_column(Text, default="")
+    cloover_json: Mapped[str] = mapped_column(Text, default="{}")   # v36 (PLAN_V22 Phase 193): Rate/Projekt/Status
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
         back_populates="angebot", order_by="AngebotsPosition.sort",
@@ -2232,4 +2234,19 @@ class Vertriebskanal(Base):
     pflicht_hinweis: Mapped[str] = mapped_column(String(200), default="")   # „?“ = Vertriebskanal klären
     reihenfolge: Mapped[int] = mapped_column(Integer, default=0)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class ClooverPdfToken(Base):
+    """v36 (PLAN_V22 Phase 194, Agent B3): Token der öffentlichen PDF-Route
+    GET /oeffentlich/cloover/<token>.pdf (PDF-Ablage-Anbieter `basis_url`): Datei
+    data/cloover_pdf/<token>.pdf, Ablauf 180 Tage, kein Login, keine Verzeichnisliste.
+    Neue Tabelle (additiv, create_all) – der v35-Code liest sie nicht."""
+    __tablename__ = "cloover_pdf_tokens"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    datei: Mapped[str] = mapped_column(String(120), default="")      # <token>.pdf unter data/cloover_pdf/
+    name: Mapped[str] = mapped_column(String(120), default="")       # Ablage-Name (AN-C-…-<Zufall>.pdf)
+    gueltig_bis: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 

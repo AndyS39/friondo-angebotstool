@@ -13,5 +13,10 @@ lxml
 Pillow
 pillow-heif
 
+# v36 (PLAN_V22): Angebots-PDF per Browser-Druck (Edge/Chromium ueber Playwright)
+playwright
+# v36 (PLAN_V22 Phase 194): QR-Code des Cloover-Abschluss-Links als SVG
+qrcode
+
 # nur Entwicklung/Abnahme (tests/abnahme.py, TestClient)
 httpx

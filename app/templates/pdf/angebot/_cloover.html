@@ -1,0 +1,34 @@
+{#- v36 (PLAN_V22 Phase 189): Block „Finanzierung mit Cloover – Saubere Energie. Faire Raten. Maximale
+    Freiheit.“ mit den vier Boxen (Sofort starten · Planbare Monatsraten · Maximale Flexibilität · Ihre Vorteile),
+    nur Profil Standard. Die Box „Planbare Monatsraten“ und die Fußnote füllt Teil B über kontext.auftrag.cloover
+    (rate_text, rate_mit_text, laufzeit, fussnote, checkout_link, qr_svg, datenschutz, hinweis_link); ohne Daten
+    „Monatsrate auf Anfrage“. Wortlaute der Boxen aus der Design-Vorlage. -#}
+{%- set a = kontext.auftrag %}
+{%- set c = a.cloover %}
+{%- set t = a.cloover_texte %}
+<div class="pdf-cloover">
+  <div class="pdf-cloover-kopf"><h3>{{ t.titel }}</h3><span class="pdf-cloover-slogan">{{ t.slogan }}</span></div>
+  <div class="pdf-cloover-boxen">
+    <div class="pdf-cloover-box"><div class="pdf-cloover-boxtitel">{{ t.sofort_titel }}</div><div class="pdf-cloover-boxtext">{{ t.sofort_text }}</div></div>
+    <div class="pdf-cloover-box"><div class="pdf-cloover-boxtitel">{{ t.raten_titel }}</div><div class="pdf-cloover-boxtext">
+      {%- if c and (c.rate_text or c.rate_mit_text) %}
+      {%- if c.rate_mit_text %}• <strong>ab {{ c.rate_mit_text }} pro Monat mit Förderung*</strong><br>{% endif %}
+      {%- if c.rate_text %}• <strong>ab {{ c.rate_text }} pro Monat ohne Förderung</strong><br>{% endif %}
+      {#- Kombi-Versand (Teil B, Agent B3: kombi_gesamtrate_cent) – ein Projekt je Kombi-Mail [ANNAHME, Rückfrage B6] #}
+      {%- if c.kombi_gesamtrate_text %}• Gesamtrate für alle Angebote dieser Mail: ab {{ c.kombi_gesamtrate_text }} pro Monat<br>{% endif %}
+      {%- else %}• Monatsrate auf Anfrage<br>
+      {%- endif %}
+      {{ t.raten_schluss }}</div></div>
+    <div class="pdf-cloover-box"><div class="pdf-cloover-boxtitel">{{ t.flex_titel }}</div><div class="pdf-cloover-boxtext">{% for punkt in t.flex_punkte %}• {{ punkt }}{% if not loop.last %}<br>{% endif %}{% endfor %}</div></div>
+    <div class="pdf-cloover-box pdf-cloover-box-flaeche"><div class="pdf-cloover-boxtitel">{{ t.vorteile_titel }}</div><div class="pdf-cloover-boxtext">{{ t.vorteile_text }}<br><strong>{{ t.zufriedenheit }}</strong> – {{ t.zitat.format(anlage=a.cloover_anlage) }}</div></div>
+  </div>
+  {%- if c and c.fussnote %}
+  <p class="pdf-cloover-fussnote">{{ c.fussnote }}</p>
+  {%- endif %}
+  {%- if c and c.checkout_link %}
+  <p class="pdf-cloover-fussnote">{{ t.rueckmeldung }}</p>
+  {%- endif %}
+  {%- if c and c.datenschutz %}
+  <p class="pdf-cloover-fussnote">{{ c.datenschutz }}</p>
+  {%- endif %}
+</div>

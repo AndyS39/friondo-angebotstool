@@ -646,3 +646,65 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
   `update.bat` installiert sie über `requirements.txt`; Prüfung `venv\Scripts\python -c "import lxml, PIL, pillow_heif"`.
 - **Gespeicherte Filter** liegen in `benutzer_einstellungen` (Keys `boards_filter`, global `boards_filter_geteilt`
   unter benutzer_id 0) – keine neue Tabelle.
+
+## Ergänzungen v36 – Teil A Angebots-PDF (16.10.2026)
+
+- **Kein neuer Hintergrundlauf, keine neuen Netzaufrufe – aber ein Browser-Prozess je Dienst:** das Angebots-PDF
+  (alle Sparten, alle Wege) druckt `app/pdf_html.py` über Playwright mit Edge (Kanal `msedge`; `.env
+  PDF_BROWSER_PFAD`; Rückfall Playwright-Chromium). Der Browser startet beim ersten PDF, läuft als Kindprozess des
+  Dienstes (headless, `--disable-gpu`, ein Thread „pdf-drucker“ mit asyncio-Schleife), wird nach Fehler/
+  Zeitüberschreitung neu gestartet und beim Beenden geschlossen (atexit). **Prozess-I/O gilt wie Netz-I/O**: der
+  Druck läuft nie mit gehaltener Datenbanksitzung (Wächter `tests/test_v27_sitzungen.py`, Startmenge
+  `PROZESS_FUNKTIONEN`). Grenzen: 2 parallele Drucke (Semaphore), 30 s je PDF, Zielwert ≤ 3 s je WP-Angebot (warm;
+  der erste Druck nach dem Start ≈ 5 s). Speicher: Edge headless ≈ 150–250 MB zusätzlich zum Dienst [ANNAHME A3 –
+  auf dem Server nachmessen, Betriebs-Seite „Prozess“ zeigt nur den Python-Prozess].
+
+  | Modul / Route | Auslöser | Intervall | Netz / Prozess-I/O | Sitzung | Maßnahme |
+  |---|---|---|---|---|---|
+  | `pdf_export.pdf_fuer_angebot` → `pdf_html.angebot_pdf` – `GET /angebote/{id}/pdf`, `GET /signatur/{id}/pdf`, `GET /signatur/extern/{token}/pdf`, `GET /meine-angebote/{id}/pdf`, `POST /angebote/{id}/email`, `POST /vorgaenge/{id}/kombi-versand`, `projektierung.gewerk_anlegen` (Ablage), `nachfassen._pdf_anhang` | jeder PDF-Aufruf | – | Browser-Druck (Playwright/Edge, Temp-HTML in `data\tmp\pdf\`), Datei nach `data\angebote\` | Kontext lesen → `verbindung_freigeben` (Commit) → Druck ohne Sitzung → Datei; Rückfall fpdf2 nach Freigabe + Fehlerprotokoll „PDF“ in eigener kurzer Sitzung | Merker `letzter_rueckfall` → Versand-Meldung; Schalter `pdf_engine = fpdf2` |
+  | `pdf_export.signiertes_pdf_erzeugen` – `POST /signatur/{id}`, `POST /signatur/extern/{token}` | Signatur | – | wie oben, Ablage `data\angebote\signiert\` | wie oben (Signatur-Dict im Kontext) | Rückfall fpdf2 mit eingebettetem Bild |
+  | `GET /angebote/{id}/pdf.html` | Editor „HTML-Vorschau“ (ID/Admin) | – | – (nur Rendern) | Leseanfrage | – |
+  | `pdf_html.migration_v36_pdf_engine` (migrate.py) | Update/Start | – | Browser-Test (Probeseite) | Einstellung lesen → `verbindung_freigeben` → Test → kurze Schreibung (`pdf_letzter_test`, ggf. `pdf_engine = fpdf2`) | Meldung in der migrate-Ausgabe |
+  | `POST /parametrierung/angebots-pdf/test`, `GET …/test.pdf` | Admin („Test-PDF erzeugen“) | – | Browser-Test über die Sparten-Vorlage, Datei `data\tmp\pdf\angebots-pdf-test.pdf` | Formular → `verbindung_freigeben` → Test → kurz | Protokoll `pdf_protokoll` |
+  | `betrieb.health()` (`/health`, Betriebs-Seite, `betrieb-wache`) | Wächter/Admin | 300 s | – | `db.kurz(schreibend=False)` (Engine, letzter Test) | warn „Angebots-PDF: Browser-Druck fehlgeschlagen“ |
+  | `scripts\pdf-browser-pruefen.bat` / `scripts/pdf_browser_pruefen.py` | Handlauf (Server, auch unter SYSTEM per psexec/Aufgabe) | – | Browser-Druck ohne Datenbank, Datei `data\log\pdf-browser-test-<Zeit>.pdf` | keine | Exit-Code 0/1/2 |
+
+- **Dienstkonto SYSTEM:** Edge muss unter SYSTEM starten (Prüfung: Parametrierung → Angebots-PDF → „Test-PDF
+  erzeugen“ im laufenden Dienst, außerhalb `scripts\pdf-browser-pruefen.bat` mit `psexec -s`); Schreibrecht auf
+  `data\tmp\pdf\` und `data\angebote\`. `update.bat` lädt den Playwright-Chromium nur nach, wenn Edge fehlt und kein
+  `PDF_BROWSER_PFAD` gesetzt ist (Internet nötig).
+- **Migration v36 Teil A (additiv):** Einstellungen `pdf_engine` (html | fpdf2 – fpdf2, solange der Browser-Test beim
+  Update fehlschlägt), `pdf_letzter_test` (JSON), `pdf_protokoll`; keine neuen Tabellen/Spalten für Teil A. Der
+  v35-Code liest diese Einstellungen nicht (Rückweg `rollback.bat --nur-code`).
+- **/health-Felder (neu):** `pdf_engine`, `pdf_browser`, `pdf_letzte_druckdauer_ms`, `pdf_drucke`, `pdf_fehler`,
+  `pdf_letzter_test_ok`. Go-live-Checkliste: 13 Punkte (neu „Angebots-PDF: Browser-Druck grün“).
+- **Pool-Invariante unverändert** (17 Läufe: 64 + 17 + 5 = 86 ≤ 90) – der Drucker-Thread hält keine Verbindung.
+
+## Ergänzungen v36 – Teil B Cloover-Projekt, PDF-Ablage, Token-Route, Lauf cloover-status (16.10.2026, Agent B3)
+
+- **Ein neuer Hintergrundlauf:** `cloover-status` (3600 s, Start +400 s, Modul `app/cloover_projekt.py`, aktiv nur
+  mit `CLOOVER_API_KEY`) – damit **18 Läufe, Pool-Invariante 64 + 18 + 5 = 87 ≤ 90**. Neue Netzaufrufe aus Anfragen
+  (alle nach `verbindung_freigeben`, Wächter `tests/test_v27_sitzungen.py`):
+
+  | Modul / Route | Auslöser | Intervall | Netz / Datei-I/O | Sitzung | Maßnahme |
+  |---|---|---|---|---|---|
+  | `cloover_projekt.vor_pdf` – `POST /angebote/{id}/email` („Versand vorbereiten“) | je Versand eines Cloover-fähigen Angebots ohne Projekt | – | Rate (B2, `cloover_api`), PDF-Fassung A drucken, Ablage-Upload (Graph `PUT …:/content` + `createLink` bzw. Datei + `cloover_pdf_tokens`), HEAD-Prüfung der URL, `POST /api/projects` (Cloover, Timeout 20 s) | lesen → `verbindung_freigeben` → Netz → Schreiben (cloover_json, AngebotsNotiz, Vorgangs-Chat) → Commit | Fehler → kein Projekt, Meldung „Cloover-Link nicht möglich: …“, `cloover_json.projekt_fehler`, Knopf „Projekt anlegen“; Cloover-Fehler zusätzlich im Fehlerprotokoll (Typ „Cloover“, ohne Key) |
+  | `cloover_projekt.nach_pdf` – dieselbe Route, nach dem Druck | je Versand mit Projekt | – | Ablage ersetzen (Graph `PUT /drives/{id}/items/{id}/content` bzw. Datei) | `verbindung_freigeben` → Netz → kurze Schreibung | Fehler → Meldung „Cloover-PDF nicht aktualisiert“, `pdf_ablage_fehler` |
+  | `cloover_projekt.vor_pdf_kombi` / `nach_pdf_kombi` – `POST /vorgaenge/{id}/kombi-versand` | Kombi-Versand | – | wie oben je Tool-Angebot, EIN `POST /api/projects` mit allen Assets/URLs, Gesamtrate (`POST /api/price-calculator/v2`) | wie oben | wie oben |
+  | `POST /angebote/{id}/cloover/projekt`, `…/cloover/status` | Editor-Knöpfe (ID/Admin) | – | wie vor_pdf (+ Fassung B) bzw. `GET /api/projects/{id}` | `verbindung_freigeben` → Netz → `db.kurz()` | JSON bei Accept application/json |
+  | Lauf `cloover-status` | Scheduler | 3600 s | `GET /api/projects/{id}` je Angebot (≤ 50 je Lauf, Projekt < 180 Tage, Status Versand vorbereitet/Versendet/Angenommen) | `db.kurz(schreibend=False)` lesen → Sitzung zu → Netz → `db.kurz()` je Angebot | Änderung → cloover_json, AngebotsNotiz; Vertrag → Vorgangs-Chat + Glocke art `cloover` (ohne Mail) an ID + AD; einmal täglich (03 Uhr) abgelaufene Token-PDFs löschen |
+  | `GET /oeffentlich/cloover/{token}.pdf` (`app/routers/oeffentlich.py`) | Cloover ruft die PDF-URL ab (Anbieter `basis_url`) | – | Datei `data\cloover_pdf\<token>.pdf` | Leseanfrage ohne Login (auth.OFFENE_PFADE), 404 bei unbekannt/abgelaufen, keine Verzeichnisliste | Token 32 Zeichen, Ablauf 180 Tage |
+  | `POST /parametrierung/cloover/ablage-test` | Admin („Test-PDF ablegen und prüfen“) | – | fpdf2-Test-PDF ablegen, HEAD prüfen, Ersetzen prüfen | Formular → Commit → `verbindung_freigeben` → Netz → Schreibung `cloover_ablage_letzter_test` | Protokoll `cloover_protokoll` |
+  | `cloover.rate_aktualisieren` (Phase 193, B2) – aus `pdf_export.pdf_fuer_angebot`/`signiertes_pdf_erzeugen` (vor jedem nicht eingefrorenen PDF, Engine html und fpdf2), `cloover_projekt.vor_pdf(_kombi)`, `POST /angebote/{id}/cloover` (Laufzeit/Anzahlung geändert) und `POST /angebote/{id}/cloover/rate` („Rate neu berechnen“) | je PDF/Versand/Knopf – Netz nur, wenn Endbetrag/Förderung/USt/Laufzeit/Anzahlung von der Basis der letzten Rate abweichen oder `erzwingen`; Modus aus/kein Key/nicht relevant = kein Aufruf | – | `POST /api/price-calculator/v2` (Rückfall v1), Timeout 20 s | Aufrufer `verbindung_freigeben` → `db.kurz(schreibend=False)` lesen → Sitzung zu → Netz → `db.kurz()` schreiben (`cloover_json`), danach `session.refresh` am ORM-Objekt | Fehler → letzte Rate mit Stand bleibt, `cloover_json.fehler`, Fehlerprotokoll „Cloover“ (ohne Key); kein neuer Lauf |
+  | Jinja-Global `cloover_ablage_kontext` (Parametrierungs-Partial) | nur, wenn die Cloover-Seite keinen Kontext `ablage` übergibt | – | – | `db.kurz(schreibend=False)` einmal je Aufruf | B1-Route soll `ablage=cloover_pdf_ablage.seiten_kontext(session)` übergeben |
+
+- **Link-Ablauf:** anonyme SharePoint-Links und Token laufen nach 180 Tagen ab [ANNAHME]; der Status-Lauf prüft nur
+  Projekte jünger als 180 Tage. Nach Ablauf kann Cloover das PDF nicht mehr laden (Rückfrage B4 an Cloover: wie
+  lange muss die URL abrufbar bleiben?).
+- **Dienstkonto SYSTEM:** Schreibrecht auf `data\cloover_pdf\` (Anbieter `basis_url`) und `data\tmp\`; SharePoint
+  braucht keinen lokalen Zugriff, nur die App-Berechtigung `Sites.Selected` (docs/graph-einrichtung.md Abschnitt 8).
+- **Migration v36 Teil B (additiv):** Tabelle `cloover_pdf_tokens` (create_all), Einstellungen `cloover_pdf_ablage`,
+  `cloover_sharepoint_site`, `cloover_sharepoint_ordner`, `cloover_ablage_letzter_test`; neue Schlüssel in
+  `angebote.cloover_json` (projekt_am, projekt_von, pdf_ablage, kombi_*, status_fehler …). Der v35-Code liest nichts
+  davon (Rückweg `rollback.bat --nur-code`).
+- **Glocke:** art `cloover` steht in `benachrichtigungen.MAIL_FREIE_ARTEN` (nie Sofort-/Digest-Mail).

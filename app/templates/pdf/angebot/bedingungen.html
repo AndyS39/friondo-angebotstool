@@ -1,0 +1,27 @@
+{#- v36 (PLAN_V22 Phase 189): Vertragsbedingungen – Abschnitte aus den Nachtext-Textblöcken B/C („###“ → blaue
+    Zwischenüberschriften: Haftungsbegrenzung · Rücktrittsrecht … · Zahlung ({zahlungsbedingungen} v30) · WP
+    „Hinweis zur KfW-Förderung“ · KL „Hinweis zur Kältetechnik“ …), Fußnoten (PV: Nullsteuersatz), Schlusskasten
+    (Bindefrist, AGB-/Datenschutz-Links klickbar, Zusicherung, „Mit freundlichen Grüßen / Ihr Friondo-Team“). -#}
+{%- set b = kontext.bedingungen %}
+<div class="pdf-seite pdf-bedingungen">
+  <h2>Vertragsbedingungen</h2>
+  {%- for abschnitt in b.abschnitte %}
+  <div class="pdf-bed-abschnitt{% if abschnitt.ebene == 1 %} pdf-bed-ebene1{% endif %}">
+    {%- if abschnitt.titel %}<h3>{{ abschnitt.titel }}</h3>{% endif %}
+    {%- for absatz in abschnitt.absaetze %}
+    <p>{{ absatz }}</p>
+    {%- endfor %}
+  </div>
+  {%- endfor %}
+  {%- for fussnote in b.fussnoten %}
+  <p class="pdf-bed-fussnote">{{ fussnote }}</p>
+  {%- endfor %}
+  <div class="pdf-bed-schluss pdf-karte pdf-flaeche">
+    {%- for absatz in b.schluss.absaetze %}
+    <p>{% for teil in absatz %}{% if teil.url %}<a href="{{ teil.url }}">{{ teil.text }}</a>{% else %}{{ teil.text }}{% endif %}{% endfor %}</p>
+    {%- endfor %}
+    {%- for zeile in b.schluss.gruss %}
+    <p class="{% if loop.first %}pdf-bed-gruss{% endif %}">{% if loop.last %}<strong>{{ zeile }}</strong>{% else %}{{ zeile }}{% endif %}</p>
+    {%- endfor %}
+  </div>
+</div>

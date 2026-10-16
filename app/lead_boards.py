@@ -211,6 +211,7 @@ KATALOGE = {
         ("db", "DB", True), ("inaktiv", "Ohne Kontakt", False),
         ("sparte", "Sparte", False), ("netto", "Netto", False), ("ort", "Ort", False),
         ("wiedervorlage", "Wiedervorlage", False), ("ampel", "Hot-Ampel", False),
+        ("cloover", "Cloover", False),   # v36 (PLAN_V22 Phase 194, B3): Vertrag/Barzahlung/Link [ANNAHME: Standard aus]
     ],
     # Meine Angebote (/meine-angebote, Außendienst): Kundenpreise, nie EK/DB
     "meine_angebote": [
@@ -719,6 +720,9 @@ def angebot_sortwert(a, key: str, kunden: dict | None = None, vorgaenge: dict | 
     if key == "ampel":
         ampel = (vorgang.verfolgung_ampel if vorgang else "") or getattr(a, "verfolgung_ampel", "") or ""
         return {"heiss": 0, "warm": 1, "kalt": 2}.get(ampel)
+    if key == "cloover":   # v36 (PLAN_V22 Phase 194, B3): 0 Vertrag · 1 Barzahlung · 2 Link · leer
+        from app import cloover_projekt
+        return cloover_projekt.sortwert(a)
     return None
 
 

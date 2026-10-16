@@ -129,7 +129,32 @@ def pruefen(session: Session) -> list[Pruefpunkt]:
     #    anwendung (grüner Verbindungstest unter /versand) und Geheimnis > 30 Tage gültig
     #    (oder ohne hinterlegtes Ablaufdatum); der Text nennt das Ablaufdatum
     punkte.append(graph_punkt(session))
+    # 13 (v36, PLAN_V22 Phase 188/190): Angebots-PDF – Engine html UND letzter Browser-Test ok
+    #    (Einstellung pdf_letzter_test aus migrate.py bzw. „Test-PDF erzeugen“)
+    punkte.append(pdf_punkt(session))
     return punkte
+
+
+def pdf_punkt(session: Session) -> Pruefpunkt:
+    """v36 (Phase 188/190): Prüfpunkt „Angebots-PDF: Browser-Druck grün“ – Engine html und das
+    gespeicherte Ergebnis des letzten Browser-Tests ok; Link auf Parametrierung → Angebots-PDF."""
+    from app import pdf_html
+    engine = pdf_html.engine(session)
+    test = pdf_html.letzter_test(session)
+    if test is None:
+        test_text = "Browser-Test noch nicht ausgeführt (migrate.py bzw. „Test-PDF erzeugen“)"
+    elif test.get("ok"):
+        test_text = (f"Browser-Test {test.get('zeit', '')} ok – {test.get('browser', '')} "
+                     f"{test.get('version', '')}, {test.get('dauer_ms', 0)} ms")
+    else:
+        test_text = f"Browser-Test {test.get('zeit', '')} fehlgeschlagen: {test.get('fehler', '')}"
+    if engine == pdf_html.ENGINE_HTML:
+        engine_text = "Engine html (Layout v3)"
+    else:
+        engine_text = "Engine fpdf2 (bisheriges Layout – Rückfall)"
+    return Pruefpunkt("Angebots-PDF: Browser-Druck grün",
+                      engine == pdf_html.ENGINE_HTML and bool(test and test.get("ok")),
+                      f"{engine_text} · {test_text}", "/parametrierung/angebots-pdf")
 
 
 def graph_punkt(session: Session) -> Pruefpunkt:

@@ -25,6 +25,12 @@ MARKER = "netz-ohne-sitzung-ok"
 NETZ_ATTRIBUTE = {"urlopen", "acquire_token_silent", "acquire_token_by_device_flow",
                   "acquire_token_for_client", "acquire_token_interactive"}
 NETZ_MODULE = {"httpx", "requests", "smtplib", "socket"}
+# v36 (PLAN_V22 Phase 188/190, Agent A3): Prozess-I/O gilt wie Netz-I/O – der Browser-Druck
+# (Playwright/Edge, eigener Thread, bis 30 s) darf nie mit gehaltener Sitzung laufen. Die beiden
+# Nahtstellen werden als „unsicher“ vorbelegt; über den Fixpunkt werden damit pdf_aus_kontext,
+# browser_test (und jeder Aufrufer ohne Freigabe) unsicher. pdf_html.angebot_pdf selbst gibt die
+# Sitzung vor dem Druck frei und muss als sicher erkannt werden.
+PROZESS_FUNKTIONEN = {"pdf_html._Drucker.drucken", "pdf_html.drucken"}
 # Freigabe-Aufrufe
 FREIGABE_FUNKTIONEN = {"verbindung_freigeben"}
 FREIGABE_METHODEN = {"close", "commit", "rollback"}
@@ -197,7 +203,8 @@ def verstoesse_suchen() -> tuple[list[str], set[str]]:
     # ohne Sitzungs-Parameter mit Netzaufruf ist immer unsicher (der Aufrufer muss
     # vorher freigeben); eine mit Parameter ist sicher, wenn der Parameter vor dem
     # Netzaufruf freigegeben und danach nicht wieder benutzt wird.
-    unsicher: set[str] = set()
+    # v36: Browser-Druck (Prozess-I/O) als Startmenge – siehe PROZESS_FUNKTIONEN
+    unsicher: set[str] = {s for s in PROZESS_FUNKTIONEN if s in funktionen}
     while True:
         neu = set(unsicher)
         for s, f in funktionen.items():
@@ -229,6 +236,12 @@ class Waechter(unittest.TestCase):
         self.assertTrue(unsicher, "keine Netzfunktionen erkannt – Prüfung defekt")
         self.assertIn("graph_versand._graph_aufruf", unsicher)
         self.assertIn("monday_sync._api", unsicher)
+        # v36 (Phase 188/190): Browser-Druck zählt als Prozess-I/O – Aufrufkette erkannt, angebot_pdf
+        # (Freigabe vor dem Druck) ist erlaubt
+        self.assertIn("pdf_html.drucken", unsicher)
+        self.assertIn("pdf_html.pdf_aus_kontext", unsicher)
+        self.assertIn("pdf_html.browser_test", unsicher)
+        self.assertNotIn("pdf_html.angebot_pdf", unsicher)
         self.assertEqual(verstoesse, [], "Netzaufruf in offener Sitzung:\n" + "\n".join(verstoesse))
 
     def test_waechter_erkennt_verstoss(self):

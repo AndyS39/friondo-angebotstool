@@ -39,6 +39,8 @@ ADMIN_EINTRAEGE = [
     "/parametrierung/bestandsimport", "/parametrierung/golive",
     "/parametrierung/kunden-dubletten", "/parametrierung/lead-einstellungen",
     "/parametrierung/lead-demo", "/parametrierung/projektierung-einstellungen#mailprotokoll",
+    # v36 (PLAN_V22 Phase 192, Agent B1): Parametrierung → Cloover (Key-Stand, Modus) nur für Admins
+    "/parametrierung/cloover",
 ]
 LEAD_EINTRAEGE = ["/parametrierung/lead-quellen", "/parametrierung/lead-parser",
                   "/parametrierung/lead-routing", "/parametrierung/lead-vorlagen",
@@ -93,7 +95,8 @@ class Uebersicht(Basis):
         # stehen zusätzlich im Hauptmenü der Kopfzeile)
         raster = r.text.split('id="param-raster"')[1].split('id="param-leer"')[0]
         for pfad in NEUE_SEITEN + ["/benutzer", "/artikel", "/parametrierung/heizreport",
-                                   "/parametrierung/artikel/kl-import"]:
+                                   "/parametrierung/artikel/kl-import",
+                                   "/parametrierung/cloover"]:   # v36 (Phase 192): Karte „Angebotstool“, nur Admin
             self.assertEqual(raster.count(f'href="{pfad}"'), 1, pfad)
         # Anker-Einträge der Protokolle
         for anker in ("/parametrierung/angebotstool#loeschprotokoll",
@@ -107,7 +110,9 @@ class Uebersicht(Basis):
             self.assertIn(f'id="{bereich}"', r.text, bereich)
         self.assertIn('id="param-suche"', r.text)
         # v33 (PLAN_V20 Phase 166, Agent G): 12 Prüfpunkte (neu „Graph als Anwendung verbunden“)
-        self.assertRegex(r.text, r"\d+/12 grün")
+        # v36 (PLAN_V22 Phase 188/190, Agent A3): 13 Prüfpunkte (neu „Angebots-PDF: Browser-Druck grün“)
+        self.assertRegex(r.text, r"\d+/13 grün")
+        self.assertIn('href="/parametrierung/angebots-pdf"', r.text)
         # keine Inline-Formulare mehr auf der Übersicht
         self.assertNotIn('action="/parametrierung/einstellungen"', r.text)
         self.assertNotIn("Eingelesene Logik", r.text)
@@ -121,7 +126,8 @@ class Uebersicht(Basis):
         self.assertEqual(r.status_code, 200)
         for pfad in ADMIN_EINTRAEGE:
             self.assertNotIn(f'href="{pfad}"', r.text, pfad)
-        self.assertNotIn("/12 grün", r.text)   # v33: 12 Prüfpunkte
+        self.assertNotIn("/13 grün", r.text)   # v33: 12 Prüfpunkte, v36: 13 (Badge nur Admin)
+        self.assertNotIn('href="/parametrierung/angebots-pdf"', r.text)   # v36: nur Admin
         # Nicht-Admin-Einträge bleiben
         for pfad in ("/parametrierung/vorlagen", "/parametrierung/teams",
                      "/parametrierung/fehlerprotokoll", "/parametrierung/angebotstool",

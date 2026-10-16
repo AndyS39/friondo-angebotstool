@@ -234,3 +234,44 @@ laufen nach dem Nachtragen stündlich von selbst nach (bis zu 7 Tage). Details: 
 Dazu gehören **alle Außendienst-Postfächer**: Die Nachfass-Mail (v33, Phase 176) sendet mit `messages`/`send` am
 Postfach `/users/<AD-E-Mail>`; fehlt ein Postfach in der Gruppe, meldet der Knopf „Versand aus <Postfach>
 fehlgeschlagen“ und das Fehlerprotokoll „Postfach … ist nicht in der Zugriffsgruppe“.
+
+## 8. SharePoint-Ablage für Cloover-PDFs (v36, PLAN_V22 Phase 194)
+
+Cloover braucht für jedes Projekt (`POST /api/projects`, Feld `offerPDF`) eine **ohne Anmeldung
+abrufbare URL** des Angebots-PDFs; das Tool selbst läuft nur im VPN. Standardweg ist eine eigene
+SharePoint-Bibliothek, in die das Tool **als Anwendung** (dieselbe App-Registrierung wie Abschnitt 1)
+hochlädt und einen anonymen Lese-Link erzeugt (`app/cloover_pdf_ablage.py`, Parametrierung → Cloover →
+PDF-Ablage). Voraussetzungen (Admin mit `admin@`):
+
+1. **Site und Bibliothek anlegen** – eigene Site (z. B. `Cloover-Angebote`, Vorlage „Teamsite“ ohne
+   Microsoft-365-Gruppe), darin die Dokumentbibliothek/der Ordner `Cloover-Angebote` (Parameter
+   `cloover_sharepoint_ordner`). Dateien heißen `AN-C-<Nr>-<Zufall>.pdf` – nie mit Kundennamen.
+2. **Anwendungsberechtigung `Sites.Selected`** (Microsoft Graph) in der App-Registrierung ergänzen und
+   Admin-Zustimmung erteilen – im Gegensatz zu `Sites.ReadWrite.All` sieht die App damit **nur** die
+   freigegebenen Sites. Danach der App Schreibrecht auf genau diese Site geben (Graph, als Admin):
+
+   ```http
+   POST https://graph.microsoft.com/v1.0/sites/{site-id}/permissions
+   {"roles": ["write"],
+    "grantedToIdentities": [{"application": {"id": "<GRAPH_CLIENT_ID>", "displayName": "Friondo Angebotstool"}}]}
+   ```
+
+   Die `site-id` liefert `GET https://graph.microsoft.com/v1.0/sites/friondo.sharepoint.com:/sites/Cloover-Angebote`
+   (Graph Explorer oder PowerShell `Invoke-MgGraphRequest`); alternativ PnP PowerShell:
+   `Grant-PnPAzureADAppSitePermission -AppId <GRAPH_CLIENT_ID> -DisplayName "Friondo Angebotstool" -Site https://friondo.sharepoint.com/sites/Cloover-Angebote -Permissions Write`.
+3. **Freigabe „Jeder mit dem Link“ erlauben** – Mandant (SharePoint Admin Center → Richtlinien → Freigabe:
+   „Jeder“) und die Site selbst (`Set-SPOSite -Identity https://friondo.sharepoint.com/sites/Cloover-Angebote
+   -SharingCapability ExternalUserAndGuestSharing`); Ablauf anonymer Links auf mindestens 180 Tage stellen
+   (`Set-SPOTenant -RequireAnonymousLinksExpireInDays 180` bzw. je Site `-AnonymousLinkExpirationInDays 180`).
+   Das Tool legt die Links mit `createLink` (type `view`, scope `anonymous`, `expirationDateTime` = +180 Tage)
+   an und übergibt Cloover die Download-URL (`…?download=1`).
+4. Im Tool: Parametrierung → Cloover → PDF-Ablage: Anbieter `sharepoint`, Site als
+   `friondo.sharepoint.com:/sites/Cloover-Angebote` (oder Site-ID), Ordner, **„Test-PDF ablegen und prüfen“**
+   (lädt ein PDF ohne Kundendaten hoch, prüft den anonymen Link per HEAD und das Ersetzen). Der Graph-Modus muss
+   **anwendung** sein (Abschnitt 3) – im Modus delegiert ist die Ablage gesperrt.
+
+Fehlerbilder: HTTP 403 beim Upload = `Sites.Selected` fehlt oder nur `read`; 403/400 bei `createLink` =
+anonyme Freigabe für Mandant oder Site nicht erlaubt; HEAD-Prüfung rot = Link braucht Anmeldung (Freigabe
+prüfen). Alternative ohne SharePoint: Anbieter `basis_url` = Token-Route `GET /oeffentlich/cloover/<token>.pdf`
+unter `BASIS_URL` (nur mit öffentlicher HTTPS-Adresse des Tools, Konzept Erreichbarkeit). Details und
+Rückfragen an Cloover (anderer Upload-Weg, Gültigkeitsdauer der URL): `docs/cloover-api.md` Abschnitt 8.

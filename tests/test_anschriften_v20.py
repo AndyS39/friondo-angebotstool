@@ -64,6 +64,12 @@ class Anschriften(unittest.TestCase):
         pfad = pdf_export.pdf_fuer_angebot(self.s, self.s.get(Angebot, a.id))
         return pypdf.PdfReader(str(pfad)).pages[0].extract_text()
 
+    def pdf_text_alle(self, a):
+        """v36 (PLAN_V22 Phase 190): alle Seiten – im Layout v3 steht die Briefanrede auf der Seite
+        „Ihr Angebot im Überblick“ (Seite 2), der Empfängerblock bleibt auf Seite 1."""
+        pfad = pdf_export.pdf_fuer_angebot(self.s, self.s.get(Angebot, a.id))
+        return "\n".join((s.extract_text() or "") for s in pypdf.PdfReader(str(pfad)).pages)
+
     def test_alt_text_parsen(self):
         w = anschriften.alt_text_parsen("Contracting GmbH, Lager 2, Hafenstr. 9, 47119 Duisburg")
         self.assertEqual((w["name"], w["zusatz"], w["strasse"], w["plz"], w["ort"]),
@@ -107,7 +113,8 @@ class Anschriften(unittest.TestCase):
         self.assertIn("z. Hd. Frau Meier", text)
         self.assertIn("Ausführungsort: Ausführungsweg 5, 47139 Duisburg", text)
         self.assertIn("Lieferanschrift: Lager Friondo, Hafenstr. 9, 47119 Duisburg", text)
-        self.assertIn("Sehr geehrter Herr Anschrift-V20,", text)   # Anrede bleibt
+        # Anrede bleibt (v36: im Layout v3 auf Seite 2 „Ihr Angebot im Überblick“ – alle Seiten prüfen)
+        self.assertIn("Sehr geehrter Herr Anschrift-V20,", self.pdf_text_alle(a))
         # Lieferschein adressiert an die Lieferanschrift
         angebot_status_setzen(a, "Angenommen")
         self.s.commit()

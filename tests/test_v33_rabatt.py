@@ -63,10 +63,17 @@ def summenblock(html: str) -> list[str]:
 
 
 def pdf_summenzeilen(pfad) -> list[str]:
+    """Zeilen des Summenblocks. v36 (PLAN_V22 Phase 190): engine-unabhängig normalisiert – ohne
+    „€“ und mit gebündeltem Leerraum (fpdf2 „Netto-Summe € 20.000,00“, Layout v3
+    „Netto-Summe 20.000,00 €“ → beide „Netto-Summe 20.000,00“); die Beträge bleiben exakt geprüft."""
     text_ = "\n".join((seite.extract_text() or "") for seite in PdfReader(str(pfad)).pages)
-    return [z.strip() for z in text_.splitlines()
+    return [" ".join(z.replace("€", " ").split()) for z in text_.splitlines()
             if any(w in z for w in ("Netto-Summe", "Umsatzsteuer", "USt.", "Gesamt-Betrag",
                                     "Rabatt", "Endbetrag"))]
+
+
+def _zeile_mit(zeilen: list[str], *teile: str) -> bool:
+    return any(all(t in z for t in teile) for z in zeilen)
 
 
 class Basis(unittest.TestCase):
@@ -225,18 +232,21 @@ class Darstellung(Basis):
         a.rabatt_prozent = 5.0
         self.s.commit()
         zeilen = pdf_summenzeilen(pdf_export.pdf_fuer_angebot(self.s, a))
-        self.assertIn("Netto-Summe € 20.000,00", zeilen)
-        self.assertIn("Umsatzsteuer 0 % (§ 12 Abs. 3 UStG) € 0,00", zeilen)
-        self.assertIn("Gesamt-Betrag € 20.000,00", zeilen)
-        self.assertIn("− Rabatt (Aktionsrabatt) € 1.000,00", zeilen)
-        self.assertIn("= Endbetrag € 19.000,00", zeilen)
+        # v36 (PLAN_V22 Phase 190): Beträge engine-unabhängig – fpdf2 „Umsatzsteuer 0 % (§ 12 Abs. 3
+        # UStG) € 0,00“ / Layout v3 „0,00 % USt. (§ 12 Abs. 3 UStG) 0,00 €“, Rabattzeile
+        # „− Rabatt (Aktionsrabatt)“ bzw. „− Rabatt Aktionsrabatt“; Kontrollwerte unverändert
+        self.assertTrue(_zeile_mit(zeilen, "Netto-Summe", "20.000,00"), zeilen)
+        self.assertTrue(_zeile_mit(zeilen, "§ 12 Abs. 3 UStG", "0,00"), zeilen)
+        self.assertTrue(_zeile_mit(zeilen, "Gesamt-Betrag", "20.000,00"), zeilen)
+        self.assertTrue(_zeile_mit(zeilen, "Rabatt", "Aktionsrabatt", "1.000,00"), zeilen)
+        self.assertTrue(_zeile_mit(zeilen, "= Endbetrag", "19.000,00"), zeilen)
         self.assertFalse([z for z in zeilen if "brutto" in z.lower()], zeilen)
         a.rabatt_prozent = None
         a.rabatt_cent = 50_000
         self.s.commit()
         zeilen = pdf_summenzeilen(pdf_export.pdf_fuer_angebot(self.s, a))
-        self.assertIn("− Rabatt (Aktionsrabatt) € 500,00", zeilen)
-        self.assertIn("= Endbetrag € 19.500,00", zeilen)
+        self.assertTrue(_zeile_mit(zeilen, "Rabatt", "Aktionsrabatt", "500,00"), zeilen)
+        self.assertTrue(_zeile_mit(zeilen, "= Endbetrag", "19.500,00"), zeilen)
         # PDF über die Route (Sperre/Rechte) läuft
         self.assertEqual(self.client.get(f"/angebote/{a.id}/pdf").status_code, 200)
 

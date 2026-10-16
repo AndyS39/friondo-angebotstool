@@ -331,9 +331,17 @@ class FallA(Basis):
     def test_fall_a_pdf(self):
         angebot = self.angebot_direkt(bogen())
         text = self.pdf_text(angebot)
-        self.assertIn("Ihre individuelle Wallbox zum Festpreis", text)
+        # v36 (PLAN_V22 Phase 190): Layout v3 trägt den Deckblatt-Titel „Ihr individuelles Wallbox-
+        # Angebot zum Festpreis“ (pdf_kontext.SPARTEN) statt der Vortext-Überschrift des TAIFUN-
+        # Musters; fpdf2 (Rückfall) druckt weiter die Vortext-Überschrift – beide gelten
+        flach_titel = " ".join(text.replace("-\n", "-").split())
+        self.assertTrue("Ihre individuelle Wallbox zum Festpreis" in text
+                        or "Ihr individuelles Wallbox-Angebot zum Festpreis" in flach_titel,
+                        "Wallbox-Titel fehlt")
+        flach = " ".join(text.split())
         self.assertIn("Komplettpaket Wallbox inkl. Montage", text)
-        self.assertIn("Die Zukunft der Energie beginnt bei Ihnen zuhause", text)   # aus der Excel-Textzeile
+        # aus der Excel-Textzeile (v36: der Browser-Druck bricht den Satz um – ohne Zeilenumbruch prüfen)
+        self.assertIn("Die Zukunft der Energie beginnt bei Ihnen zuhause", flach)
         self.assertIn("Sehr geehrte Frau WB-Test v34", text)
         for gruppe in GRUPPEN:
             self.assertIn(gruppe, text)
@@ -341,7 +349,10 @@ class FallA(Basis):
         self.assertIn("2.235,70", text)
         self.assertIn("424,78", text)
         self.assertIn("2.660,48", text)
-        self.assertIn("Installationsvoraussetzungen", text)
+        # v36 (PLAN_V22 Phase 190): der Nachtext-Seitentitel „# Installationsvoraussetzungen“ entfällt im
+        # Layout v3 – die Absätze stehen auf der Seite „Vertragsbedingungen“ der Design-Vorlage; fpdf2 druckt ihn
+        self.assertTrue("Installationsvoraussetzungen" in text or "Vertragsbedingungen" in text,
+                        "Seite mit den Vertragsbedingungen fehlt")
         self.assertIn("Rücktrittsrecht", text)
         self.assertIn("Vollmacht zur Beauftragung der SpotmyEnergy GmbH", text)   # Nachtext D immer
         self.assertIn("Voraussichtlicher Ausführungszeitraum", text)
@@ -350,10 +361,16 @@ class FallA(Basis):
         self.assertNotIn("Bohrung/Durchbrüche", text)
         # kein Nachtext A, kein KfW-/Förderblock (der Vortext nennt wörtlich den
         # „Fördermittel-Check“ – deshalb die konkreten Block-Begriffe), keine Wirtschaftlichkeit
-        for verboten in ("Zahlungsoptionen", "Cloover", "KfW", "Förderbetrag", "Förderfähige",
-                         "Eigenanteil", "Wirtschaftlichkeit", "So rechnet sich", "Beispielrate",
-                         "Aufschiebende Bedingung", "Auslegung der", "Kältetechnik",
-                         "{zahlungsbedingungen}", "Wärmepumpen-Angebot", "Grundförderung", "_x000D_"):
+        # v36 (PLAN_V22 Phase 189/193): im Layout v3 trägt die Auftragsseite für alle Sparten des Profils
+        # Standard – auch WB (`cloover_sparten`, Design-Vorlage angebot-wallbox.html) – die Karte
+        # „FINANZIERUNG MIT CLOOVER“; seit Phase 193 hat „Friondo WB Standard“ auch im fpdf2-Rückfall einen
+        # Nachtext A „Ihre Zahlungsoptionen bei Friondo“ mit dem Platzhalter [CLOOVER] (WB_STANDARD_NACHTEXT_V36)
+        # – „Zahlungsoptionen“/„Cloover“ sind deshalb in keiner Engine mehr verboten (v34: kein Nachtext A)
+        verboten_liste = ["KfW", "Förderbetrag", "Förderfähige",
+                          "Eigenanteil", "Wirtschaftlichkeit", "So rechnet sich", "Beispielrate",
+                          "Aufschiebende Bedingung", "Auslegung der", "Kältetechnik",
+                          "{zahlungsbedingungen}", "Wärmepumpen-Angebot", "Grundförderung", "_x000D_"]
+        for verboten in verboten_liste:
             self.assertNotIn(verboten, text, verboten)
         # Vollmacht-Anker: anhaenge + angebotsprofile (pdf_export._mit_vollmacht nutzt beide)
         self.assertTrue(anhaenge.vollmacht_erforderlich(angebot))

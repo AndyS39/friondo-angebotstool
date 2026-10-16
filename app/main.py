@@ -23,6 +23,8 @@ from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorg
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
 from app.routers import konfiguration_heizreport   # v26: Parametrierung → Heizreport
+from app.routers import konfiguration_pdf   # v36 (PLAN_V22 Phase 188/190): Parametrierung → Angebots-PDF
+from app.routers import konfiguration_cloover   # v36 (PLAN_V22 Phase 192): Parametrierung → Cloover
 from app.routers import betrieb as betrieb_router   # v27: /health + Parametrierung → Betrieb
 from app.routers import lm_mail, lm_vorlagen   # v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor, Lead-Mails
 from app.routers import lm_taifun, lm_kanaele   # v35 (PLAN_LEAD_V6): TAIFUN-Übergabe, Kanäle (Objektfotos entfallen – Nachtrag 16.10.2026)
@@ -30,6 +32,9 @@ from app import taifun_export   # v35 (PLAN_LEAD_V6 Phase 183): Scheduler-Lauf t
 from app.routers import einstellungen as einstellungen_router   # v30 (PLAN_V18 Phase 145): Darstellung
 from app.routers import suche as suche_router   # v32 (PLAN_V19 Phase 164): Kundensuche
 from app.routers import angebote_elektro, taifun_pdf   # v34 (PLAN_V21 Phase 180): Elektro ins PV, TAIFUN-PDF lesen
+from app.routers import angebote_cloover_projekt, konfiguration_cloover_ablage, oeffentlich   # v36 (PLAN_V22 Phase 194, B3): Cloover-Projekt, PDF-Ablage, Token-Route
+from app import cloover_projekt   # v36 (PLAN_V22 Phase 194, B3): Scheduler-Lauf cloover-status
+from app.routers import angebote_cloover   # v36 (PLAN_V22 Phase 193): Editor-Karte „Finanzierung (Cloover)“
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -75,6 +80,7 @@ async def lifespan(app: FastAPI):
     from app import leadmanagement
     leadmanagement.scheduler_starten()
     taifun_export.scheduler_starten()   # v35 (PLAN_LEAD_V6 Phase 183): Lauf taifun-uebergaben
+    cloover_projekt.scheduler_starten()   # v36 (PLAN_V22 Phase 194, B3): Lauf cloover-status (60 min, 18. Lauf)
     # v12 (Phase 77): Geokodierung im Hintergrund (alle 5 Minuten)
     from app import geocoding
     geocoding.scheduler_starten()
@@ -172,6 +178,7 @@ app.include_router(suche_router.router)   # v32 (PLAN_V19 Phase 164): Kundensuch
 app.include_router(betrieb_router.router)   # v27 (PLAN_V17 Phase 129)
 app.include_router(vorgaenge.router)
 app.include_router(angebote_elektro.router)   # v34 (PLAN_V21 Phase 180)
+app.include_router(angebote_cloover.router)   # v36 (PLAN_V22 Phase 193)
 app.include_router(taifun_pdf.router)   # v34 (PLAN_V21 Phase 180)
 app.include_router(projektierung_router.router)
 app.include_router(glocke.router)
@@ -196,6 +203,11 @@ app.include_router(kunden.router)
 app.include_router(artikel.router)
 app.include_router(konfiguration.router)
 app.include_router(konfiguration_heizreport.router)   # v26 (PLAN_PROJ_V5 Phase 122)
+app.include_router(konfiguration_pdf.router)   # v36 (PLAN_V22 Phase 188/190): Angebots-PDF
+app.include_router(konfiguration_cloover.router)   # v36 (PLAN_V22 Phase 192): Cloover
+app.include_router(konfiguration_cloover_ablage.router)   # v36 (PLAN_V22 Phase 194, B3): Cloover → PDF-Ablage
+app.include_router(angebote_cloover_projekt.router)   # v36 (PLAN_V22 Phase 194, B3): Cloover-Projekt am Angebot
+app.include_router(oeffentlich.router)   # v36 (PLAN_V22 Phase 194, B3): Token-Route /oeffentlich/cloover/<token>.pdf
 app.include_router(konfigurator.router)
 app.include_router(angebote.router)
 app.include_router(statistik.router)

@@ -1,0 +1,68 @@
+{# v36 (PLAN_V22 Phase 193, Agent B2): Karte „Finanzierung (Cloover)“ unter der Kopfkarte des Editors
+   (Innendienst/Admin). Werte aus app.cloover.editor_kontext (cloover_karte) – nie EK/DB. Laufzeit (1–25),
+   Anzahlung €, Rate ohne/mit Förderung (mit nur WP mit Förderbetrag > 0), Stand, Quelle, Häkchen
+   „Finanzierung im PDF ausblenden“ (POST /angebote/<id>/cloover), Knopf „Rate neu berechnen“
+   (POST /angebote/<id>/cloover/rate), rote Hinweise (E-Mail/Telefon/Firmenkunde/Ausführungsort), Block
+   „Cloover-Projekt“ = Include _cloover_projekt.html (Phase 194, Agent B3 – erhält denselben Kontext:
+   angebot, cloover_karte (inkl. .daten = cloover_json), nur_lesen). Karte nur bei relevant (oder
+   ausgeblendet – das Häkchen muss erreichbar bleiben), sonst Hinweiszeile mit Grund. #}
+{% if cloover_karte is defined and cloover_karte %}
+{% set ck = cloover_karte %}
+{% set gesperrt = (nur_lesen is defined and nur_lesen) %}
+{% if ck.sichtbar %}
+<details class="cloover-karte" id="cloover-karte" open>
+    <summary><strong>Finanzierung (Cloover)</strong>
+        <span class="dezent">– Monatsrate für dieses Angebot{% if ck.modus == 'test' %} · <span class="cloover-badge">Test-Umgebung</span>{% endif %}{% if ck.ausgeblendet %} · im PDF ausgeblendet{% endif %}</span>
+    </summary>
+    <div class="cloover-inhalt">
+        {% if ck.ausgeblendet %}
+        <p class="dezent">{{ ck.grund }} – keine Rate, kein Cloover-Projekt. Häkchen unten entfernen, um die Finanzierung wieder einzublenden.</p>
+        {% endif %}
+        <div class="cloover-raten">
+            {% if ck.rate_ohne %}
+                {% if ck.rate_mit %}
+                <div class="cloover-rate mit-foerderung"><span class="dezent">Rate mit Förderung</span><strong>ab {{ ck.rate_mit }} / Monat*</strong></div>
+                {% endif %}
+                <div class="cloover-rate"><span class="dezent">Rate ohne Förderung</span><strong>ab {{ ck.rate_ohne }} / Monat</strong></div>
+            {% else %}
+                <div class="cloover-anfrage">Monatsrate auf Anfrage
+                    <span class="dezent">– noch keine Rate berechnet (geschieht automatisch vor dem PDF und beim „Versand vorbereiten“ oder über „Rate neu berechnen“)</span></div>
+            {% endif %}
+        </div>
+        <p class="cloover-stand">
+            {% if ck.rate_ohne %}Stand {{ ck.stand }} · Quelle {{ ck.quelle or '–' }} · Basis der Rate: Endbetrag {{ ck.rate_endbetrag_text }}{% if ck.rate_foerderung_text %}, Förderung {{ ck.rate_foerderung_text }}{% endif %}, Laufzeit {{ ck.rate_laufzeit }} Jahre, Anzahlung {{ ck.rate_anzahlung_text }} €
+            {% else %}Laufzeit {{ ck.laufzeit }} Jahre · Anzahlung {{ ck.anzahlung_text }} € · aktueller Endbetrag {{ ck.endbetrag_text }}{% if ck.foerderung_text %}, Förderung {{ ck.foerderung_text }}{% endif %}{% endif %}
+        </p>
+        {% if ck.veraltet %}
+        <p class="cloover-veraltet">Die Rate bezieht sich auf einen älteren Stand (Endbetrag, Förderung, Laufzeit oder Anzahlung haben sich geändert) – sie wird vor dem nächsten PDF automatisch neu berechnet.</p>
+        {% endif %}
+        {% if ck.fehler %}<p class="fehlertext">Cloover-Rate nicht verfügbar: {{ ck.fehler }}</p>{% endif %}
+        {% for hinweis in ck.hinweise %}<p class="fehlertext">{{ hinweis }}</p>{% endfor %}
+        {% if ck.aenderbar and not gesperrt %}
+        <form method="post" action="/angebote/{{ angebot.id }}/cloover" class="cloover-form" id="cloover-form">
+            <label>Laufzeit (Jahre)
+                <input type="number" name="laufzeit" min="1" max="25" step="1" value="{{ ck.laufzeit }}" required></label>
+            <label>Anzahlung (€)
+                <input type="text" name="anzahlung" inputmode="decimal" value="{{ ck.anzahlung_text }}" placeholder="0,00"></label>
+            <label class="kontrollfeld" title="Karte 2, Rate, Cloover-Block und Fußnote entfallen im PDF; kein Cloover-Projekt">
+                <input type="checkbox" name="ausblenden" {{ 'checked' if ck.ausgeblendet }}> Finanzierung im PDF ausblenden</label>
+            <button class="knopf klein" type="submit">Speichern</button>
+        </form>
+        <div class="cloover-knoepfe">
+            <form method="post" action="/angebote/{{ angebot.id }}/cloover/rate" id="cloover-rate-form">
+                <button class="knopf klein zweitrangig" type="submit" {{ 'disabled' if not ck.relevant }}
+                        title="Rate bei Cloover neu abfragen (Endbetrag, Förderung, Laufzeit, Anzahlung)">Rate neu berechnen</button>
+            </form>
+        </div>
+        {% elif not ck.aenderbar %}
+        <p class="dezent">Laufzeit, Anzahlung und Ausblenden sind nur im Entwurf oder bei „Versand vorbereitet“ änderbar – bei versendeten Angeboten über „Überarbeiten“ (neue Version).</p>
+        {% endif %}
+        {# Phase 194 (Agent B3): Block „Cloover-Projekt“ – Status, Link kopieren, Finanzierungsangebot öffnen,
+           „Projekt anlegen“ bei fehlendem Projekt, „Status jetzt abrufen“ #}
+        {% include "angebote/_cloover_projekt.html" ignore missing %}
+    </div>
+</details>
+{% else %}
+<p class="dezent cloover-hinweis" id="cloover-karte">Finanzierung (Cloover): {{ ck.grund }}</p>
+{% endif %}
+{% endif %}

@@ -5,6 +5,7 @@
 {% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand, notizen_chat, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
 {% from "_taifun_pdf.html" import taifun_pdf_eintrag %}
+{% from "_cloover_badge.html" import cloover_badge %}
 
 {% block titel %}Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
 
@@ -28,6 +29,8 @@
             <span class="betrag">{{ a.summen().endbetrag | euro }}</span>
         </div>
         {{ statuskette(a.status) }}
+        {#- v36 (PLAN_V22 Phase 194, B3): Cloover-Badge (Vertrag unterschrieben / Barzahlung / Link) #}
+        {% if not a.extern and cloover_badge_info(a) %}<p style="margin:0.2rem 0 0">{{ cloover_badge(a) }}</p>{% endif %}
         <div class="kartenfuss">
             {% if projekt_modul_ok %}
                 {% if a.id in projekt_je_angebot %}
