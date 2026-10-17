@@ -117,6 +117,9 @@
             <option value="orange" {{ 'selected' if ampel == 'orange' }}>Individuell</option>
         </select></label>
     <label class="kontrollfeld">Interesse {{ interesse_ui.filter(interesse) }}</label>
+    {% if vertriebler_fest %}{# Nachtrag 17.10.2026 (Rückfrage 16): Außendienst sieht nur eigene Erfassungen #}
+    <span class="dezent" data-rolle="nur-eigene">Nur eigene Erfassungen</span>
+    {% else %}
     <label class="kontrollfeld">Vertriebler
         <select name="vertriebler_id">
             <option value="0">alle</option>
@@ -124,6 +127,7 @@
                 <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ benutzer_map[vid].name if vid in benutzer_map else vid }}</option>
             {% endfor %}
         </select></label>
+    {% endif %}
     <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
     {% if q or sparte or ampel or interesse or vertriebler_id %}
         <a class="knopf klein ghost" href="/erfassungen?status={{ status | urlencode }}" title="Filter zurücksetzen">Filter zurücksetzen</a>

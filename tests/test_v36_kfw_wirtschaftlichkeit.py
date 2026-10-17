@@ -254,6 +254,35 @@ class KfwKontext(Basis):
         self.assertEqual(k["eigenquote"], 100 - k["foerderquote"])
         self.assertEqual(sum(b["prozent"] for b in k["balken"]), 100)
 
+    def test_gewerbe_kfw_522_wortlaute(self):
+        """Nachtrag 17.10.2026 (Rückfrage 6): Nichtwohngebäude drucken die KfW-Seite mit dem Programm
+        „Heizungsförderung für Unternehmen – Nichtwohngebäude“ (KfW 522), nur Grundförderung, ohne
+        Privatpersonen-/§-35c-/Einkommensbonus-Wortlaute; EFH bleibt beim Wortlaut der Vorlage."""
+        a = self.wp_angebot(O01="Gewerbe", O05=500)
+        k = pdf_kontext_kfw.kontext(self.s, a)
+        self.assertIsNotNone(k)
+        self.assertTrue(k["nwg"])
+        self.assertFalse(k["mfh"])
+        self.assertEqual(k["objekt"], "nwg")
+        self.assertEqual(k["eyebrow"], "ANTRAG: KFW 522 (NICHTWOHNGEBÄUDE)")
+        self.assertEqual(k["programm"], "KfW 522 (Nichtwohngebäude)")
+        self.assertEqual(k["gut_zu_wissen"][0], "Gefördert wird über das Programm „Heizungsförderung für "
+                                               "Unternehmen – Nichtwohngebäude“ (KfW 522).")
+        texte = " ".join(k["gut_zu_wissen"] + k["antrag_unterlagen"])
+        for verboten in ("Privatpersonen", "KfW 458", "§ 35c", "Für den Einkommensbonus", "selbstgenutzten Wohneinheit",
+                         "Einkommensteuerbescheide"):
+            self.assertNotIn(verboten, texte, verboten)
+        self.assertIn("Grundförderung", texte)
+        self.assertIn("zum Unternehmen", texte)
+        self.assertEqual([b["name"] for b in k["bausteine"]], ["Grundförderung"])
+        self.assertTrue(any(h.startswith("Gewerbeobjekt: Antrag über KfW 522") for h in k["hinweise"]), k["hinweise"])
+        self.assertEqual(k["eigenquote"], 100 - k["foerderquote"])
+        # EFH-Kontrolle: Wortlaut der Vorlage unverändert
+        e = pdf_kontext_kfw.kontext(self.s, self.wp_angebot())
+        self.assertFalse(e["nwg"])
+        self.assertIn("Heizungsförderung für Privatpersonen – Wohngebäude“ (KfW 458)", e["gut_zu_wissen"][0])
+        self.assertEqual(e["antrag_unterlagen"], list(pdf_kontext_kfw.ANTRAG_UNTERLAGEN))
+
     def test_manuelle_foerderung_ohne_kennzeichen(self):
         a = self.wp_angebot()
         a.foerder_einkommen_prozent = 10.0                   # v8-Baustein-Übersteuerung: 30 + 16 + 10 = 56 %

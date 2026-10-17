@@ -95,6 +95,7 @@ Nummern vergeben.
 | v37 | PLAN_LEAD_V7.md | 196–200 |
 | v38 | PLAN_V23.md | 201–205 |
 | v38-Nachtrag | Rollout-Prüfung der Kette (ohne Plan, `diagnose/v36/gesamtuebersicht.md` §10) | – |
+| v38-Nachtrag 2 | Entscheidungen zu den Rückfragen der Kette (ohne Plan, `diagnose/v36/gesamtuebersicht.md` §9 „Antworten 17.10.2026“) | – |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -4263,7 +4264,7 @@ Cloover-Tests sind gemockt.)
   (hydraulischer Abgleich) dieses Angebots, ohne Position entfällt der Klammerzusatz; manuelle Förderung ohne Kennzeichen
   (nur Flag); Förderblock ausgeblendet/PV/KL/WB → `kfw = None`, Seite entfällt; `kfw["foerderquote"]` (Anteil) speist auch
   den Summenblock, `kfw["foerdersatz"]` (nominal) nur zur Information. Gewerbe-Fall (KfW 522) ist im Design nicht vorgesehen
-  (Rückfrage).
+  (Rückfrage) *(seit Nachtrag 17.10.2026 mit eigenen Wortlauten für Nichtwohngebäude – siehe Ende von „Neu in v38“)*.
 - **Wirtschaftlichkeit PV (Phase 189, A2, `app/pdf_kontext_wirtschaftlichkeit.py`, `wirtschaftlichkeit.html`,
   `angebot_wirtschaftlichkeit.css`):** die drei v22-Seiten („Auf einen Blick“ · „Ersparnis im Detail“ · „Sicherheit &
   Transparenz“) als HTML nach `docs/wirtschaftlichkeit-mockup/seite1–3.html`, Nunito Sans statt Poppins, Farben über die
@@ -4326,7 +4327,7 @@ Cloover-Tests sind gemockt.)
   `summen()["netto_nach_rabatt"]`, `vatPercentage` 19|0, `subsidy` Förderbetrag bei WP, `capacity` kW der
   Leistungsklasse / kWp / Σ Kühllast / 11). Meldungen: 401 „Cloover: API-Key abgelehnt“, 422 „Cloover: Eingabe
   abgelehnt (…)“, 5xx/Timeout „Cloover nicht erreichbar – später erneut versuchen“; jeder Fehler ins
-  Fehlerprotokoll (Typ „Cloover“, ohne Key, Körper nur als Feldnamen). Modus aus / ohne Key = kein Netzaufruf;
+  Fehlerprotokoll (Typ „Cloover“, ohne Key, Körper nur als Feldnamen). Modus aus / ohne Key = kein Netzaufruf *(seit Nachtrag 17.10.2026: der Verbindungstest läuft auch im Modus aus)*;
   kein Netz mit offener Sitzung (Wächter erkennt die Kette). Benutzerverwaltung: Feld „Cloover-Konto (E-Mail)“
   (`benutzer.cloover_email`, Innendienst/Admin) – Projekte laufen unter diesem Konto, sonst Standard-Konto.
   Kontrollwerte: WP 42.830,55 € / Förderung 16.500 € → `price` 35992.06, `vatPercentage` 19, `subsidy` 16500;
@@ -4490,7 +4491,7 @@ Zwischenstand-Commit „v37“ ohne Push; Rückfragen gebündelt am Ende der Ket
   `umweg_km`, `umweg_text`), Kalenderansicht (Slot-Tooltip), Ersatzkunde-Dialog (Spalte „Strecke“, Umkreis bleibt
   Luftlinie), Karte (Termin-Popup, Start → Termin), Mein Tag („Als Nächstes“/„Heute“: vom Vortermin bzw. von der
   Startadresse des AD-Profils, Rückfall `routen_start`). Tageskontingent `routing_kontingent_tag` (Standard 2000
-  [ANNAHME], Zähler `aufrufe_ors_matrix_<Datum>`): Hinweis ab 80 % in den Lead-Einstellungen (Abschnitt „Lead-Management
+  [ANNAHME] – *seit Nachtrag 17.10.2026 Standard 500 mit einmaligem Nachzug*, Zähler `aufrufe_ors_matrix_<Datum>`): Hinweis ab 80 % in den Lead-Einstellungen (Abschnitt „Lead-Management
   V7 – Routing“), ab 100 % kein Matrix-Aufruf mehr bis Mitternacht; Prüfpunkt „Routing-Dienst antwortet“ (`POST
   /parametrierung/lead-routing/test`, Admin, Matrix 1×1 Duisburg → Bochum nach `verbindung_freigeben`). Cache 90 Tage.
 - **Objekte ein- und ausklappbar (Phase 198):** Objektliste der Kartei als Akkordeon (`<details>`), Standard zu bei
@@ -4599,7 +4600,8 @@ Geräts (kein Hintergrund-Upload, kein Service Worker ohne HTTPS).
   jede ID gegen Vorgang und Recht, antwortet `{ok, geloescht[], abgelehnt[], meldung}` (JSON) bzw. Redirect;
   Dateien werden erst nach dem Commit gelöscht (Wiederholung bei Windows-Dateisperre); Notizen-Chat je Ordner
   „Galerie: 3 Fotos gelöscht (Ordner Zählerschrank): …“ (wie beim Einzel-Löschen, das protokolliert). Kacheln
-  verschwinden ohne Neuladen; gilt überall, wo das Makro `galerie` liegt. Einzel-Löschen und Lightbox unverändert.
+  verschwinden ohne Neuladen; gilt überall, wo das Makro `galerie` liegt. Einzel-Löschen und Lightbox unverändert *(Einzel-Löschen seit
+  Nachtrag 17.10.2026 nach derselben Datei-Regel)*.
   Tests `tests/test_v38_galerie.py` (11, davon 3 Chrome headless); angepasst `test_v34_galerie.py` (Knopftext,
   keine Navigation nach dem Upload). Screenshots `docs/design-v38/galerie-*`, `erfassung-wartende-fotos-*`.
 - **Befund Abbruch des Bogens (Phase 202, Agent E, `diagnose/v38/E_patches/befund_abbruch.py`):** Antworten
@@ -4688,7 +4690,8 @@ Geräts (kein Hintergrund-Upload, kein Service Worker ohne HTTPS).
   stattgefunden (Grund: …). Bemerkung: …“, fällig heute) an `vorgaenge.leadmanager_id` mit Glocke (`todo_zugewiesen`,
   v29) – ohne Leadmanager an den nächsten Leadmanager per Round-Robin, sonst den Handelnden, mit Hinweis „kein
   Leadmanager zugewiesen“ (`todos.an_benutzer_id` ist NOT NULL) [ANNAHME, Rückfrage]; Wiedervorlage des Vorgangs auf
-  heute (`wiedervorlage_art = termin_ausgefallen`) [ANNAHME]; Chat-Eintrag „Termin am TT.MM. nicht stattgefunden (Grund)
+  heute (`wiedervorlage_art = termin_ausgefallen`) [ANNAHME] *(seit Nachtrag 17.10.2026 nur, wenn sie leer ist oder
+  später liegt)*; Chat-Eintrag „Termin am TT.MM. nicht stattgefunden (Grund)
   · neue Terminfindung durch Leadmanagement“; Meldung „Weitergegeben an das Leadmanagement“. **Folge 2:** zweite Abfrage
   „Kunden disqualifizieren?“ mit Pflichtgrund aus dem Logik-Blatt Gründe (`unqualifiziert`); `termin_no_show(…,
   "abgesagt")` + `lead_boards.status_setzen(…, "unqualifiziert", grund=…)` (Phase „Disqualifiziert“, Verlauf,
@@ -4735,3 +4738,36 @@ Geräts (kein Hintergrund-Upload, kein Service Worker ohne HTTPS).
   (nur auf dem Server, `scripts\pdf-browser-pruefen.bat`), Außendienst-Sichtprüfung am echten Handy (Tests + 390-px-
   Screenshots der Agenten). Rückfragen 1–18, [ANNAHME]-Listen und Server-To-dos: `diagnose/v36/gesamtuebersicht.md`
   §8–§11 (lokal); Pläne PLAN_V22/PLAN_LEAD_V7/PLAN_V23 vollständig abgehakt.
+- **Nachtrag 2 (17.10.2026) – Entscheidungen zu den Rückfragen der Plan-Kette** (Andreas: „4. Was brauchst du hier
+  konkret? Den Rest entscheide selbst im Sinne des Projekts.“; Antworten als Tabelle in `diagnose/v36/gesamtuebersicht.md`
+  §9 „Antworten 17.10.2026“ (lokal); Commit „v38-Nachtrag 2“, kein Push vor Freigabe). Codeänderungen: **(6) KfW 522** –
+  Nichtwohngebäude (Objektart „Gewerbe“, `kfw.KfwEingaben.objekt = "nwg"`) drucken die KfW-Seite mit eigenen Wortlauten
+  („Heizungsförderung für Unternehmen – Nichtwohngebäude“ (KfW 522), nur Grundförderung, ohne § 35c/Einkommensbonus/
+  selbstgenutzte WE; `pdf_kontext_kfw.GUT_ZU_WISSEN_NWG`/`ANTRAG_UNTERLAGEN_NWG`, `kfw["nwg"]`; Entwurf fürs Gegenlesen).
+  **(8) Cloover-Verbindungstest läuft auch im Modus „aus“**, sobald der Key gesetzt ist (`_anfrage(modus_pruefen=False)`
+  nur dort, Ergebnis mit Zusatz „Modus „aus“ – Raten und Projekte bleiben abgeschaltet“; Raten/Projekte bleiben gesperrt).
+  **(12) Routing-Kontingent Standard 500** (Free-Plan der ORS-Matrix-API; `migration_v37_routing` zieht den alten Standard
+  2000 einmalig nach – Marker `migration_nachtrag_kontingent_500`, von Hand gesetzte Werte bleiben). **(16) `/erfassungen`
+  zeigt dem Außendienst nur eigene Erfassungen** (selbst erfasste oder Erfassungen eigener Vorgänge nach
+  `vorgaenge.eigene_vorgang_ids`; Detail und Protokoll-PDF fremder Erfassungen leiten mit Meldung um; kein
+  Vertriebler-Filter; die Korrektur bleibt enger). **(17) ✕ (Einzel-Löschen) auch für eigene Uploads des Außendienstes**
+  (`galerie.darf_datei_loeschen` in `vorgaenge.galerie_loeschen`, Makro `_galerie.html` über `loeschbar`). **(18)
+  Wiedervorlage bei „Termin nicht stattgefunden“ nur vorziehen** (`lead_termin_ausfall.wiedervorlage_vorziehen`: leer
+  oder später → heute, eine fällige/überfällige bleibt mit Person und Art). Alles Übrige bleibt wie gebaut: Objektfotos
+  gestrichen (1), Nummern v38/201–205 (2), Plan-Vorschläge A1–A3/B1–B8 (3), Übergabeliste-Zeile „übersprungen
+  (Rückfrage)“ (5), Gültig bis +30 / Telefon-Zeile / WP-Vortext / WB-Historienblock, Cloover-Slogan bereits gefiltert
+  (6), Semaphore 2 und WB-Cloover-Karte (7), B2/B3-Annahmen (9/10), monday gewinnt / Zuständiger nachziehen /
+  Cache-Miss-Matrix / OFFEN 1 (12), PVV-Regeln (13), Design-v3-Umfang und Systemschrift (15), Sperrumfang der Korrektur,
+  Chat-Eintrag je Seite, Warnfarbe nach Anlagedatum (16), Montage/Chat je Ordner/Grenzen/Formular-Modus (17),
+  Round-Robin, nur Vor-Ort-Termine, Block im Dialog, Hinweis-Link (18). Folgepläne: „Angebot neu aufbauen“ aus der
+  Erfassung, Blättern in Leads VOT, doppelte `termin_karten`, `todos.an_benutzer_id` nullable. **Zulieferungen
+  (Rückfrage 4) konkret:** Claudia → `docs/design-v37/vorlage/Friondo Tool Design.html` + `review-kartei-2026-10-16.png`;
+  IT → `ORS_API_KEY` in die `.env` (Server + Dev-PC, Free-Plan 500/Tag); Cloover → Test-Key/Test-URL (später Live) in die
+  `.env` plus Antworten zu 4xx-Format, `capacity`, Projekt-Antwort, Fußnote/Datenschutz, B4/B5/B8; TAIFUN-Betreuer →
+  Original `ADRESSEN.xsd` nach `docs/taifun/`, Import-Ordner/Dienstkonto SYSTEM, Encoding, Dubletten/Kundennummer;
+  Server → frische DB-Kopie + `data\fehler.log` nach `diagnose\` und nach dem Rollout `scripts\pdf-browser-pruefen.bat`
+  unter SYSTEM; Mennekes-Datenblatt nach `anlagen/`. Tests: `test_v36_kfw_wirtschaftlichkeit` (+1),
+  `test_v36_cloover_api` (Modus-aus-Test angepasst), `test_lead_v7_termine_routing` (+1, Standard 500),
+  `test_v38_erfassung` (+1, Umleitung des fremden AD), `test_v38_galerie` (+1), `test_v38_mobil` (+1); keine neue
+  Tabelle/Spalte (Marker als Einstellung), keine neuen Netzaufrufe. Doku: `docs/nach-dem-update-v36/37/38.md`
+  (Abschnitte „Nachtrag 17.10.2026“), `docs/cloover-api.md`, `docs/betrieb.md`, `docs/updates.md` 4g.

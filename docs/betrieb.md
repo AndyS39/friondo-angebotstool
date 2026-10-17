@@ -716,7 +716,7 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
 
   | Modul | Funktion | Auslöser | Intervall | Netzaufruf | hält Sitzung während Netz-I/O | Schreibtransaktion | Hinweis |
   |---|---|---|---|---|---|---|---|
-  | `app/routing.py` `matrix_fuellen` (v37) | Key aus `.env` (`ORS_API_KEY`) mit Vorrang vor dem Parameter; Tageskontingent `routing_kontingent_tag` (Standard 2000, ab 100 % kein Aufruf, Schätzung) | Anfrage: Terminvorschläge, Kalenderansicht, Ersatzkunde-Dialog, Karte (`karte/daten`), Mein Tag (`GET /leads`, heutige Termine) | je Cache-Miss, gebündelt ≤ 50 × 50 | ORS Matrix (Timeout 8 s) | nein – `verbindung_freigeben` vor dem HTTP-Aufruf | ja: Zähler (eigene kurze Transaktion) + Cache-Upsert mit sofortigem Commit | Cache 90 Tage; Zähler `aufrufe_ors_matrix_<Datum>`, Anzeige/Warnung in den Lead-Einstellungen |
+  | `app/routing.py` `matrix_fuellen` (v37) | Key aus `.env` (`ORS_API_KEY`) mit Vorrang vor dem Parameter; Tageskontingent `routing_kontingent_tag` (Standard 500 seit Nachtrag 17.10.2026 – bis v38 2000 –, ab 100 % kein Aufruf, Schätzung) | Anfrage: Terminvorschläge, Kalenderansicht, Ersatzkunde-Dialog, Karte (`karte/daten`), Mein Tag (`GET /leads`, heutige Termine) | je Cache-Miss, gebündelt ≤ 50 × 50 | ORS Matrix (Timeout 8 s) | nein – `verbindung_freigeben` vor dem HTTP-Aufruf | ja: Zähler (eigene kurze Transaktion) + Cache-Upsert mit sofortigem Commit | Cache 90 Tage; Zähler `aufrufe_ors_matrix_<Datum>`, Anzeige/Warnung in den Lead-Einstellungen |
   | `app/routing.py` `dienst_pruefen` (v37) | Prüfpunkt „Routing-Dienst antwortet“ – Matrix 1×1 Duisburg → Bochum | Anfrage `POST /parametrierung/lead-routing/test` (Admin) | manuell | ORS Matrix (8 s) | nein – Freigabe vor dem Aufruf | ja: Zähler, Cache, Parameter `routing_pruefung` | ohne Key „ORS_API_KEY fehlt“ |
   | `app/mein_tag.py` `_startpunkt` (v37) | Rückfall-Startpunkt: `routen_start` über `geocoding.geokodieren` (nur ohne Startadresse im AD-Profil) | Anfrage `GET /leads` (Außendienst) | je Cache-Miss | Nominatim/ORS/Google-Geocoding (8 s) | nein – `geokodieren` gibt vorher frei | ja: Geocode-Cache | best effort, Fehler → ohne Strecke |
   | `app/lead_termin.py` `termin_anpassen` (v37) | Termin in place ändern, Outlook-Auftrag/Mails nur nach Freischaltung | Anfrage `POST …/termin/{tid}/anpassen` | je Klick | kein Netz (Outlook über `outlook_auftraege`, Lauf `outlook-sync`) | nein | ja (`_speichern`: Rollback + eine Wiederholung) | monday wird nie zurückgeschrieben |
@@ -726,8 +726,9 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
   `POST /lead-management/lead/{id}/objekte/zustand`, `POST /parametrierung/lead-routing/test` (Netz, s. o.),
   `POST /login` (zusätzliches Cookie `angebotstool_benutzer` – nur die Benutzer-ID, nie die PIN).
 - **Routing-Kontingent (IT):** der openrouteservice-Key liegt nur in der `.env` (`ORS_API_KEY`, Konto
-  account.heigit.org); Tageskontingent `routing_kontingent_tag` (Lead-Einstellungen, Standard 2000 – Free-Plan Matrix
-  vermutlich 500/Tag, Rückfrage) an den tatsächlichen Plan anpassen; ab 80 % Hinweis, ab 100 % Schätzung (Luftlinie
+  account.heigit.org); Tageskontingent `routing_kontingent_tag` (Lead-Einstellungen, Standard 500 = Free-Plan der
+  Matrix-API, Nachtrag 17.10.2026 – `migration_v37_routing` zieht den alten Standard 2000 einmalig nach, ein bezahlter
+  Plan wird von Hand eingetragen); ab 80 % Hinweis, ab 100 % Schätzung (Luftlinie
   × 1,3) bis Mitternacht.
 - **Migration v37 (additiv):** Spalten `vot_termine.monday_beginn/angepasst_am/angepasst_von`, Lead-Parameter
   `routing_kontingent_tag`/`routing_pruefung` (`routing.migration_v37_routing`), `vertriebskanaele.aktiv = 0` für
@@ -773,3 +774,21 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
   p95 Listen beobachten, Folgeplan „Blättern“); `scripts/lasttest.py` ruft im AD-Profil `GET /leads/vergangene` auf (der
   Dialog verändert Daten und ist nicht im Lastmodell [ANNAHME]). Keine Datenbankänderung außer den additiven Spalten
   `vot_termine.ausfall_grund/ausfall_bemerkung` (Rückweg `rollback.bat --nur-code`).
+
+## Ergänzungen Nachtrag 17.10.2026 – Entscheidungen zu den Rückfragen der Plan-Kette (Commit „v38-Nachtrag 2“)
+
+- **Keine neuen Netzaufrufe, Läufe, Tabellen oder Spalten.** Der Cloover-Verbindungstest (`cloover_api.verbindung_testen`,
+  Knopf in Parametrierung → Cloover) läuft jetzt auch im Modus „aus“ (Key gesetzt) – derselbe Pfad wie bisher, Netz nur
+  nach `verbindung_freigeben`; Raten und Projekte bleiben im Modus „aus“ gesperrt (`_anfrage(modus_pruefen=False)` gibt es
+  nur für den Test).
+- **`GET /erfassungen` für die Basisrolle Außendienst:** eine zusätzliche Leseabfrage je Aufruf
+  (`vorgaenge.eigene_vorgang_ids`, fünf indexierte Teilabfragen); Detail und Protokoll-PDF fremder Erfassungen antworten
+  mit 303 statt mit der Seite. Innendienst/Admin/Projektierung/Leadmanagement unverändert.
+- **Einzel-Löschen der Galerie (✕):** Rechte je Datei (`galerie.darf_datei_loeschen`) wie beim Mehrfach-Löschen – der
+  Außendienst löscht eigene Uploads; Protokoll im Notizen-Chat unverändert.
+- **„Termin nicht stattgefunden“:** die Wiedervorlage des Vorgangs wird nur vorgezogen (leer/später → heute); keine
+  Änderung an To-Do, Glocke, Outlook-Storno oder Mail-Storno.
+- **Routing-Kontingent:** Standard 500 (Free-Plan); `migration_v37_routing` stellt einen noch auf 2000 stehenden Parameter
+  einmalig um (Marker-Einstellung `migration_nachtrag_kontingent_500`, rein additiv – Rückweg `rollback.bat --nur-code`).
+- **KfW-Seite:** Nichtwohngebäude (KfW 522) mit eigenen Wortlauten – reine Textaufbereitung im PDF-Kontext, Rechenkern
+  unverändert.

@@ -10,8 +10,8 @@
 #    „ORS_API_KEY fehlt“ in Parametrierung und Prüfpunkt.
 #  - Anzeigeformat überall gleich (strecke_text): „18,4 km · 24 Min“ vom Dienst,
 #    „ca. 24 km · 31 Min (geschätzt)“ bei Ausfall/ohne Key.
-#  - Tageskontingent routing_kontingent_tag (Standard 2000 [ANNAHME: Free-Plan-Limit laut
-#    Briefing – Rückfrage im Bericht], Zähler aufrufe_ors_matrix_<Datum> wie bisher über
+#  - Tageskontingent routing_kontingent_tag (Standard 500 = Free-Plan der ORS-Matrix-API, Nachtrag
+#    17.10.2026 – bis v38 2000 [ANNAHME]), Zähler aufrufe_ors_matrix_<Datum> wie bisher über
 #    geocoding._zaehler, best effort); ab 80 % Hinweis in den Lead-Einstellungen, ab 100 %
 #    kein Matrix-Aufruf mehr am selben Tag (Schätzung statt HTTP 403) [ANNAHME].
 #  - Prüfpunkt „Routing-Dienst antwortet“ (dienst_pruefen): Matrix 1×1 Duisburg → Bochum nach
@@ -37,7 +37,10 @@ TIMEOUT = 8
 CACHE_TAGE = 90
 # v37: Tageskontingent der Matrix-Aufrufe (Lead-Parameter routing_kontingent_tag)
 KONTINGENT_PARAMETER = "routing_kontingent_tag"
-KONTINGENT_STANDARD = 2000          # [ANNAHME] laut Briefing (ORS Free-Plan) – Rückfrage im Bericht
+KONTINGENT_STANDARD = 500           # Free-Plan der openrouteservice-Matrix-API (500 Anfragen je Tag) –
+                                    # Nachtrag 17.10.2026 (Rückfrage 12 der Plan-Kette); bis v38: 2000 [ANNAHME]
+KONTINGENT_STANDARD_ALT = 2000      # Standard bis v38 – migration_v37_routing zieht ihn einmalig nach
+MARKER_KONTINGENT = "migration_nachtrag_kontingent_500"   # Einstellung: Nachzug nur einmal (bewusste 2000 bleiben)
 KONTINGENT_WARNUNG_PROZENT = 80
 ZAEHLER_DIENST = "ors_matrix"       # Schlüssel des Tageszählers (geocoding._zaehler)
 PRUEFUNG_PARAMETER = "routing_pruefung"     # letztes Ergebnis des Prüfpunkts (Text)
@@ -468,14 +471,27 @@ def einstellungen_kontext(session: Session) -> dict:
 def migration_v37_routing(session: Session) -> list[str]:
     """Idempotent (Hook in migrate.py durch den Orchestrator): liegt ein ORS-Key vor
     (.env oder Parameter) und steht routing_anbieter noch auf „luftlinie“, wird „ors“
-    gesetzt; der Parameter routing_kontingent_tag bekommt seinen Standard, wenn er fehlt.
+    gesetzt; der Parameter routing_kontingent_tag bekommt seinen Standard, wenn er fehlt, und wird
+    einmalig von 2000 auf 500 gestellt (Nachtrag 17.10.2026, Marker migration_nachtrag_kontingent_500).
     Ohne Key bleibt „luftlinie“ + Hinweis (keine Änderung)."""
     from app import leadmanagement as kern
     from app.models import LeadParameter
+    from app.models import einstellung_holen, einstellung_setzen
     meldungen = []
-    if session.query(LeadParameter).filter(LeadParameter.name == KONTINGENT_PARAMETER).first() is None:
+    zeile = session.query(LeadParameter).filter(LeadParameter.name == KONTINGENT_PARAMETER).first()
+    if zeile is None:
         kern.parameter_setzen(session, KONTINGENT_PARAMETER, str(KONTINGENT_STANDARD))
         meldungen.append(f"Routing (v37): Parameter {KONTINGENT_PARAMETER} = {KONTINGENT_STANDARD} angelegt")
+    elif einstellung_holen(session, MARKER_KONTINGENT, "") != "erledigt":
+        # Nachtrag 17.10.2026 (Rückfrage 12): der v37-Standard 2000 wird einmalig auf den Free-Plan-Wert
+        # gestellt – nur, wenn der Parameter noch den alten Standard trägt (von Hand gesetzte Werte bleiben);
+        # der Marker verhindert, dass ein später bewusst eingetragener Wert 2000 (bezahlter Plan) erneut kippt
+        if str(zeile.wert or "").strip() == str(KONTINGENT_STANDARD_ALT):
+            kern.parameter_setzen(session, KONTINGENT_PARAMETER, str(KONTINGENT_STANDARD))
+            meldungen.append(f"Routing (Nachtrag 17.10.2026): {KONTINGENT_PARAMETER} "
+                             f"{KONTINGENT_STANDARD_ALT} -> {KONTINGENT_STANDARD} (Free-Plan der Matrix-API)")
+    if einstellung_holen(session, MARKER_KONTINGENT, "") != "erledigt":
+        einstellung_setzen(session, MARKER_KONTINGENT, "erledigt")
     if ors_schluessel(session) and anbieter(session) == "luftlinie":
         kern.parameter_setzen(session, "routing_anbieter", "ors")
         meldungen.append("Routing (v37): routing_anbieter luftlinie -> ors (ORS-Key vorhanden)")

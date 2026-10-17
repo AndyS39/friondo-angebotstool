@@ -996,7 +996,9 @@ def galerie_verschieben(request: Request, datei_id: int,
 @router.post("/galerie/datei/{datei_id}/loeschen")
 def galerie_loeschen(request: Request, datei_id: int,
                            session: Session = Depends(get_session)):
-    """Löschen nur Innendienst/Projektierung/Admin – protokolliert im Chat."""
+    """Einzel-Löschen (✕): Innendienst/Projektierung/Admin jede Datei, der Außendienst seine eigenen
+    Uploads (galerie.darf_datei_loeschen – Nachtrag 17.10.2026, Rückfrage 17 R1; bis v38 nur die Rolle) –
+    protokolliert im Chat."""
     from app import galerie as galerie_modul
     from app import vorgaenge as vorgaenge_modul
     from app.models import GalerieDatei
@@ -1005,10 +1007,10 @@ def galerie_loeschen(request: Request, datei_id: int,
     if datei is None:
         return RedirectResponse("/vorgaenge", status_code=303)
     vorgang_id = datei.vorgang_id
-    if not galerie_modul.darf_loeschen(benutzer):
+    if not galerie_modul.darf_datei_loeschen(benutzer, datei):
         return RedirectResponse(f"/vorgaenge/{vorgang_id}?meldung="
-                                + quote_plus("Löschen nur für Innendienst/"
-                                             "Projektierung/Admin."),
+                                + quote_plus("Löschen nur für Innendienst/Projektierung/Admin "
+                                             "oder eigene Uploads."),
                                 status_code=303)
     name, ordner = datei.dateiname, datei.ordner
     galerie_modul.loeschen(session, datei)

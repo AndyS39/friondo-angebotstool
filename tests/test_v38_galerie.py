@@ -309,6 +309,31 @@ class MehrfachLoeschen(Basis):
         self.assertIn("Keine Datei gelöscht", galerie_modul.loesch_meldung([], [7], True))
 
 
+class EinzelLoeschen(Basis):
+    def test_eigene_uploads_des_aussendienstes_fremde_nicht(self):
+        """Nachtrag 17.10.2026 (Rückfrage 17 R1): das ✕ (Einzel-Löschen) und seine Route gelten wie das
+        Mehrfach-Löschen je Datei – Außendienst nur eigene Uploads, Innendienst alle, Montage nie."""
+        self.leeren(self.vorgang.id)
+        eigene = self.datei_anlegen(self.vorgang.id, "e1.jpg", "Zählerschrank", self.ad)
+        fremde = self.datei_anlegen(self.vorgang.id, "f1.jpg", "Zählerschrank", self.innen)
+        ad = client_fuer(self.ad.id)
+        html = ad.get(f"/vorgaenge/{self.vorgang.id}").text
+        self.assertIn(f'action="/vorgaenge/galerie/datei/{eigene.id}/loeschen"', html)
+        self.assertNotIn(f'action="/vorgaenge/galerie/datei/{fremde.id}/loeschen"', html)
+        r = ad.post(f"/vorgaenge/galerie/datei/{fremde.id}/loeschen", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("meldung=", r.headers["location"])
+        self.assertEqual(len(self.dateien(self.vorgang.id)), 2)
+        r = ad.post(f"/vorgaenge/galerie/datei/{eigene.id}/loeschen", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertNotIn("meldung=", r.headers["location"])
+        self.assertEqual([d.id for d in self.dateien(self.vorgang.id)], [fremde.id])
+        self.assertTrue(any("e1.jpg" in n and "gelöscht" in n for n in self.notizen(self.vorgang.id)))
+        html = client_fuer(self.innen.id).get(f"/vorgaenge/{self.vorgang.id}").text
+        self.assertIn(f'action="/vorgaenge/galerie/datei/{fremde.id}/loeschen"', html)
+        self.leeren(self.vorgang.id)
+
+
 class Markup(Basis):
     def test_vorgangsakte_kaestchen_nur_mit_loeschrecht(self):
         self.leeren(self.vorgang.id)

@@ -76,8 +76,9 @@ MELDUNG_MODUS_AUS = "Cloover: Modul aus (cloover_modus = aus)"
 MELDUNG_KEY_ABGELEHNT = "Cloover: API-Key abgelehnt"
 MELDUNG_NICHT_ERREICHBAR = "Cloover nicht erreichbar – später erneut versuchen"
 MELDUNG_TEST_KEY_ABGELEHNT = "Cloover erreichbar, aber Key abgelehnt (HTTP 401)"
-MELDUNG_TEST_MODUS_AUS = ("Cloover: Modus „aus“ – für den Verbindungstest den Modus auf „test“ stellen "
-                          "und speichern")
+# Nachtrag 17.10.2026 (Rückfrage 8): der Verbindungstest läuft auch im Modus „aus“, sobald der Key gesetzt ist
+# (Zusatz im Ergebnis) – bis v38 brach er mit dem Hinweis „Modus auf test stellen“ ab
+ZUSATZ_TEST_MODUS_AUS = "Modus „aus“ – Raten und Projekte bleiben abgeschaltet"
 # 4xx-Status, bei denen v2 wegen der Eingabe (Anlagentyp) scheitert und v1 greift [ANNAHME: alle
 # Eingabefehler außer 401/403/429 – ein falscher Anlagentyp kommt je nach Server als 400 oder 422]
 RUECKFALL_STATUS = (400, 404, 405, 409, 415, 422)
@@ -431,12 +432,13 @@ def _fehler_protokollieren(methode: str, pfad: str, status: int, antwort, body) 
         pass
 
 
-def _anfrage(methode: str, pfad: str, body: dict | None = None) -> tuple[int, dict]:
+def _anfrage(methode: str, pfad: str, body: dict | None = None, *, modus_pruefen: bool = True) -> tuple[int, dict]:
     """Vorprüfung (Key, Modus) + Aufruf + Fehlerprotokoll bei Status 0/4xx/5xx. Liefert (Status, Antwort);
-    das Werten übernimmt der Aufrufer (`_pruefen`)."""
+    das Werten übernimmt der Aufrufer (`_pruefen`). `modus_pruefen=False` nur für den Verbindungstest
+    (Nachtrag 17.10.2026: er läuft auch im Modus „aus“) – der Key bleibt immer Pflicht."""
     if not konfiguriert():
         raise ClooverFehler(MELDUNG_KEY_FEHLT)
-    if _modus_aktuell() == "aus":
+    if modus_pruefen and _modus_aktuell() == "aus":
         raise ClooverFehler(MELDUNG_MODUS_AUS)
     status, antwort = _roh_anfrage(methode, pfad, body)
     if not isinstance(antwort, dict):
@@ -495,14 +497,16 @@ def _laufzeit_pruefen(laufzeit_jahre) -> int:
 
 # --- Rate ------------------------------------------------------------------------------------
 
-def _rate_v1(brutto_cent: int, laufzeit: int, anzahlung_cent: int, user_email: str) -> tuple[int, dict]:
+def _rate_v1(brutto_cent: int, laufzeit: int, anzahlung_cent: int, user_email: str, *,
+             modus_pruefen: bool = True) -> tuple[int, dict]:
     body = {"totalCostOfInstallation": _eur(brutto_cent), "userEmail": user_email,
             "durationInYears": laufzeit, "downPayment": _eur(anzahlung_cent), "currency": "EUR"}
-    return _anfrage("POST", PFAD_RATE_V1, body)
+    return _anfrage("POST", PFAD_RATE_V1, body, modus_pruefen=modus_pruefen)
 
 
 def rate_berechnen(assets: list[dict], laufzeit_jahre: int, anzahlung_cent: int, user_email: str, *,
-                   brutto_cent: int | None = None, rueckfall: bool = True) -> dict:
+                   brutto_cent: int | None = None, rueckfall: bool = True,
+                   modus_pruefen: bool = True) -> dict:
     """POST /api/price-calculator/v2 (Rückfall v1 bei abgelehntem Anlagentyp) →
     {rate_ohne_cent, rate_mit_cent | None, quelle "v2"|"v1", antwort, laufzeit_jahre, anzahlung_cent}.
     Rückfall v1 (`totalCostOfInstallation` = `brutto_cent`, der Endbetrag brutto) nur, wenn v2 mit einem
@@ -515,7 +519,7 @@ def rate_berechnen(assets: list[dict], laufzeit_jahre: int, anzahlung_cent: int,
         raise ClooverFehler("Cloover: userEmail fehlt (Cloover-Konto in der Parametrierung eintragen)")
     body = {"userEmail": user_email, "country": "Germany", "projectAssets": list(assets or []),
             "durationInYears": laufzeit, "downPayment": _eur(anzahlung), "inflateTransactionFee": False}
-    status, antwort = _anfrage("POST", PFAD_RATE_V2, body)
+    status, antwort = _anfrage("POST", PFAD_RATE_V2, body, modus_pruefen=modus_pruefen)
     if status in (200, 201):
         rate_ohne = _rate_cent(_wert(antwort, "monthlyPayment"))
         if rate_ohne is None:
@@ -525,7 +529,7 @@ def rate_berechnen(assets: list[dict], laufzeit_jahre: int, anzahlung_cent: int,
                 "quelle": "v2", "antwort": antwort, "laufzeit_jahre": laufzeit, "anzahlung_cent": anzahlung}
     if rueckfall and brutto_cent is not None and status in RUECKFALL_STATUS:
         v2_fehler = fehler_meldung(status, antwort)
-        status1, antwort1 = _rate_v1(int(brutto_cent), laufzeit, anzahlung, user_email)
+        status1, antwort1 = _rate_v1(int(brutto_cent), laufzeit, anzahlung, user_email, modus_pruefen=modus_pruefen)
         _pruefen(status1, antwort1)
         rate_ohne = _rate_cent(_wert(antwort1, "monthlyPayment"))
         if rate_ohne is None:
@@ -617,19 +621,20 @@ def verbindung_testen(session) -> tuple[bool, str]:
     → „Verbindung OK · Beispielrate 93,36 €/Monat (Test-Umgebung)“ (Zusatz nur bei Test-URL) bzw.
     „Cloover erreichbar, aber Key abgelehnt (HTTP 401)“ bzw. Fehlertext; danach v2-Probe mit einem Asset je
     aktiver Sparte („Klima: Typ Energetic Renovation akzeptiert“ / „… abgelehnt: <message>“). Ergebnis in
-    `cloover_letzter_test`. Liest alles vor dem ersten Netzaufruf und gibt die Verbindung frei."""
+    `cloover_letzter_test`. Liest alles vor dem ersten Netzaufruf und gibt die Verbindung frei.
+    Nachtrag 17.10.2026 (Rückfrage 8): läuft auch im Modus „aus“ (Key gesetzt) – dann mit dem Zusatz
+    „Modus „aus“ – Raten und Projekte bleiben abgeschaltet“; nur der fehlende Key bricht ab."""
     from app.db import verbindung_freigeben
     if not konfiguriert():
         return False, MELDUNG_KEY_FEHLT
-    if modus(session) == "aus":
-        return False, MELDUNG_TEST_MODUS_AUS
+    modus_aus = modus(session) == "aus"
     email = standard_email(session)
     aktive = sparten(session)
     typ_kl = kl_typ(session)
     laufzeit = laufzeit_jahre(session)
     verbindung_freigeben(session)
     try:
-        status, antwort = _rate_v1(1_000_000, 10, 200_000, email)
+        status, antwort = _rate_v1(1_000_000, 10, 200_000, email, modus_pruefen=False)
     except ClooverFehler as fehler:
         return False, fehler.meldung
     if status == 401:
@@ -652,13 +657,15 @@ def verbindung_testen(session) -> tuple[bool, str]:
             asset = dict(PROBE_ASSETS[sparte], type=typ)
             name = SPARTEN_NAMEN[sparte]
             try:
-                rate_berechnen([asset], laufzeit, 0, email, rueckfall=False)
+                rate_berechnen([asset], laufzeit, 0, email, rueckfall=False, modus_pruefen=False)
                 teile.append(f"{name}: Typ {typ} akzeptiert")
             except ClooverFehler as fehler:
                 grund = fehler.meldung[len("Cloover: "):] if fehler.meldung.startswith("Cloover: ") else fehler.meldung
                 teile.append(f"{name}: Typ {typ} abgelehnt: {grund}")
         if teile:
             text += " · " + " · ".join(teile)
+        if modus_aus:
+            text += " · " + ZUSATZ_TEST_MODUS_AUS
     letzten_test_merken(session, ok, text)
     return ok, text
 

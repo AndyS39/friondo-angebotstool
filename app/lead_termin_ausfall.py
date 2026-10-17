@@ -74,6 +74,16 @@ MAX_GRUND_TEXT = 300
 
 # --- Hilfen ---------------------------------------------------------------------------
 
+def wiedervorlage_vorziehen(vorgang, heute_tag: date) -> bool:
+    """Nachtrag 17.10.2026 (Rückfrage 18 R6): True, wenn die Wiedervorlage des Vorgangs leer ist oder nach
+    `heute_tag` liegt (dann wird sie auf heute vorgezogen); eine fällige/überfällige bleibt unverändert."""
+    wv = getattr(vorgang, "wiedervorlage_am", None)
+    if wv is None:
+        return True
+    tag = wv.date() if isinstance(wv, datetime) else wv
+    return tag > heute_tag
+
+
 def grund_text(grund: str, freitext: str = "") -> str:
     """Lesbarer Grund: Label, bei Sonstiges „Sonstiges: <Freitext>“."""
     label = GRUENDE_MAP.get(grund, grund or "")
@@ -217,8 +227,11 @@ def melden(session: Session, termin: VotTermin, benutzer, daten: dict, heute=Non
         if empfaenger_id:
             todo = lead_todos.anlegen(session, benutzer, empfaenger_id, TODO_TITEL.format(kunde=name),
                                       text=text, faellig_am=faellig_am, vorgang_id=vorgang.id)
-        # Wiedervorlage des Vorgangs auf heute [ANNAHME Plan] – Verantwortlicher = To-Do-Empfänger
-        nachfassen.wiedervorlage_setzen(session, vorgang, heute_tag, empfaenger_id, WIEDERVORLAGE_ART)
+        # Wiedervorlage des Vorgangs auf heute – Verantwortlicher = To-Do-Empfänger; Nachtrag 17.10.2026
+        # (Rückfrage 18 R6): nur vorziehen – eine leere oder in der Zukunft liegende Wiedervorlage wird auf
+        # heute gesetzt, eine bereits fällige/überfällige (z. B. „Nochmal anrufen“ des Vertrieblers) bleibt
+        if wiedervorlage_vorziehen(vorgang, heute_tag):
+            nachfassen.wiedervorlage_setzen(session, vorgang, heute_tag, empfaenger_id, WIEDERVORLAGE_ART)
         _chat(session, vorgang, benutzer,
               f"Termin am {termin.beginn.strftime('%d.%m.') if termin.beginn else '?'} nicht stattgefunden "
               f"({grund_lesbar}) · neue Terminfindung durch Leadmanagement"

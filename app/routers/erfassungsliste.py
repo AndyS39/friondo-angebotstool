@@ -70,6 +70,35 @@ def _kontext(session: Session, erfassungen):
     return kunden, benutzer, angebote
 
 
+# --- Nachtrag 17.10.2026 (Rückfrage 16 der Plan-Kette): Außendienst sieht nur eigene Erfassungen ---------
+#
+# Bis v38 zeigte /erfassungen jedem Außendienstler (Pfadtabelle „/erfassung…“) alle Erfassungen aller
+# Vertriebler – seit v38 auch deren Entwürfe. Jetzt gilt dieselbe Regel wie in Kundensuche und Vorgangsakte
+# (v35-Nachtrag): eigene = selbst erfasste oder Erfassungen eines eigenen Vorgangs
+# (vorgaenge.eigene_vorgang_ids – Zuständigkeit, monday-Lead, eigene Erfassung, eigener Termin, eigenes
+# Angebot; jeder Status). Liste filtert, Detail und Protokoll-PDF leiten bei fremden Erfassungen um; die
+# Korrektur bleibt enger (nur erfassungen.benutzer_id, erfassung_korrektur.korrektur_erlaubt).
+def _eigene_filtern(session: Session, benutzer, erfassungen):
+    """Erfassungen, die der Außendienstler (Basisrolle, auch Handelsvertreter) sehen darf."""
+    from app import vorgaenge as vorgaenge_modul
+    eigene = vorgaenge_modul.eigene_vorgang_ids(session, benutzer.id)
+    return [e for e in erfassungen
+            if e.benutzer_id == benutzer.id or (e.vorgang_id is not None and e.vorgang_id in eigene)]
+
+
+def _fremd_fuer_aussendienst(session: Session, benutzer, erfassung: Erfassung) -> bool:
+    """True, wenn ein Außendienstler eine fremde Erfassung öffnen will (Detail, Protokoll-PDF)."""
+    if getattr(benutzer, "basisrolle", "") != "aussendienst":
+        return False
+    return not _eigene_filtern(session, benutzer, [erfassung])
+
+
+def _fremd_umleitung() -> RedirectResponse:
+    from urllib.parse import quote_plus
+    return RedirectResponse("/erfassungen?meldung=" + quote_plus(
+        "Keine Berechtigung – die Erfassung gehört zu einem fremden Vorgang."), status_code=303)
+
+
 @router.get("")
 def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
                 interesse: str = "", vertriebler_id: int = 0, sparte: str = "",
@@ -105,6 +134,12 @@ def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
     if ampel:
         abfrage = abfrage.filter(Erfassung.ampel == ampel)
     erfassungen = abfrage.order_by(Erfassung.abgesendet_am.desc()).all()
+    # Nachtrag 17.10.2026 (Rückfrage 16): Außendienst nur eigene Erfassungen, Vertriebler-Filter entfällt
+    benutzer_obj = request.state.benutzer
+    vertriebler_fest = getattr(benutzer_obj, "basisrolle", "") == "aussendienst"
+    if vertriebler_fest:
+        erfassungen = _eigene_filtern(session, benutzer_obj, erfassungen)
+        vertriebler_id = 0
     kunden, benutzer, angebote = _kontext(session, erfassungen)
     # v38 (PLAN_V23 Phase 204): Objektzeile je Erfassung (eine Abfrage je Liste) – Spalte „Objekt“,
     # Zeile unter dem Kundennamen (< 600 px), Suche findet die Objektbezeichnung
@@ -144,7 +179,6 @@ def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
     # bisherige Reihenfolge: zuletzt abgesendet zuerst)
     board = ("taifun_warteschlange" if status in ("In TAIFUN zu schreiben", "individuell-offen")
              else "erfassungen")
-    benutzer_obj = request.state.benutzer
     spalten = lead_boards.spalten_fuer(session, benutzer_obj, board)
     sortierung = lead_boards.sortierung_fuer(session, benutzer_obj, board)
     lead_boards.zeilen_sortieren(erfassungen, sortierung,
@@ -157,7 +191,7 @@ def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
                   korrektur_badge=korrektur_modul.badge_text,
                   angebote=angebote, q=q, status=status, ampel=ampel,
                   interesse=interesse, vertriebler_id=vertriebler_id, sparte=sparte,
-                  vertriebler_werte=vertriebler_werte,
+                  vertriebler_werte=vertriebler_werte, vertriebler_fest=vertriebler_fest,
                   bemerkungen=bemerkungen, fachhinweis_ids=fachhinweis_ids,
                   status_liste=ERFASSUNG_STATUS,
                   board=board, spalten=spalten, sortierung=sortierung,
@@ -173,6 +207,8 @@ def detail(request: Request, erfassung_id: int,
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
+    if _fremd_fuer_aussendienst(session, request.state.benutzer, erfassung):   # Nachtrag 17.10.2026
+        return _fremd_umleitung()
     from app.logik import logik_fuer_sparte
     logik, _ = logik_modul.hole_logik(session)
     logik = logik_fuer_sparte(logik, erfassung.sparte or "WP") or logik   # v8
@@ -206,14 +242,16 @@ def detail(request: Request, erfassung_id: int,
 
 
 @router.get("/{erfassung_id}/protokoll.pdf")
-def protokoll_pdf(erfassung_id: int, session: Session = Depends(get_session)):
-    """Abfrageprotokoll als PDF (Phase 25)."""
+def protokoll_pdf(request: Request, erfassung_id: int, session: Session = Depends(get_session)):
+    """Abfrageprotokoll als PDF (Phase 25); Außendienst nur eigene (Nachtrag 17.10.2026)."""
     from fastapi.responses import FileResponse
 
     from app import protokoll_pdf as protokoll_modul
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
+    if _fremd_fuer_aussendienst(session, request.state.benutzer, erfassung):
+        return _fremd_umleitung()
     from app.logik import logik_fuer_sparte
     logik, _ = logik_modul.hole_logik(session)
     logik = logik_fuer_sparte(logik, erfassung.sparte or "WP") or logik   # v8

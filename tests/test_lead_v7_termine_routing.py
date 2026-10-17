@@ -134,7 +134,7 @@ class Basis(unittest.TestCase):
                            ("kalender_sync", "aus"), ("routing_anbieter", "ors"), ("ors_api_key", ""),
                            ("termin_konflikt_modus", "warnen"), ("vorschlaege_anzahl", "3"),
                            ("score_aktiv", "aus"), ("kanal_ad_regel", ""), ("puffer_min", "30"),
-                           (routing.KONTINGENT_PARAMETER, "2000")):
+                           (routing.KONTINGENT_PARAMETER, str(routing.KONTINGENT_STANDARD))):
             kern.parameter_setzen(cls.s, name, wert)
         cls.s.commit()
         cls.admin = cls.s.get(Benutzer, 1)
@@ -625,7 +625,7 @@ class Routing(Basis):
         self.assertEqual(m.call_count, 0)
         self.assertTrue(routing.strecke(self.s, BASIS, (BASIS[0] + 0.05, BASIS[1]))["geschaetzt"])
         self.schalter(_zaehler_name(), "0")
-        self.schalter(routing.KONTINGENT_PARAMETER, "2000")
+        self.schalter(routing.KONTINGENT_PARAMETER, str(routing.KONTINGENT_STANDARD))
 
     def test_d7_migration_setzt_anbieter_idempotent(self):
         self.schalter("routing_anbieter", "luftlinie")
@@ -643,7 +643,41 @@ class Routing(Basis):
             meldungen = routing.migration_v37_routing(self.s)
             self.s.commit()
             self.assertEqual(meldungen, [])
-        self.assertEqual(routing.kontingent(self.s), 2000)
+        self.assertEqual(routing.kontingent(self.s), routing.KONTINGENT_STANDARD)
+
+    def test_d7b_kontingent_2000_wird_einmalig_500(self):
+        """Nachtrag 17.10.2026 (Rückfrage 12): Standard 500 (ORS Free-Plan); der alte v37-Standard 2000 wird
+        einmalig nachgezogen, von Hand gesetzte Werte und ein später bewusst eingetragenes 2000 bleiben."""
+        from app.models import Einstellung, einstellung_holen, einstellung_setzen
+        self.assertEqual(routing.KONTINGENT_STANDARD, 500)
+        marker_alt = einstellung_holen(self.s, routing.MARKER_KONTINGENT, "")
+        try:
+            self.s.query(Einstellung).filter(Einstellung.name == routing.MARKER_KONTINGENT).delete(synchronize_session=False)
+            self.schalter(routing.KONTINGENT_PARAMETER, "2000")
+            meldungen = routing.migration_v37_routing(self.s)
+            self.s.commit()
+            self.assertEqual(routing.kontingent(self.s), 500)
+            self.assertTrue(any("2000 -> 500" in m for m in meldungen), meldungen)
+            self.assertEqual(einstellung_holen(self.s, routing.MARKER_KONTINGENT, ""), "erledigt")
+            # bewusst wieder 2000 (bezahlter Plan): bleibt, keine Meldung
+            self.schalter(routing.KONTINGENT_PARAMETER, "2000")
+            meldungen = routing.migration_v37_routing(self.s)
+            self.s.commit()
+            self.assertEqual(routing.kontingent(self.s), 2000)
+            self.assertFalse(any("2000 -> 500" in m for m in meldungen), meldungen)
+            # von Hand gesetzter Wert ohne Marker: bleibt (nur der alte Standard wird nachgezogen)
+            self.s.query(Einstellung).filter(Einstellung.name == routing.MARKER_KONTINGENT).delete(synchronize_session=False)
+            self.schalter(routing.KONTINGENT_PARAMETER, "1500")
+            routing.migration_v37_routing(self.s)
+            self.s.commit()
+            self.assertEqual(routing.kontingent(self.s), 1500)
+        finally:
+            self.schalter(routing.KONTINGENT_PARAMETER, str(routing.KONTINGENT_STANDARD))
+            if marker_alt:
+                einstellung_setzen(self.s, routing.MARKER_KONTINGENT, marker_alt)
+            else:
+                self.s.query(Einstellung).filter(Einstellung.name == routing.MARKER_KONTINGENT).delete(synchronize_session=False)
+            self.s.commit()
 
     def test_d8_textformat(self):
         self.assertEqual(routing.strecke_text({"km": 18.44, "minuten": 24.4, "geschaetzt": False}), "18,4 km · 24 Min")

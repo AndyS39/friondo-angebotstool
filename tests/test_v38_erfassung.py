@@ -364,7 +364,10 @@ class Korrektur(Basis):
         self.assertIn(f'href="/erfassung/{self.gesendet_id}/korrektur"', akte)
         # fremde Erfassung: Prüfseite leitet um (kein Knopf), Detailseite ohne Knopf
         self.assertEqual(fremd.get(f"/erfassung/{self.gesendet_id}/pruefen").status_code, 303)
-        self.assertNotIn('data-rolle="korrektur-knopf"', fremd.get(f"/erfassungen/{self.gesendet_id}").text)
+        # Nachtrag 17.10.2026 (Rückfrage 16): fremder Außendienst wird von der Detailseite umgeleitet
+        r = fremd.get(f"/erfassungen/{self.gesendet_id}")
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/erfassungen?meldung="))
         # Korrekturmodus-Markup: Leiste, „Korrektur speichern“, kein Freitext-Wechsel, kein „Später fortsetzen“
         seite = ad.get(f"/erfassung/{self.gesendet_id}/seite/{self.alte_anlage_nr}").text
         self.assertIn('data-rolle="korrektur-leiste"', seite)
@@ -507,6 +510,57 @@ class Korrektur(Basis):
         r = _client(self.fremd_id).post(f"/erfassungen/{self.freitext_id}/freitext", data={"freitext": "x"})
         self.assertEqual(r.status_code, 303)
         self.assertEqual(len(self._notizen(self.vorgang_id)), vorher + 1)
+
+
+class ErfassungslisteRechte(Basis):
+    """Nachtrag 17.10.2026 (Rückfrage 16): /erfassungen zeigt dem Außendienst nur eigene Erfassungen –
+    selbst erfasste oder solche seiner Vorgänge; Detail und Protokoll-PDF fremder Erfassungen leiten um."""
+    def test_liste_nur_eigene_und_vorgaenge(self):
+        ad, fremd, innen = _client(self.ad_id), _client(self.fremd_id), _client(self.innen_id)
+        # Erfassung des Innendienstes am Vorgang des AD (ad_id) zählt für den AD als eigene
+        s = SessionLocal()
+        try:
+            e = Erfassung(kunde_id=self.kunde_id, benutzer_id=self.innen_id, vorgang_id=self.vorgang_id,
+                          objekt_id=self.haupt_id, status="Neu", sparte="WP", konfigurator_typ="WP",
+                          antworten_json=json.dumps(self.basis_antworten), typ="katalog",
+                          abgesendet_am=datetime.now())
+            s.add(e)
+            s.commit()
+            innen_erf_id = e.id
+        finally:
+            s.close()
+        try:
+            html = ad.get("/erfassungen").text
+            self.assertIn(f'/erfassungen/{self.gesendet_id}"', html)
+            self.assertIn(f'/erfassungen/{innen_erf_id}"', html)
+            self.assertIn('data-rolle="nur-eigene"', html)
+            self.assertNotIn('name="vertriebler_id"', html)
+            # fremder Vertriebler: keine der Erfassungen, auch nicht über den Filterparameter
+            for pfad in ("/erfassungen", f"/erfassungen?vertriebler_id={self.ad_id}", "/erfassungen?status=entwuerfe"):
+                html = fremd.get(pfad).text
+                self.assertNotIn(f'/erfassungen/{self.gesendet_id}"', html, pfad)
+                self.assertNotIn(f'/erfassungen/{innen_erf_id}"', html, pfad)
+                self.assertNotIn(f'/erfassungen/{self.alt_entwurf_id}"', html, pfad)
+            # Innendienst wie bisher: alles, mit Vertriebler-Filter
+            html = innen.get("/erfassungen").text
+            self.assertIn(f'/erfassungen/{self.gesendet_id}"', html)
+            self.assertIn('name="vertriebler_id"', html)
+            self.assertNotIn('data-rolle="nur-eigene"', html)
+            # Detail und Protokoll: eigene 200, fremde 303, Innendienst 200
+            self.assertEqual(ad.get(f"/erfassungen/{innen_erf_id}").status_code, 200)
+            self.assertEqual(ad.get(f"/erfassungen/{innen_erf_id}/protokoll.pdf").status_code, 200)
+            for pfad in (f"/erfassungen/{self.gesendet_id}", f"/erfassungen/{self.gesendet_id}/protokoll.pdf"):
+                r = fremd.get(pfad)
+                self.assertEqual(r.status_code, 303, pfad)
+                self.assertTrue(r.headers["location"].startswith("/erfassungen?meldung="))
+            self.assertEqual(innen.get(f"/erfassungen/{self.gesendet_id}/protokoll.pdf").status_code, 200)
+        finally:
+            s = SessionLocal()
+            try:
+                s.query(Erfassung).filter(Erfassung.id == innen_erf_id).delete(synchronize_session=False)
+                s.commit()
+            finally:
+                s.close()
 
 
 class ErfassungslisteObjekt(Basis):

@@ -352,10 +352,20 @@ class Client(Basis):
                 with self.assertRaises(cloover_api.ClooverFehler) as cm:
                     aufruf()
                 self.assertEqual(cm.exception.meldung, cloover_api.MELDUNG_MODUS_AUS)
+            self.assertEqual(server.aufrufe, [])
+            # Nachtrag 17.10.2026 (Rückfrage 8): der Verbindungstest läuft auch im Modus „aus“ – mit Zusatz
+            server.setze("POST", cloover_api.PFAD_RATE_V1, (200, V1_ANTWORT))
             ok, text = cloover_api.verbindung_testen(self.s)
-        self.assertFalse(ok)
-        self.assertEqual(text, cloover_api.MELDUNG_TEST_MODUS_AUS)
-        self.assertEqual(server.aufrufe, [])
+        self.assertTrue(ok, text)
+        self.assertEqual(text, "Verbindung OK · Beispielrate 93,36 €/Monat (Test-Umgebung) · "
+                               "Wärmepumpe: Typ Heat pump akzeptiert · Photovoltaik: Typ Solar akzeptiert · "
+                               "Klima: Typ Energetic Renovation akzeptiert · Wallbox: Typ Wallbox akzeptiert · "
+                               + cloover_api.ZUSATZ_TEST_MODUS_AUS)
+        self.assertEqual([a["pfad"] for a in server.aufrufe],
+                         [cloover_api.PFAD_RATE_V1] + [cloover_api.PFAD_RATE_V2] * 4)
+        self.assertTrue(cloover_api.letzter_test(self.s)["ok"])
+        self.assertEqual(cloover_api.modus(self.s), "aus")                 # der Test schaltet den Modus nicht um
+        server.aufrufe.clear()
         # ohne Key: Modul aus, egal was gespeichert ist
         self.einstellung(cloover_api.EINSTELLUNG_MODUS, "test")
         with mock.patch.object(config, "CLOOVER_API_KEY", ""), \

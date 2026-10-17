@@ -74,7 +74,8 @@ Standard-Konto [ANNAHME Plan: Projekt läuft unter dem vorbereitenden Innendiens
   `verbindung_testen(session)` liest Parameter, gibt frei und ruft dann das Netz. Der Wächter
   `tests/test_v27_sitzungen.py` erkennt die Aufrufkette über `_roh_anfrage` (urllib).
 - **Modus aus = kein Aufruf:** ohne Key (`konfiguriert()` False) oder bei `cloover_modus = aus` wirft jeder
-  Aufruf `ClooverFehler` („… Modul aus“), `_roh_anfrage` wird nicht erreicht. Der sitzungslose Client kennt den
+  Aufruf `ClooverFehler` („… Modul aus“), `_roh_anfrage` wird nicht erreicht – einzige Ausnahme ist der
+  Verbindungstest (`modus_pruefen=False`, Nachtrag 17.10.2026). Der sitzungslose Client kennt den
   Modus über einen prozessweiten Merker (`modus(session)` setzt ihn; sonst einmal über eine kurze Lesesitzung).
 - **HTTP:** `_roh_anfrage(methode, pfad, body)` – urllib, Header `X-API-Key`, `Accept`/`Content-Type:
   application/json`, Timeout 20 s, Rückgabe (Status, JSON-Dict; leerer/ungültiger Body → {} bzw. {"text"}),
@@ -136,7 +137,9 @@ Gemockte Antwort der Test-Umgebung für den WP-Fall (15 Jahre): 389,99 € ohne 
 1. v1-Beispielrate 10.000 € brutto, 2.000 € Anzahlung, 10 Jahre → „Verbindung OK · Beispielrate 93,36 €/Monat
    (Test-Umgebung)“ (Rate aus der Antwort; Zusatz nur bei Test-URL) bzw. „Cloover erreichbar, aber Key abgelehnt
    (HTTP 401)“ bzw. Fehlertext; ohne Key „Cloover: kein API-Key in der .env (CLOOVER_API_KEY) – Modul aus“; bei
-   Modus „aus“ ein Hinweis, den Modus auf „test“ zu stellen.
+   Modus „aus“ läuft der Test seit dem Nachtrag 17.10.2026 ebenfalls (Key gesetzt) und hängt „Modus „aus“ – Raten und
+   Projekte bleiben abgeschaltet“ an – so lässt sich der Key prüfen, ohne Raten oder Projekte freizuschalten
+   (`_anfrage(modus_pruefen=False)` nur für den Test; der Modus wird nicht umgeschaltet).
 2. v2-Probe mit einem Beispiel-Asset je aktiver Sparte (`PROBE_ASSETS`) und Meldung je Typ: „Wärmepumpe: Typ
    Heat pump akzeptiert · … · Klima: Typ Energetic Renovation akzeptiert“ bzw. „… abgelehnt: Eingabe abgelehnt
    (<message>)“.

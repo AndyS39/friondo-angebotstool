@@ -342,6 +342,14 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
   schreibsturm 190/190, normal 0 Fehler / 0 Sperren (p95 Listen/Akten 2,3 s, Terminvorschläge 11,7 s, Angebots-PDF 4,2 s
   über den Zielwerten – nach dem Rollout auf dem Server nachmessen, Parametrierung → Betrieb). Details
   `docs/lasttest-v27.md` 4.11; Protokolle lokal `diagnose/test_v38_final/`.
+- **Nachtrag 2 (17.10.2026, Entscheidungen zu den Rückfragen der Kette):** `migrate.py` meldet beim ersten Lauf
+  „Routing (Nachtrag 17.10.2026): routing_kontingent_tag 2000 -> 500 (Free-Plan der Matrix-API)“, falls der
+  Parameter noch den alten Standard trug (einmalig, Marker-Einstellung; auf dem Server wird er gleich mit 500
+  angelegt) – keine neuen Tabellen oder Spalten. Sichtbar: der Außendienst sieht unter „Erfassungen“
+  (`/erfassungen`) nur eigene Erfassungen und löscht eigene Fotos auch über das ✕; der Cloover-Verbindungstest
+  läuft auch im Modus „aus“; die KfW-Seite kennt Nichtwohngebäude (KfW 522); „Termin nicht stattgefunden“ zieht
+  eine Wiedervorlage nur vor (eine fällige bleibt). Details in `docs/nach-dem-update-v36/37/38.md`
+  (Abschnitte „Nachtrag 17.10.2026“).
 
 ## 5. Versionsstand prüfen
 

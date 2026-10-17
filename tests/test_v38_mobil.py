@@ -76,6 +76,10 @@ class MobilV38(unittest.TestCase):
                 v = Vorgang(kunde_id=k.id, ad_id=ad_id, lead_phase="terminiert", leadmanager_id=cls.lm_id, **extra)
                 s.add(v)
                 s.flush()
+                # SQLite vergibt IDs neu: verwaiste Zeilen abgebrochener Testläufe anderer Dateien (Mails,
+                # To-Dos, Aktivitäten, Notizen) würden sonst für diesen Vorgang zählen (Befund 17.10.2026)
+                for tabelle in (KommunikationLog, Todo, LeadAktivitaet, VorgangsNotiz):
+                    s.query(tabelle).filter(tabelle.vorgang_id == v.id).delete(synchronize_session=False)
                 objekte.hauptobjekt(s, v.id, anlegen=True, kunde=k)
                 return v
 
@@ -110,11 +114,22 @@ class MobilV38(unittest.TestCase):
             k = kunde("Innen")
             cls.v_innen = vorgang(k, cls.ad2_id)
             cls.t_innen = termin(cls.v_innen, _um(heute, 16), cls.ad2_id)
+            # Nachtrag 17.10.2026 (Rückfrage 18 R6): bestehende Wiedervorlagen – überfällig bleibt, künftige wird vorgezogen
+            k = kunde("WvAlt")
+            cls.v_wv_alt = vorgang(k, cls.ad1_id, wiedervorlage_am=_um(heute - timedelta(days=3), 0),
+                                   wiedervorlage_benutzer_id=cls.ad1_id, wiedervorlage_art="nochmal_anrufen")
+            cls.t_wv_alt = termin(cls.v_wv_alt, _um(heute - timedelta(days=1), 10), cls.ad1_id)
+            k = kunde("WvNeu")
+            cls.v_wv_neu = vorgang(k, cls.ad1_id, wiedervorlage_am=_um(heute + timedelta(days=5), 0),
+                                   wiedervorlage_benutzer_id=cls.ad1_id, wiedervorlage_art="nochmal_anrufen")
+            cls.t_wv_neu = termin(cls.v_wv_neu, _um(heute - timedelta(days=1), 11), cls.ad1_id)
             s.commit()
             cls.ids = {"heute": cls.v_heute.id, "gestern": cls.v_gestern.id, "fremd": cls.v_fremd.id,
-                       "ohne_lm": cls.v_ohne_lm.id, "pruef": cls.v_pruef.id, "innen": cls.v_innen.id}
+                       "ohne_lm": cls.v_ohne_lm.id, "pruef": cls.v_pruef.id, "innen": cls.v_innen.id,
+                       "wv_alt": cls.v_wv_alt.id, "wv_neu": cls.v_wv_neu.id}
             cls.tids = {"heute": cls.t_heute.id, "gestern": cls.t_gestern.id, "fremd": cls.t_fremd.id,
-                        "ohne_lm": cls.t_ohne_lm.id, "pruef": cls.t_pruef.id, "innen": cls.t_innen.id}
+                        "ohne_lm": cls.t_ohne_lm.id, "pruef": cls.t_pruef.id, "innen": cls.t_innen.id,
+                        "wv_alt": cls.t_wv_alt.id, "wv_neu": cls.t_wv_neu.id}
         finally:
             s.close()
         cls.ad1 = _client(cls.ad1_id)
@@ -448,6 +463,36 @@ class MobilV38(unittest.TestCase):
             s.close()
         # Rücksprung nur auf eigene Pfade
         self.assertEqual(leads_router_sicher("https://fremd.example/x"), "/leads")
+
+    def test_i_wiedervorlage_nur_vorziehen(self):
+        """Nachtrag 17.10.2026 (Rückfrage 18 R6): „Neuen Termin vereinbaren lassen“ zieht eine leere oder
+        künftige Wiedervorlage auf heute vor; eine bereits fällige/überfällige bleibt (Datum, Person, Art)."""
+        from types import SimpleNamespace
+        self.assertTrue(lead_termin_ausfall.wiedervorlage_vorziehen(SimpleNamespace(wiedervorlage_am=None), self.heute))
+        self.assertTrue(lead_termin_ausfall.wiedervorlage_vorziehen(
+            SimpleNamespace(wiedervorlage_am=_um(self.heute + timedelta(days=1), 0)), self.heute))
+        self.assertFalse(lead_termin_ausfall.wiedervorlage_vorziehen(
+            SimpleNamespace(wiedervorlage_am=_um(self.heute, 0)), self.heute))
+        self.assertFalse(lead_termin_ausfall.wiedervorlage_vorziehen(
+            SimpleNamespace(wiedervorlage_am=self.heute - timedelta(days=2)), self.heute))
+        for key in ("wv_alt", "wv_neu"):
+            r = self.ad1.post(f"/leads/termin/{self.tids[key]}/ausgefallen",
+                              data={"grund": "nicht_angetroffen", "folge": "neuer_termin"},
+                              headers={"Accept": "application/json"})
+            self.assertEqual(r.status_code, 200, r.text)
+        s = SessionLocal()
+        try:
+            alt = s.get(Vorgang, self.ids["wv_alt"])
+            self.assertEqual(alt.wiedervorlage_am.date(), self.heute - timedelta(days=3))   # überfällig bleibt
+            self.assertEqual(alt.wiedervorlage_benutzer_id, self.ad1_id)
+            self.assertEqual(alt.wiedervorlage_art, "nochmal_anrufen")
+            self.assertEqual(s.query(Todo).filter(Todo.vorgang_id == alt.id).count(), 1)     # To-Do trotzdem
+            neu = s.get(Vorgang, self.ids["wv_neu"])
+            self.assertEqual(neu.wiedervorlage_am.date(), self.heute)                        # vorgezogen
+            self.assertEqual(neu.wiedervorlage_benutzer_id, self.lm_id)
+            self.assertEqual(neu.wiedervorlage_art, lead_termin_ausfall.WIEDERVORLAGE_ART)
+        finally:
+            s.close()
 
     def test_h_testphase_sperrt_das_melden_nicht(self):
         """Der Testphase-Schalter terminierung_aktiv (v31) sperrt nur Neubuchungen – die Kopie

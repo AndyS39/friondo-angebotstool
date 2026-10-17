@@ -9,8 +9,9 @@ Alle Datenbankänderungen sind additiv – der v36-Code läuft auf der v37-Daten
    account.heigit.org, kostenloser Plan), Dienst neu starten; danach Lead-Einstellungen → Abschnitt „Routing“: der
    Prüfpunkt „Routing-Dienst antwortet (Duisburg → Bochum)“ muss grün melden. Die Migration stellt den Anbieter auf
    „ors“, sobald der Key vorliegt (sonst unter Lead-Routing umstellen). Tageskontingent `routing_kontingent_tag`
-   (Standard 2000) an den tatsächlichen Plan anpassen – der Free-Plan begrenzt die Matrix-API vermutlich auf 500
-   Anfragen je Tag (Rückfrage); ab 80 % warnt die Seite, ab 100 % wird bis Mitternacht geschätzt. Der alte Parameter
+   (Standard 500 = Free-Plan der Matrix-API; `migrate.py` meldet beim ersten Lauf „Routing (Nachtrag 17.10.2026):
+   routing_kontingent_tag 2000 -> 500“, falls noch der alte Standard stand – ein bezahlter Plan wird von Hand
+   eingetragen und bleibt stehen); ab 80 % warnt die Seite, ab 100 % wird bis Mitternacht geschätzt. Der alte Parameter
    `ors_api_key` bleibt nur Rückfall und sollte leer sein.
 2. **Kanäle:** `migrate.py` meldet beim ersten Lauf „Kanaele (v37): 'WELOVEX' deaktiviert …“ und „… 'DAA'
    deaktiviert …“; steht einer der Kanäle in `hv_ausschluss` oder `kanal_ad_regel`, kommt zusätzlich „Kanaele (v37):
@@ -73,3 +74,19 @@ Alle Datenbankänderungen sind additiv – der v36-Code läuft auf der v37-Daten
 - **Screenshots** vorher/nachher hell/dunkel (20 Lead-Seiten, nur Demo-Daten): `docs/design-v37/`;
   die Design-Vorlage und der Review-Screenshot von Claudia fehlen – Abweichungen später über den v3-Token-Block
   in `lead_v2.css` nachziehen (Vorlage gewinnt).
+
+## Nachtrag 17.10.2026 – Entscheidungen zu den Rückfragen (v37)
+
+- **Routing:** Tageskontingent-Standard 500 (Free-Plan der openrouteservice-Matrix-API) statt 2000; die Migration zieht
+  einen noch auf 2000 stehenden Parameter einmalig nach (siehe Punkt 1 oben). Es bleibt: ein neues monday-Datum gewinnt
+  gegenüber einer Tool-Anpassung (mit Aktivität), der Zuständige des Vorgangs folgt dem Vertrieblerwechsel am Termin, Mein
+  Tag und Karte dürfen bei fehlenden Cache-Werten gebündelte Matrix-Aufrufe auslösen (das Kontingent schützt), der
+  Prüfpunkt zeigt keine Luftlinie, die manuelle Vor-Ort-Terminvergabe bleibt in der Testphase gesperrt.
+- **Kanäle/Interessen:** „PV vorhanden“ allein erfüllt das Pflichtfeld „Interesse“ nicht und reicht in Schnellanlage/API
+  nicht aus; der Platzhalter `{pv_vorhanden}` kommt nicht automatisch in eine Standard-Vorlage (Innendienst trägt ihn bei
+  Bedarf im Vorlagen-Editor ein). Meldet `migrate.py` WELOVEX/DAA in `hv_ausschluss`/`kanal_ad_regel`, den Kanal dort von
+  Hand entfernen (Punkt 2 oben).
+- **Design v3:** Lead-Quellen & Kampagnen und die Steuerdatei-Seite bleiben im v3; „Meine Termine“ bleibt v3 (die
+  Mein-Tag-Optik gilt nur für `/leads`); die Farbbalken der Dashboard-Kacheln bleiben; Systemschrift bleibt (keine
+  Font-Zulieferung nötig). Design-Datei und Review-Screenshot von Claudia weiterhin erbeten
+  (`docs/design-v37/vorlage/`).

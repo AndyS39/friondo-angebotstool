@@ -238,7 +238,7 @@
                             </select>
                         </form>
                         {% endif %}
-                        {% if galerie_darf_loeschen %}
+                        {% if loeschbar %}{# Nachtrag 17.10.2026 (Rückfrage 17 R1): ✕ auch für eigene Uploads des Außendienstes #}
                         <form method="post" action="/vorgaenge/galerie/datei/{{ d.id }}/loeschen" style="display:inline"
                               onsubmit="return confirm('Bild {{ d.dateiname }} löschen?');">
                             <button type="submit" title="Löschen (protokolliert)">✕</button>
@@ -260,7 +260,7 @@
                     <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
                     <small>{{ d.hochgeladen_am.strftime('%d.%m.%y') }}{{ ' · ' ~ d.bemerkung if d.bemerkung }}</small>
                     <a href="/vorgaenge/galerie/datei/{{ d.id }}?download=1" download title="Herunterladen">⬇</a>
-                    {% if galerie_darf_loeschen %}
+                    {% if loeschbar %}
                     <form method="post" action="/vorgaenge/galerie/datei/{{ d.id }}/loeschen" style="display:inline"
                           onsubmit="return confirm('Datei {{ d.dateiname }} löschen?');">
                         <button type="submit" title="Löschen">✕</button>

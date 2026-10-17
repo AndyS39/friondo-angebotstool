@@ -96,6 +96,24 @@ ANTRAG_UNTERLAGEN = (
     "Angaben zum Gebäude und zur selbstgenutzten Wohneinheit",
     "Für den Einkommensbonus: Einkommensteuerbescheide des Haushalts",
 )
+# Nachtrag 17.10.2026 (Rückfrage 6, Gewerbe-Fall): Nichtwohngebäude (Objektart „Gewerbe“, kfw.KfwEingaben.objekt
+# = "nwg") laufen über „Heizungsförderung für Unternehmen – Nichtwohngebäude“ (Blatt „KfW“ programm_gewerbe,
+# Standard „KfW 522 (Nichtwohngebäude)“) – die Design-Vorlage kennt nur den Privatkunden-Fall; die Boxen tragen
+# deshalb eigene Wortlaute: Programmname, nur Grundförderung (keine Boni), kein § 35c EStG (nur selbstgenutztes
+# Wohneigentum), Antrag durch das Unternehmen. {programm} = Kurzname aus dem KfW-Ergebnis („KfW 522“).
+# Wortlaute sind Entwürfe fürs Gegenlesen durch den Innendienst [ANNAHME].
+GUT_ZU_WISSEN_NWG = (
+    "Gefördert wird über das Programm „Heizungsförderung für Unternehmen – Nichtwohngebäude“ ({programm}).",
+    "Der hydraulische Abgleich{pos_hydraulik} ist Fördervoraussetzung und im Angebot enthalten.",
+    "Am Installationsort darf kein Anschluss- oder Benutzungszwang an ein Wärmenetz bestehen.",
+    "Für Nichtwohngebäude gibt es die Grundförderung – Klimageschwindigkeits- und Einkommensbonus sind hier "
+    "nicht möglich.",
+)
+ANTRAG_UNTERLAGEN_NWG = (
+    "Zugang zum KfW-Portal „Meine KfW“ (Registrierung des Unternehmens mit E-Mail-Adresse)",
+    "Die BzA-ID aus der Bestätigung zum Antrag von Friondo",
+    "Angaben zum Gebäude (Nichtwohngebäude, Nettogrundfläche) und zum Unternehmen",
+)
 
 _BAUSTEIN_NAMEN = {"grund": "Grundförderung", "klima": "Klimageschwindigkeits-Bonus",
                    "einkommen": "Einkommensbonus", "zuschuss": "KfW-Zuschuss"}
@@ -179,9 +197,15 @@ def _schritte(pos_bza: str | None) -> list[dict]:
             for i, (titel, text) in enumerate(SCHRITTE, 1)]
 
 
-def _gut_zu_wissen(pos_hydraulik: str | None) -> list[str]:
+def _gut_zu_wissen(pos_hydraulik: str | None, objekt: str = "efh", programm: str = "") -> list[str]:
     zusatz = f" (Pos. {pos_hydraulik})" if pos_hydraulik else ""
+    if objekt == "nwg":          # Nachtrag 17.10.2026: Nichtwohngebäude (KfW 522) mit eigenen Wortlauten
+        return [text.format(pos_hydraulik=zusatz, programm=programm or "KfW 522") for text in GUT_ZU_WISSEN_NWG]
     return [text.format(pos_hydraulik=zusatz) for text in GUT_ZU_WISSEN]
+
+
+def _antrag_unterlagen(objekt: str = "efh") -> list[str]:
+    return list(ANTRAG_UNTERLAGEN_NWG if objekt == "nwg" else ANTRAG_UNTERLAGEN)
 
 
 # ----------------------------------------------------------------------------- Bausteine
@@ -298,10 +322,12 @@ def aufbereiten(ergebnis: "kfw.KfwErgebnis", *, endbetrag_cent: int, ust_prozent
         "zuschuss": _euro(zuschuss), "eigenanteil": _euro(eigenanteil),
         "deckel_satz": deckel_satz, "hinweise": hinweise, "disclaimer": disclaimer,
         "konditionen_ab": datum_text,
-        "schritte": _schritte(pos_bza), "gut_zu_wissen": _gut_zu_wissen(pos_hydraulik),
-        "antrag_unterlagen": list(ANTRAG_UNTERLAGEN),
+        "schritte": _schritte(pos_bza),
+        "gut_zu_wissen": _gut_zu_wissen(pos_hydraulik, objekt, programm.split(" (")[0].strip()),
+        "antrag_unterlagen": _antrag_unterlagen(objekt),
         "pos_bza": pos_bza, "pos_hydraulik": pos_hydraulik,
-        "manuell": bool(manuell), "mfh": objekt == "mfh", "wohneinheiten": int(wohneinheiten or 0),
+        "manuell": bool(manuell), "mfh": objekt == "mfh", "nwg": objekt == "nwg",
+        "wohneinheiten": int(wohneinheiten or 0),
         "objekt": objekt, "bild": BILD,
     }
 

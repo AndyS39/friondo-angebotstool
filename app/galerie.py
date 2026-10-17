@@ -478,7 +478,8 @@ def migration_v35_objektfotos(session: Session) -> list[str]:
 # Außendienstler darf Dateien löschen, die er selbst hochgeladen hat (im eigenen Vorgang).
 # Montage bleibt bei der heutigen Regel (ansehen + hochladen, nie löschen – Plan: „nicht über
 # die heutigen Rechte hinaus“) [ANNAHME: die Hochladenden-Regel gilt nur für die Basisrolle
-# Außendienst]. Das Einzel-Löschen (Route galerie_loeschen) bleibt unverändert rollenbasiert.
+# Außendienst]. Seit dem Nachtrag 17.10.2026 (Rückfrage 17 R1) gilt dieselbe Regel auch für das
+# Einzel-Löschen (✕, Route vorgaenge.galerie_loeschen): das ✕ steht an jeder löschbaren Datei.
 
 def darf_datei_loeschen(benutzer, datei: GalerieDatei | None) -> bool:
     """Löschrecht je Datei: Rolle (darf_loeschen) ODER eigener Upload eines Außendienstlers."""

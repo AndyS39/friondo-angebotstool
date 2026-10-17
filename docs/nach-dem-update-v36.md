@@ -95,7 +95,9 @@ der v36-Datenbank – Rückweg-Probe im Durchlauf). **Teil A** (dieser Abschnitt
    Wortlaut mit Cloover bzw. dem Datenschutzbeauftragten abstimmen).
 3. **Verbindungstest:** Knopf „Verbindung testen“ → erwartet „Verbindung OK · Beispielrate 93,36 €/Monat
    (Test-Umgebung) · Wärmepumpe: Typ Heat pump akzeptiert · …“; „Key abgelehnt (HTTP 401)“ → Key prüfen; abgelehnte
-   Typen (z. B. Klima) → Rückfrage B2, bis dahin rechnet das Tool die Rate über v1 (Gesamtbetrag).
+   Typen (z. B. Klima) → Rückfrage B2, bis dahin rechnet das Tool die Rate über v1 (Gesamtbetrag). Der Test läuft
+   auch im Modus „aus“ (Ergebnis mit Zusatz „Modus „aus“ – Raten und Projekte bleiben abgeschaltet“) – so lässt sich
+   der Key prüfen, bevor Raten und Projekte freigeschaltet werden (Nachtrag 17.10.2026).
 4. **PDF-Ablage (für den persönlichen Finanzierungs-Link):** SharePoint-Site/Bibliothek „Cloover-Angebote“ anlegen,
    der Tool-App `Sites.Selected` (Write) auf diese Site geben, Freigabe „Jeder mit dem Link“ für Mandant und Site
    erlauben, Ablauf anonymer Links ≥ 180 Tage (`docs/graph-einrichtung.md` Abschnitt 8). Voraussetzung: Graph-Modus
@@ -142,3 +144,24 @@ der v36-Datenbank – Rückweg-Probe im Durchlauf). **Teil A** (dieser Abschnitt
   berechnete Rate; die Textblöcke tragen dafür den Platzhalter `[CLOOVER]` (Migration beim Update) – beim Bearbeiten
   der Nachtexte den Platzhalter stehen lassen. „Friondo WB Standard“ hat dafür einen neuen Nachtext A („Ihre
   Zahlungsoptionen bei Friondo“, Kopie des KL-Textes mit „Ihre Wallbox-Lösung“) – Entwurf fürs Gegenlesen.
+
+## Nachtrag 17.10.2026 – Entscheidungen zu den Rückfragen (v36)
+
+Andreas hat die Rückfragen der Plan-Kette mit „im Sinne des Projekts entscheiden“ beantwortet. Für v36 gilt:
+
+- **KfW-Seite bei Gewerbe (Nichtwohngebäude):** die Seite „Ihre KfW-Förderung“ druckt für Objektart „Gewerbe“ jetzt die
+  Wortlaute des Programms „Heizungsförderung für Unternehmen – Nichtwohngebäude“ (KfW 522): nur Grundförderung, kein
+  Hinweis auf § 35c EStG, keine Einkommensbonus-Unterlagen, „Angaben zum Gebäude (Nichtwohngebäude, Nettogrundfläche) und
+  zum Unternehmen“. **Innendienst:** Wortlaute bitte gegenlesen (Entwurf) – Rechenwerte sind unverändert.
+- **Cloover-Verbindungstest** auch im Modus „aus“ (siehe Punkt 3 oben). Alles andere an Cloover bleibt wie gebaut:
+  Sparkasse DU ohne `[CLOOVER]`, Rate vor jedem nicht eingefrorenen PDF, PDF-Link 180 Tage, alte Projekte bleiben bei
+  Cloover, Kombi-Gesamtrate im PDF, unbekannte Status roh – bis Cloover die offenen Fragen beantwortet (Liste in
+  `diagnose/v36/gesamtuebersicht.md` §9, Rückfrage 4).
+- **Layout:** „Gültig bis“ bleibt Angebotsdatum + 30 Tage; die Telefon-Zeile im Infokasten kommt aus der
+  Benutzerverwaltung (ohne Nummer entfällt sie – bitte Telefonnummern der Vertriebler pflegen); der WP-Vortext bleibt der
+  heutige Text (wer die Formulierung der Design-Vorlage möchte – „VDI 4645“, ohne „Anbei erhalten Sie …“ – ändert den
+  Textblock „Friondo WP Standard“ in der Parametrierung); der Wallbox-Absatz „Komplettpaket Wallbox inkl. Montage“ steht
+  im Historienblock „Friondo WB Standard (bis v35)“ und kann von dort in den aktuellen Block kopiert werden; der
+  Cloover-Slogan erscheint in Karte 2 der Profile Enni/SWD/Sparkasse DU nicht (wird beim Rendern ausgefiltert).
+- **Engine:** Browser-Druck bleibt bei höchstens zwei gleichzeitigen Drucken; die Druckzeit wird nach dem Rollout auf dem
+  Server nachgemessen (Parametrierung → Angebots-PDF „Test-PDF erzeugen“ und Betrieb). WB behält die Cloover-Karte.

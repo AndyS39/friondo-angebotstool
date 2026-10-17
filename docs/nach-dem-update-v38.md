@@ -20,11 +20,16 @@ Alle Datenbankänderungen sind additiv – der v37-Code läuft auf der v38-Daten
   selbst hochgeladenen), „n Fotos löschen“ – nach der Sicherheitsabfrage sind sie endgültig weg (Eintrag im
   Notizen-Chat). In der Upload-Liste entfernt „Auswählen“ mehrere Fotos auf einmal aus der Liste.
 - **Innendienst/Projektierung:** „Auswählen“ und „n Fotos löschen“ stehen in jedem Galerie-Ordner (Vorgangs-/Projektakte);
-  Montage löscht weiterhin nicht. Einzel-Löschen (✕) und Lightbox sind unverändert.
+  Montage löscht weiterhin nicht. Das ✕ (Einzel-Löschen) folgt seit dem Nachtrag 17.10.2026 derselben Regel – der
+  Außendienst sieht es an selbst hochgeladenen Fotos und Dokumenten; die Lightbox ist unverändert.
 
 ## Erfassung: Später fortsetzen, Antworten korrigieren, Objekt in der Liste (Phase 202/204)
 
 **Für den Außendienst**
+- **Liste „Erfassungen“ (`/erfassungen`):** zeigt seit dem Nachtrag 17.10.2026 nur noch eigene Erfassungen – selbst
+  erfasste und die der eigenen Kunden/Vorgänge (auch wenn der Innendienst sie angelegt hat). Fremde Erfassungen und
+  deren Protokoll-PDF sind nicht mehr aufrufbar (Meldung), der Vertriebler-Filter entfällt dort. Die mobile
+  Übersicht `/erfassung` bleibt wie bisher.
 - **Später fortsetzen:** Oben rechts im Erfassungsbogen steht „Später fortsetzen“. Der Knopf speichert alles,
   was auf der aktuellen Seite ausgefüllt ist (auch wenn Pflichtfragen noch offen sind), und führt zur
   Erfassungsliste („Erfassung gespeichert. Sie können jederzeit weitermachen.“). Wer stattdessen die Seite
@@ -72,7 +77,8 @@ Alle Datenbankänderungen sind additiv – der v37-Code läuft auf der v38-Daten
 **Leadmanagement:**
 - Meldet ein Vertriebler „Termin nicht stattgefunden – neuen Termin vereinbaren lassen“, erscheint ein **To-Do „Neuen
   Termin vereinbaren: <Kunde>“** (fällig heute, mit Glocke) beim zugewiesenen Innendienstler des Vorgangs; der Lead steht
-  im Hauptboard unter „Kontaktiert“, die Wiedervorlage auf heute, der Grund im Notizen-Chat und am Termin. Ohne
+  im Hauptboard unter „Kontaktiert“, die Wiedervorlage auf heute (eine bereits fällige Wiedervorlage bleibt stehen, eine
+  spätere wird vorgezogen – Nachtrag 17.10.2026), der Grund im Notizen-Chat und am Termin. Ohne
   zugewiesenen Innendienstler geht das To-Do an den nächsten Leadmanager (Hinweis „kein Leadmanager zugewiesen“).
 - Vertriebler können Kunden nach einem ausgefallenen Termin direkt **disqualifizieren** (mit Grund) – der Vorgang steht
   dann im Hauptboard unter „Disqualifiziert“ und lässt sich wie bisher zurückholen. Es geht keine Mail an den Kunden.
@@ -83,3 +89,21 @@ Alle Datenbankänderungen sind additiv – der v37-Code läuft auf der v38-Daten
 - Unten in der Tabelle die zugeklappte Gruppe **„Vergangene Termine · n“** (Termine der letzten 180 Tage ohne Erfassung,
   neueste zuerst, „vor n Tagen“); der Klappzustand bleibt je Benutzer gemerkt. Der rote Überfällig-Banner und die
   Ansicht „nur überfällige“ entfallen. Die Zeilenaktion „Termin nicht stattgefunden“ gibt es auch hier.
+
+## Nachtrag 17.10.2026 – Entscheidungen zu den Rückfragen (v38)
+
+- **Erfassung:** Die Korrektur bleibt gesperrt, sobald ein verknüpftes Angebot kein Entwurf mehr ist (auch Angenommen/
+  Abgelehnt/Überholt – Änderungen laufen dann über „Überarbeiten“/neue Version). Ein Knopf „Angebot neu aufbauen“ aus der
+  korrigierten Erfassung kommt mit einem Folgeplan; bis dahin: Angebotsentwurf löschen und „Angebot erzeugen“. Je
+  gespeicherter Seite steht ein Eintrag im Notizen-Chat; die Warnfarbe alter Entwürfe richtet sich nach dem Anlagedatum.
+  Neu: `/erfassungen` zeigt dem Außendienst nur eigene Erfassungen (siehe oben).
+- **Galerie:** ✕ für eigene Uploads des Außendienstes (siehe oben); Montage löscht nie; je Ordner ein Chat-Eintrag mit
+  Dateinamen; Upload-Timeout 10 Minuten, Zwischenspeicher 50 Fotos / 100 MB; die mobile Erfassung (Seite „Einschätzung“)
+  lädt Fotos weiter mit „Weiter“ hoch – ohne Pop-up und ohne Zwischenspeicher.
+- **Leads VOT / Mobil:** Ohne zugewiesenen Leadmanager geht das To-Do „Neuen Termin vereinbaren“ weiter an den nächsten
+  Leadmanager (Round-Robin; ein To-Do „ohne Person“ braucht eine Schema-Änderung – Folgeplan). „Vergangene Termine“ zeigt
+  nur Vor-Ort-Termine (Telefon-/Teams-Termine ohne Erfassung bleiben bis Tagesende in „Heute“). Leads, deren Termine alle
+  gemeldet oder abgesagt sind, verlassen die Tabelle. Die zweite Abfrage „Kunden disqualifizieren?“ bleibt ein
+  aufklappender Block im selben Dialog, der Hinweis-Link unter „Heute“ bleibt. Die Wiedervorlage wird nur vorgezogen
+  (siehe oben). Blättern in Leads VOT bei vielen vergangenen Terminen und die doppelte Berechnung der Terminkarten in
+  `/leads` kommen mit einem Folgeplan.
